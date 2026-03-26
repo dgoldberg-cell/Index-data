@@ -1,0 +1,1976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>JEM Index Workstation</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+--bg-0:#faf8f4;--bg-1:#f3f0ea;--bg-2:#ece8e0;--bg-3:#e2ddd4;
+--bg-hover:#ddd8ce;--bg-active:#d4cfc4;--bg-white:#fffdf9;
+--border:#d8d2c6;--border-hi:#c8c2b4;--border-focus:#7c6a4f;
+--tx-1:#2c2418;--tx-2:#5c5243;--tx-3:#8a7e6d;--tx-4:#b0a594;
+--blue:#4a6898;--blue-hi:#5a7ab0;--blue-bg:rgba(74,104,152,.08);--blue-bd:rgba(74,104,152,.22);
+--purple:#7c5e9a;--purple-bg:rgba(124,94,154,.07);--purple-bd:rgba(124,94,154,.22);
+--red:#b05050;--red-bg:rgba(176,80,80,.07);--red-bd:rgba(176,80,80,.22);
+--green:#4a8a5a;--green-bg:rgba(74,138,90,.07);--green-bd:rgba(74,138,90,.22);
+--amber:#9a7a30;--amber-bg:rgba(154,122,48,.07);
+--gold:#8c7a50;--gold-bg:rgba(140,122,80,.06);
+--sidebar-w:210px;
+--font:'DM Sans',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;--serif:'Source Serif 4',Georgia,serif;
+--radius:7px;--radius-lg:11px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:var(--bg-0);color:var(--tx-1);font-family:var(--font)}
+::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-track{background:var(--bg-1)}::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:4px}
+button{font-family:var(--font);cursor:pointer}input,textarea,select{font-family:var(--font)}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+
+#app{display:flex;height:100vh}
+
+/* Sidebar */
+.sidebar{width:var(--sidebar-w);background:var(--bg-white);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;z-index:50}
+.sidebar-logo{padding:16px 18px 12px;font-family:var(--serif);font-size:16px;font-weight:700;color:var(--tx-1);border-bottom:1px solid var(--border);letter-spacing:-.3px}
+.sidebar-logo span{color:var(--gold);font-weight:400;font-style:italic;font-size:13px;display:block;margin-top:1px}
+.sidebar-sheet{padding:7px 18px;font-size:10px;color:var(--tx-4);font-family:var(--mono);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar-nav{flex:1;padding:8px;overflow-y:auto}
+.nav-sec{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--tx-4);padding:12px 10px 5px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:6px;font-size:12.5px;font-weight:500;color:var(--tx-3);cursor:pointer;transition:all .1s;margin-bottom:1px}
+.nav-item:hover{background:var(--bg-1);color:var(--tx-2)}
+.nav-item.active{background:var(--gold-bg);color:var(--gold);border:1px solid rgba(140,122,80,.18);font-weight:600}
+.nav-item .badge{margin-left:auto;background:var(--purple-bg);color:var(--purple);font-size:10px;font-weight:600;padding:1px 7px;border-radius:10px}
+.nav-item svg{width:16px;height:16px;flex-shrink:0;opacity:.6}
+.nav-item.active svg{opacity:1}
+.sidebar-tabs{padding:6px 8px;border-top:1px solid var(--border);max-height:140px;overflow-y:auto}
+.sidebar-tabs h4{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--tx-4);padding:4px 10px 4px}
+.stab{padding:5px 11px;border-radius:5px;font-size:11px;color:var(--tx-3);cursor:pointer;transition:all .1s}
+.stab:hover{background:var(--bg-1);color:var(--tx-2)}.stab.active{color:var(--gold);font-weight:600}
+.sidebar-user{padding:10px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:9px}
+.sidebar-avatar{width:28px;height:28px;border-radius:50%;background:var(--bg-2);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--gold);overflow:hidden;flex-shrink:0}
+.sidebar-avatar img{width:100%;height:100%;object-fit:cover}
+.sidebar-uname{font-size:11px;color:var(--tx-2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.main-content{flex:1;display:flex;overflow:hidden}
+.content{flex:1;overflow-y:auto;overflow-x:hidden}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:0 13px;height:32px;border-radius:var(--radius);font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--bg-white);color:var(--tx-2);transition:all .12s;white-space:nowrap}
+.btn:hover{background:var(--bg-1);color:var(--tx-1);border-color:var(--border-hi)}
+.btn-gold{background:var(--gold);color:#fff;border-color:var(--gold)}.btn-gold:hover{background:#9a8860}
+.btn-blue{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-bd)}.btn-blue:hover{background:rgba(74,104,152,.14)}
+.btn-purple{background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd)}.btn-purple:hover{background:rgba(124,94,154,.14)}
+.btn-red{background:var(--red-bg);color:var(--red);border-color:var(--red-bd)}.btn-red:hover{background:rgba(176,80,80,.14)}
+.btn-green{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)}.btn-green:hover{background:rgba(74,138,90,.14)}
+.btn-sm{height:26px;padding:0 9px;font-size:11px}
+.btn-icon{width:32px;padding:0;justify-content:center}.btn-icon.btn-sm{width:26px}
+
+/* Page header */
+.page-hd{padding:20px 28px 14px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg-white)}
+.page-hd h1{font-family:var(--serif);font-size:20px;font-weight:700;letter-spacing:-.3px;color:var(--tx-1)}
+.page-hd p{font-size:12px;color:var(--tx-3);margin-top:2px}
+.page-hd-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+
+/* Cards */
+.card{background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;transition:border-color .12s}
+.card:hover{border-color:var(--border-hi)}
+.card h4{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--tx-4);margin-bottom:7px}
+.card .val{font-size:24px;font-weight:700;font-family:var(--serif);letter-spacing:-.5px}
+.card .sub{font-size:10px;color:var(--tx-4);margin-top:2px}
+.grid{display:grid;gap:12px}.grid-4{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}.grid-2{grid-template-columns:1fr 1fr}
+.pad{padding:22px 28px}
+
+/* Index Preview */
+.idx-toolbar{display:flex;align-items:center;gap:8px;padding:10px 24px;border-bottom:1px solid var(--border);background:var(--bg-white);flex-wrap:wrap;flex-shrink:0}
+.idx-nav-mode{display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.idx-nav-btn{padding:5px 12px;font-size:11px;font-weight:500;color:var(--tx-3);background:var(--bg-white);border:none;border-right:1px solid var(--border);cursor:pointer;transition:all .1s}
+.idx-nav-btn:last-child{border-right:none}
+.idx-nav-btn:hover{background:var(--bg-1);color:var(--tx-2)}
+.idx-nav-btn.active{background:var(--gold-bg);color:var(--gold);font-weight:600}
+.idx-layout-toggle{display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-left:auto}
+.idx-search{display:flex;align-items:center;gap:7px;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius);padding:0 10px;height:30px;min-width:180px}
+.idx-search:focus-within{border-color:var(--gold)}
+.idx-search input{background:none;border:none;outline:none;color:var(--tx-1);font-size:12px;width:100%}
+.idx-search input::placeholder{color:var(--tx-4)}
+
+.idx-main{display:flex;flex:1;overflow:hidden}
+.idx-tree{width:220px;min-width:220px;border-right:1px solid var(--border);overflow-y:auto;background:var(--bg-white);padding:8px}
+.idx-tree.hidden{display:none}
+.idx-tree-section{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--tx-4);padding:10px 8px 4px}
+.idx-tree-item{padding:4px 10px;border-radius:4px;font-size:11.5px;color:var(--tx-3);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .08s}
+.idx-tree-item:hover{background:var(--bg-1);color:var(--tx-2)}
+.idx-tree-item.active{background:var(--gold-bg);color:var(--gold);font-weight:600}
+.idx-tree-count{font-size:9px;color:var(--tx-4);font-family:var(--mono)}
+
+.idx-body{flex:1;overflow-y:auto;padding:24px 32px}
+.idx-body.two-col{columns:2;column-gap:40px;column-rule:1px solid var(--border)}
+
+/* Section headers in index */
+.idx-section-hd{font-family:var(--serif);font-size:22px;font-weight:700;color:var(--tx-1);padding:16px 0 10px;border-bottom:2px solid var(--gold);margin-bottom:16px;break-after:avoid;letter-spacing:-.3px}
+.idx-section-hd:first-child{padding-top:0}
+
+/* Index entry */
+.idx-entry{margin-bottom:14px;break-inside:avoid;position:relative}
+.idx-entry.flagged{border-left:3px solid var(--amber);padding-left:10px}
+.idx-entry.bookmarked::before{content:'🔖';position:absolute;left:-20px;top:0;font-size:12px}
+.idx-entry-name{font-family:var(--serif);font-size:15px;font-weight:700;color:var(--tx-1);margin-bottom:2px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.idx-entry-name:hover{color:var(--gold)}
+.idx-entry-badge{font-size:9px;font-weight:500;font-family:var(--font);padding:1px 6px;border-radius:8px;vertical-align:middle}
+.idx-entry-badge.warn{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(154,122,48,.2)}
+.idx-entry-badge.empty{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
+.idx-entry-meta{font-size:10px;color:var(--tx-4);margin-bottom:4px;font-family:var(--mono)}
+.idx-seealso{font-size:11px;color:var(--tx-3);font-style:italic;margin-bottom:4px}
+.idx-seealso a{color:var(--blue);font-style:normal}
+.idx-bestbet{display:inline-block;font-size:10px;background:var(--gold-bg);color:var(--gold);padding:1px 8px;border-radius:8px;margin-bottom:4px;border:1px solid rgba(140,122,80,.2)}
+
+/* Segment group */
+.idx-seg{margin-bottom:6px}
+.idx-seg-label{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--tx-4);margin-bottom:2px}
+
+/* Individual result */
+.idx-result{display:flex;align-items:baseline;gap:6px;padding:1px 0;font-size:12.5px;line-height:1.5}
+.idx-result-desc{color:var(--tx-2);flex:1}
+.idx-result-desc.empty-desc{color:var(--red);font-style:italic;background:rgba(176,80,80,.05);padding:0 4px;border-radius:3px}
+.idx-result-desc.editable:hover{background:var(--bg-1);cursor:text;border-radius:3px;padding:0 4px}
+.idx-result-rel{font-size:10px;color:var(--tx-4);font-style:italic}
+.idx-result-ref{font-family:var(--mono);font-size:10.5px;color:var(--blue);white-space:nowrap}
+.idx-result-ref a{color:var(--blue)}
+.idx-result-actions{display:flex;gap:3px;opacity:0;transition:opacity .1s;flex-shrink:0}
+.idx-result:hover .idx-result-actions{opacity:1}
+.idx-mini-btn{width:20px;height:20px;border:1px solid var(--border);border-radius:4px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx-4);font-size:10px;transition:all .1s}
+.idx-mini-btn:hover{background:var(--bg-1);color:var(--tx-2);border-color:var(--border-hi)}
+.idx-mini-btn.active{color:var(--gold);border-color:var(--gold)}
+
+/* Transcript popup */
+.transcript-popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;max-height:70vh;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 12px 40px rgba(0,0,0,.12);z-index:300;display:flex;flex-direction:column}
+.transcript-popup-hd{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.transcript-popup-hd h3{font-family:var(--serif);font-size:14px;font-weight:600}
+.transcript-popup-body{flex:1;overflow-y:auto;padding:18px;font-family:var(--serif);font-size:14px;line-height:1.7;color:var(--tx-2)}
+.popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,.15);z-index:299}
+
+/* Inline edit */
+.idx-inline-edit{display:flex;gap:4px;align-items:center}
+.idx-inline-input{border:1px solid var(--gold);border-radius:4px;padding:2px 8px;font-size:12px;font-family:var(--font);color:var(--tx-1);outline:none;background:var(--bg-white);flex:1;min-width:150px}
+
+/* Bulk bar */
+.bulk-bar{display:flex;align-items:center;gap:8px;padding:8px 24px;background:var(--blue-bg);border-bottom:1px solid var(--blue-bd);font-size:12px;color:var(--blue);font-weight:500;flex-shrink:0}
+
+/* Table (Sheet View) */
+.table-toolbar{display:flex;align-items:center;gap:8px;padding:8px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;background:var(--bg-white)}
+table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0}
+thead{position:sticky;top:0;z-index:10}
+th{background:var(--bg-1);padding:0 12px;height:34px;font-size:10px;font-weight:600;color:var(--tx-4);text-transform:uppercase;letter-spacing:.5px;text-align:left;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--tx-3);background:var(--bg-2)}
+td{padding:0 12px;height:32px;font-size:12px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;background:var(--bg-white)}
+tr:hover td{background:var(--bg-0)}
+tr.sel td{background:var(--blue-bg)}
+td.editing{background:var(--bg-1)!important;outline:2px solid var(--gold);outline-offset:-2px}
+.cell-input{background:none;border:none;outline:none;color:var(--tx-1);font-size:12px;width:100%;height:100%}
+.col-chk{width:36px;min-width:36px;text-align:center}
+.col-num{width:42px;min-width:42px;text-align:center;font-family:var(--mono)}
+input[type="checkbox"]{appearance:none;width:14px;height:14px;border:1.5px solid var(--border-hi);border-radius:3px;background:var(--bg-white);cursor:pointer;position:relative;transition:all .08s;vertical-align:middle}
+input[type="checkbox"]:checked{background:var(--gold);border-color:var(--gold)}
+input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;left:1px;font-size:11px;color:#fff;font-weight:700}
+.toolbar-spacer{flex:1}
+.toolbar-count{font-size:10px;color:var(--tx-4);font-family:var(--mono)}
+
+/* Review */
+.review-item{background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:10px}
+.review-item:hover{border-color:var(--border-hi)}
+.review-tag{font-family:var(--serif);font-size:15px;font-weight:600;margin-bottom:3px}
+.review-section{font-size:10px;color:var(--tx-4);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px}
+.review-row{display:flex;gap:16px;margin-bottom:8px;font-size:12.5px}
+.review-label{font-size:9px;font-weight:600;color:var(--tx-4);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.review-old{color:var(--tx-4);text-decoration:line-through}
+.review-new{color:var(--green);font-weight:500}
+.review-reason{font-size:11px;color:var(--tx-3);font-style:italic;margin-bottom:10px;padding:8px 12px;background:var(--bg-0);border-radius:6px;border-left:3px solid var(--purple)}
+.review-actions{display:flex;gap:6px;align-items:center}
+.review-custom-input{flex:1;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius);padding:5px 10px;color:var(--tx-1);font-size:12px;outline:none}
+.review-custom-input:focus{border-color:var(--gold)}
+.review-transcript{font-size:11px;color:var(--tx-3);margin-top:8px;padding:8px 12px;background:var(--bg-0);border-radius:6px;max-height:70px;overflow-y:auto;font-family:var(--serif);line-height:1.5}
+
+/* Auditor */
+.audit-stat{text-align:center;padding:14px;background:var(--bg-white);border-radius:var(--radius);border:1px solid var(--border)}
+.audit-stat .num{font-size:28px;font-weight:700;font-family:var(--serif)}
+.audit-stat .lbl{font-size:9px;color:var(--tx-4);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.audit-progress-bar{height:6px;background:var(--bg-2);border-radius:3px;overflow:hidden;margin:8px 0}
+.audit-progress-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--blue));border-radius:3px}
+.audit-log{max-height:180px;overflow-y:auto;font-family:var(--mono);font-size:10px;color:var(--tx-3);padding:10px;background:var(--bg-0);border-radius:6px;border:1px solid var(--border)}
+
+/* AI Panel */
+.ai-panel{width:360px;min-width:360px;background:var(--bg-white);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.ai-panel.hidden{display:none}
+.ai-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.ai-head h3{font-size:13px;font-weight:600;flex:1;font-family:var(--serif)}
+.ai-dot{width:7px;height:7px;border-radius:50%;background:var(--purple);box-shadow:0 0 6px var(--purple)}
+.ai-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.ai-msg{padding:10px 12px;border-radius:9px;font-size:12.5px;line-height:1.5;max-width:92%;word-wrap:break-word;animation:msgIn .15s ease-out}
+@keyframes msgIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.ai-msg.user{background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--tx-1);align-self:flex-end;border-bottom-right-radius:3px}
+.ai-msg.assistant{background:var(--bg-0);border:1px solid var(--border);color:var(--tx-2);align-self:flex-start;border-bottom-left-radius:3px}
+.ai-msg.system{background:var(--purple-bg);border:1px solid var(--purple-bd);color:var(--purple);font-size:11px;align-self:center;text-align:center}
+.ai-msg strong{color:var(--tx-1)}.ai-msg code{font-family:var(--mono);font-size:10.5px;background:var(--bg-2);padding:1px 4px;border-radius:3px}
+.ai-msg pre{background:var(--bg-1);padding:8px;border-radius:6px;font-family:var(--mono);font-size:10px;overflow-x:auto;margin:5px 0;white-space:pre-wrap;color:var(--tx-1)}
+.ai-typing{color:var(--tx-4);font-size:11px;font-style:italic;padding:4px 12px}
+.ai-input-area{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border)}
+.ai-input{flex:1;background:var(--bg-0);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;color:var(--tx-1);font-size:12px;outline:none;resize:none;min-height:36px;max-height:90px}
+.ai-input:focus{border-color:var(--purple)}.ai-input::placeholder{color:var(--tx-4)}
+.ai-send{width:36px;height:36px;border-radius:var(--radius);background:var(--purple);border:none;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ai-send:hover{background:#8e70aa}.ai-send:disabled{opacity:.4}
+
+/* Setup */
+.setup-screen{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg-0);background-image:radial-gradient(ellipse at 30% 20%,rgba(140,122,80,.06) 0%,transparent 55%)}
+.setup-card{background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius-lg);padding:36px;max-width:520px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.06)}
+.setup-card h1{font-family:var(--serif);font-size:22px;font-weight:700;letter-spacing:-.4px;margin-bottom:3px}
+.setup-card .sub{font-size:12px;color:var(--tx-3);line-height:1.6;margin-bottom:18px}
+.setup-card label{display:block;font-size:10px;font-weight:600;color:var(--tx-4);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+.s-input{width:100%;padding:9px 12px;background:var(--bg-0);border:1px solid var(--border);border-radius:var(--radius);color:var(--tx-1);font-size:12px;font-family:var(--mono);outline:none;margin-bottom:12px}
+.s-input:focus{border-color:var(--gold)}.s-input::placeholder{color:var(--tx-4)}
+.setup-steps{background:var(--bg-0);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px}
+.setup-steps h3{font-size:11px;font-weight:600;color:var(--tx-2);margin-bottom:6px}
+.setup-steps ol{padding-left:18px;font-size:11px;color:var(--tx-3);line-height:1.9}
+.setup-steps code{background:var(--bg-2);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:10px;color:var(--gold)}
+.setup-ai{background:var(--purple-bg);border:1px solid var(--purple-bd);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px}
+.setup-ai h3{font-size:11px;font-weight:600;color:var(--purple);margin-bottom:3px}
+.setup-ai p{font-size:10px;color:var(--tx-3);margin-bottom:6px}
+.setup-err{color:var(--red);font-size:11px;margin-bottom:8px}
+
+/* Settings */
+.rule-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-0);border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:12px}
+.rule-name{font-weight:600;color:var(--tx-1);flex:1}.rule-desc{font-size:11px;color:var(--tx-3);flex:2}
+.rule-toggle{width:34px;height:18px;border-radius:9px;background:var(--bg-3);border:none;cursor:pointer;position:relative;transition:background .15s}
+.rule-toggle.on{background:var(--gold)}
+.rule-toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.rule-toggle.on::after{transform:translateX(16px)}
+
+/* Loading + Toasts */
+.loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--tx-4)}
+.spinner{width:22px;height:22px;border:2.5px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;gap:6px;align-items:center}
+.toast{padding:8px 18px;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius);font-size:11px;color:var(--tx-2);box-shadow:0 4px 16px rgba(0,0,0,.08);animation:toastIn .2s ease-out}
+.toast.success{border-color:var(--green);color:var(--green)}.toast.error{border-color:var(--red);color:var(--red)}
+@keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* Filter dropdown */
+.filter-dd{position:absolute;top:100%;left:0;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.08);padding:6px;z-index:100;min-width:200px;max-height:300px;overflow-y:auto}
+.filter-dd-item{padding:5px 10px;border-radius:4px;font-size:12px;color:var(--tx-2);cursor:pointer}
+.filter-dd-item:hover{background:var(--bg-1);color:var(--tx-1)}
+.filter-dd-item .cnt{font-family:var(--mono);font-size:10px;color:var(--tx-4);float:right}
+
+/* ═══ Inline Review System ═══ */
+.idx-suggestion{display:flex;align-items:baseline;gap:6px;padding:3px 6px;margin:1px 0;background:var(--purple-bg);border:1px solid var(--purple-bd);border-radius:5px;font-size:12px;animation:sugIn .2s ease-out}
+@keyframes sugIn{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:translateX(0)}}
+.idx-sug-arrow{color:var(--purple);font-weight:700;flex-shrink:0;font-size:13px}
+.idx-sug-old{color:var(--tx-4);text-decoration:line-through;font-size:11.5px}
+.idx-sug-new{color:var(--purple);font-weight:600;flex:1}
+.idx-sug-reason{font-size:10px;color:var(--tx-3);font-style:italic;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.idx-sug-actions{display:flex;gap:3px;flex-shrink:0}
+.idx-sug-btn{width:22px;height:22px;border:1px solid var(--border);border-radius:4px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;transition:all .1s}
+.idx-sug-btn.accept{color:var(--green);border-color:var(--green-bd)}.idx-sug-btn.accept:hover{background:var(--green-bg)}
+.idx-sug-btn.deny{color:var(--red);border-color:var(--red-bd)}.idx-sug-btn.deny:hover{background:var(--red-bg)}
+.idx-sug-btn.custom{color:var(--blue);border-color:var(--blue-bd)}.idx-sug-btn.custom:hover{background:var(--blue-bg)}
+
+/* Review checkboxes */
+.idx-review-chk{width:13px;height:13px;border-radius:3px;flex-shrink:0;cursor:pointer;margin-right:2px}
+.idx-review-chk:checked{background:var(--green);border-color:var(--green)}
+.idx-entry-review{display:inline-flex;align-items:center;gap:4px;margin-left:8px;font-size:10px;color:var(--tx-4)}
+.idx-entry-review .reviewed-label{color:var(--green);font-weight:500}
+
+/* Section progress in sidebar */
+.sidebar-progress{padding:4px 8px;margin:0 10px 2px}
+.sidebar-progress-bar{height:3px;background:var(--bg-2);border-radius:2px;overflow:hidden}
+.sidebar-progress-fill{height:100%;background:var(--green);border-radius:2px;transition:width .3s}
+.sidebar-progress-text{font-size:8px;color:var(--tx-4);font-family:var(--mono);margin-top:1px}
+
+/* Review mode banner */
+.review-mode-bar{display:flex;align-items:center;gap:8px;padding:6px 16px;background:var(--purple-bg);border-bottom:1px solid var(--purple-bd);font-size:11px;color:var(--purple);font-weight:500;flex-shrink:0}
+.review-mode-bar .rm-count{font-family:var(--mono);font-weight:600}
+
+/* Review filter pills */
+.idx-filter-pills{display:flex;gap:4px;margin-left:8px}
+.idx-filter-pill{padding:3px 10px;border-radius:12px;font-size:10px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg-white);color:var(--tx-3);transition:all .12s}
+.idx-filter-pill:hover{background:var(--bg-1);color:var(--tx-2)}
+.idx-filter-pill.active{background:var(--purple-bg);color:var(--purple);border-color:var(--purple-bd)}
+
+/* Audit scope selector */
+.audit-scope{background:var(--bg-0);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.audit-scope h4{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--tx-4);margin-bottom:8px}
+.audit-scope-options{display:flex;flex-wrap:wrap;gap:6px}
+.audit-scope-opt{padding:5px 12px;border-radius:var(--radius);font-size:11px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg-white);color:var(--tx-3);transition:all .12s}
+.audit-scope-opt:hover{background:var(--bg-1);color:var(--tx-2);border-color:var(--border-hi)}
+.audit-scope-opt.active{background:var(--gold-bg);color:var(--gold);border-color:rgba(140,122,80,.3)}
+.audit-scope-opt.section-opt{font-size:10px}
+
+/* Settings editable rules */
+.rule-edit-row{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:12px}
+.rule-edit-input{flex:1;background:var(--bg-white);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--tx-1);outline:none;font-family:var(--font)}
+.rule-edit-input:focus{border-color:var(--gold)}
+.example-row{display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:12px}
+.example-tag{font-weight:600;color:var(--tx-1);min-width:80px}
+.example-desc{color:var(--tx-2);flex:1}
+.spelling-row{display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:6px;margin-bottom:3px;font-size:11px;font-family:var(--mono)}
+.spelling-wrong{color:var(--red);text-decoration:line-through}
+.spelling-right{color:var(--green);font-weight:500}
+
+/* Bulk accept bar */
+.bulk-accept-bar{display:flex;align-items:center;gap:6px;padding:4px 8px;margin-top:4px}
+.bulk-accept-btn{font-size:10px;padding:2px 8px;height:22px}
+
+/* Denied history drawer */
+.denied-drawer{background:var(--bg-0);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-top:12px;max-height:200px;overflow-y:auto}
+.denied-item{display:flex;align-items:baseline;gap:6px;padding:3px 0;font-size:11px;color:var(--tx-3);border-bottom:1px solid var(--border)}
+.denied-item:last-child{border-bottom:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+// JEM INDEX WORKSTATION v2
+// ═══════════════════════════════════════════════════════════════
+const DISC='https://sheets.googleapis.com/$discovery/rest?version=v4',SCOPES='https://www.googleapis.com/auth/spreadsheets';
+
+// sectionFromPath is a function — must never be serialized
+function sectionFromPath(p){if(p.startsWith('People/'))return'People';if(p.includes('History'))return'History';if(p.startsWith('Time/')||p.includes('Calendar'))return'Dates';if(p.startsWith('Place/')||p.includes('Location')||p.includes('Country'))return'Locations';if(p.includes('Nigun'))return'Nigunim';if(p.includes('Organization')||p.includes('Book'))return'Orgs & Books';return'Topics'}
+
+const DEFAULT_RULES={tagDesc:{minWords:3,maxWords:6,absMax:8,
+checks:[{id:'length',name:'Length (3-6 words, max 8)',on:true},{id:'no_repeat',name:'No tag name repetition',on:true},{id:'rebbe',name:'"Rebbe" only when it\'s the point',on:true},{id:'trailing_prep',name:'Preserve trailing prepositions',on:true},{id:'multi_point',name:'Multi-point significance',on:true},{id:'spelling',name:'Spelling & grammar',on:true}],
+good:[{tag:'Tefillin',desc:'With pride'},{tag:'Pesach',desc:'Communal Seders in'},{tag:'Terror',desc:'Following Ma\'alot Massacre'},{tag:'Farbrengen',desc:'Broadcast at'}],
+bad:[{tag:'Tefillin',desc:'Praying publicly with pride wearing tefillin'},{tag:'Shabbos',desc:'The Rebbe speaks about Shabbos'}],
+spelling:[{wrong:'prier',right:'prior'},{wrong:'preformed',right:'performed'},{wrong:'begining',right:'beginning'},{wrong:'Godliness',right:'G-dliness'},{wrong:'Godly',right:'G-dly'},{wrong:"Farbrengen's",right:'Farbrengens'}]},
+segOrder:['Addresses','Timeless Moments','Conversations','My Encounter','Short Films','Films'],
+typeMap:{'LT Sicha':'Addresses','LT Timeless Moment':'Timeless Moments','LT Eye to Eye':'Conversations','LT My Encounter':'My Encounter','Short Film':'Short Films','Film':'Films','Film Chapter':'Films','Living Torah':'Addresses'},
+relDefaults:{People:{Addresses:'spoken_about','Timeless Moments':'seen_in',Conversations:'in_conversation_with','My Encounter':'interviewee','Short Films':'interviewee',Films:'interviewee'},Topics:{Addresses:'spoken_about','Timeless Moments':'seen_in',Conversations:'spoken_about','My Encounter':'spoken_about','Short Films':'spoken_about',Films:'spoken_about'}},
+sectionOrder:['People','Topics','Dates','History','Locations','Nigunim','Orgs & Books']};
+
+// Load persisted rules or use defaults
+function loadRules(){
+  // Start with a clean copy of defaults
+  const rules={tagDesc:JSON.parse(JSON.stringify(DEFAULT_RULES.tagDesc)),
+    segOrder:[...DEFAULT_RULES.segOrder],typeMap:{...DEFAULT_RULES.typeMap},
+    sectionOrder:[...DEFAULT_RULES.sectionOrder],relDefaults:JSON.parse(JSON.stringify(DEFAULT_RULES.relDefaults)),
+    sectionFromPath:sectionFromPath};
+  try{
+    const saved=localStorage.getItem('jw_rules');
+    if(saved){
+      const p=JSON.parse(saved);
+      if(p.tagDesc)rules.tagDesc=p.tagDesc;
+      if(!rules.tagDesc.spelling)rules.tagDesc.spelling=DEFAULT_RULES.tagDesc.spelling;
+      if(p.segOrder)rules.segOrder=p.segOrder;
+      if(p.typeMap)rules.typeMap=p.typeMap;
+      if(p.sectionOrder)rules.sectionOrder=p.sectionOrder;
+      if(p.relDefaults)rules.relDefaults=p.relDefaults;
+    }
+  }catch(e){console.warn('Rules load error',e)}
+  // Always ensure function is set
+  rules.sectionFromPath=sectionFromPath;
+  return rules;
+}
+function saveRules(){
+  const toSave={tagDesc:RULES.tagDesc,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults};
+  localStorage.setItem('jw_rules',JSON.stringify(toSave));
+}
+const RULES=loadRules();
+
+// ── State ─────────────────────────────────────────────────
+const S={connected:false,clientId:localStorage.getItem('jw_cid')||'',sheetId:localStorage.getItem('jw_sid')||'',claudeKey:localStorage.getItem('jw_ckey')||'',user:null,sheetMeta:null,
+activeTab:0,headers:[],rows:[],loading:false,
+view:'index',aiOpen:false,
+// Index
+indexData:null,
+idxSearch:'',idxNavMode:'tabs',idxLayout:'single',idxActiveSection:'all',idxActiveEntry:null,
+idxBookmarks:JSON.parse(localStorage.getItem('jw_bm')||'{}'),
+idxNotes:JSON.parse(localStorage.getItem('jw_notes')||'{}'),
+editingDesc:null,
+transcriptPopup:null,
+// Inline review system
+reviewData:JSON.parse(localStorage.getItem('jw_rv')||'{}'), // {key: {suggestion, reason, status:'pending'|'accepted'|'denied', deniedHistory:[], reviewed:bool}}
+reviewMode:false, // Toggle: hide reviewed items
+reviewFilter:'all', // 'all','unreviewed','pending','reviewed'
+// Audit scope
+auditScope:'all', // 'all','sections','entries','visible'
+auditSections:{}, // {People:true, Topics:false,...}
+auditEntryFilter:'',
+// Sheet
+search:'',sortCol:null,sortDir:'asc',selected:new Set(),visibleCols:new Set(),editCell:null,editVal:'',
+// Review (old queue — migrating to inline)
+reviewQueue:JSON.parse(localStorage.getItem('jw_rq')||'[]'),reviewCustom:{},
+// Auditor
+auditRunning:false,auditProgress:0,auditTotal:0,auditLog:[],auditBatch:25,
+// AI
+aiMsgs:[],aiTyping:false,aiInput:'',
+toasts:[],tid:0};
+
+// ── Helpers ───────────────────────────────────────────────
+const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function cl(n){let s='',c=n;while(c>=0){s=String.fromCharCode(c%26+65)+s;c=Math.floor(c/26)-1}return s}
+function toast(m,t=''){S.toasts.push({id:++S.tid,m,t});render();setTimeout(()=>{S.toasts=S.toasts.filter(x=>x.id!==S.tid);render()},3500)}
+function rmd(t){return t.replace(/```action[\s\S]*?```/g,'').replace(/```([\s\S]*?)```/g,'<pre>$1</pre>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>')}
+function saveBM(){localStorage.setItem('jw_bm',JSON.stringify(S.idxBookmarks))}
+function saveNotes(){localStorage.setItem('jw_notes',JSON.stringify(S.idxNotes))}
+function saveRQ(){localStorage.setItem('jw_rq',JSON.stringify(S.reviewQueue))}
+function saveRV(){localStorage.setItem('jw_rv',JSON.stringify(S.reviewData))}
+
+// Review data key: entryName|segType|rowIdx
+function rvKey(entryName,segType,rowIdx){return entryName+'|'+segType+'|'+rowIdx}
+function getRV(key){return S.reviewData[key]||null}
+function setRV(key,data){S.reviewData[key]=data;saveRV()}
+function delRV(key){delete S.reviewData[key];saveRV()}
+
+// Check if a description-level item is reviewed
+function isDescReviewed(entryName,segType,rowIdx){
+  const k=rvKey(entryName,segType,rowIdx);
+  const rv=getRV(k);
+  return rv?rv.reviewed===true:false;
+}
+
+// Check if ALL descriptions under an entry are reviewed
+function isEntryReviewed(entry){
+  if(!entry||!entry.results||!entry.results.length)return false;
+  return entry.results.every(r=>isDescReviewed(entry.name,r.segType,r.rowIdx));
+}
+
+// Check if ALL entries in a section are reviewed
+function isSectionReviewed(sectionName){
+  if(!S.indexData)return false;
+  const entries=S.indexData.sections[sectionName]||[];
+  if(!entries.length)return false;
+  return entries.every(e=>isEntryReviewed(e));
+}
+
+// Count reviewed descriptions for a section
+function sectionReviewProgress(sectionName){
+  if(!S.indexData)return{reviewed:0,total:0};
+  const entries=S.indexData.sections[sectionName]||[];
+  let reviewed=0,total=0;
+  entries.forEach(e=>{e.results.forEach(r=>{total++;if(isDescReviewed(e.name,r.segType,r.rowIdx))reviewed++})});
+  return{reviewed,total};
+}
+
+// Toggle reviewed status for a description
+function toggleDescReviewed(entryName,segType,rowIdx){
+  const k=rvKey(entryName,segType,rowIdx);
+  const rv=getRV(k)||{};
+  rv.reviewed=!rv.reviewed;
+  setRV(k,rv);
+}
+
+// Has pending suggestion
+function hasPendingSuggestion(entryName,segType,rowIdx){
+  const k=rvKey(entryName,segType,rowIdx);
+  const rv=getRV(k);
+  return rv&&rv.suggestion&&rv.status==='pending';
+}
+
+// Accept suggestion: update main sheet + Index tab, mark reviewed
+async function acceptSuggestion(entryName,segType,rowIdx){
+  const k=rvKey(entryName,segType,rowIdx);
+  const rv=getRV(k);
+  if(!rv||!rv.suggestion)return;
+  const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
+  if(kwCol>=0&&S.rows[rowIdx]){
+    try{
+      let kw=JSON.parse(S.rows[rowIdx][kwCol]);
+      const tag=kw.find(t=>t.name===entryName);
+      if(tag){tag.description=rv.suggestion;await saveCell(rowIdx,kwCol,JSON.stringify(kw))}
+    }catch(e){toast('Save error','error');return}
+  }
+  rv.status='accepted';rv.reviewed=true;setRV(k,rv);
+  // Sync to Index tab (non-blocking)
+  const entry=findEntry(entryName);
+  const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
+  if(r){
+    syncToIndexTab(entryName,r,'accepted','').catch(()=>{});
+    syncDescToIndexTab(entryName,r,rv.suggestion).catch(()=>{});
+  }
+  buildIndex();render();
+}
+
+// Deny suggestion: save to history, sync to sheet
+function denySuggestion(entryName,segType,rowIdx){
+  const k=rvKey(entryName,segType,rowIdx);
+  const rv=getRV(k);
+  if(!rv)return;
+  if(!rv.deniedHistory)rv.deniedHistory=[];
+  rv.deniedHistory.push({suggestion:rv.suggestion,reason:rv.reason,time:Date.now()});
+  rv.suggestion='';rv.reason='';rv.status='denied';
+  setRV(k,rv);
+  // Sync to Index tab (non-blocking)
+  const entry=findEntry(entryName);
+  const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
+  if(r)syncToIndexTab(entryName,r,'denied','').catch(()=>{});
+  render();
+}
+
+// Apply custom text — update main sheet + Index tab
+async function applyCustomDesc(entryName,segType,rowIdx,customText){
+  const k=rvKey(entryName,segType,rowIdx);
+  const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
+  if(kwCol>=0&&S.rows[rowIdx]){
+    try{
+      let kw=JSON.parse(S.rows[rowIdx][kwCol]);
+      const tag=kw.find(t=>t.name===entryName);
+      if(tag){tag.description=customText;await saveCell(rowIdx,kwCol,JSON.stringify(kw))}
+    }catch(e){toast('Save error','error');return}
+  }
+  const rv=getRV(k)||{};
+  rv.status='custom';rv.reviewed=true;rv.customApplied=customText;setRV(k,rv);
+  // Sync to Index tab (non-blocking)
+  const entry=findEntry(entryName);
+  const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
+  if(r){
+    syncToIndexTab(entryName,r,'custom','').catch(()=>{});
+    syncDescToIndexTab(entryName,r,customText).catch(()=>{});
+  }
+  buildIndex();render();
+}
+
+// Bulk accept all pending suggestions in an entry
+async function bulkAcceptEntry(entryName){
+  if(!S.indexData)return;
+  const entry=findEntry(entryName);
+  if(!entry)return;
+  let count=0;
+  for(const r of entry.results){
+    const k=rvKey(entryName,r.segType,r.rowIdx);
+    const rv=getRV(k);
+    if(rv&&rv.suggestion&&rv.status==='pending'){
+      await acceptSuggestion(entryName,r.segType,r.rowIdx);
+      count++;
+    }
+  }
+  if(count)toast(`Accepted ${count} suggestions for "${entryName}"`,'success');
+}
+
+// Migrate old reviewQueue items to new inline system
+function migrateOldQueue(){
+  if(S.reviewQueue.length>0){
+    S.reviewQueue.forEach(item=>{
+      const k=rvKey(item.entryName,item.section||'',item.rowIdx);
+      if(!getRV(k)){
+        setRV(k,{suggestion:item.suggestion||'',reason:item.reason||'',status:'pending',reviewed:false,deniedHistory:[]});
+      }
+    });
+    S.reviewQueue=[];saveRQ();
+  }
+}
+
+// ── Build Index from Sheet Data ───────────────────────────
+function buildIndex(){
+  if(!S.headers.length||!S.rows.length){S.indexData=null;return}
+  const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
+  const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
+  const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
+  const idCol=S.headers.findIndex(h=>h.toLowerCase()==='id');
+  const objIdCol=S.headers.findIndex(h=>h.toLowerCase()==='objectid');
+  const transcriptCol=S.headers.findIndex(h=>h.toLowerCase()==='transcript');
+  const summaryCol=S.headers.findIndex(h=>h.toLowerCase()==='summary');
+  const progCol=S.headers.findIndex(h=>h.toLowerCase()==='program_number');
+  const pvNameCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_name');
+  const pvTypeCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_type');
+
+  if(kwCol===-1){toast('Cannot find "keywords" column','error');return}
+
+  const entries={}; // key: tagName → {name, path, section, results:[{desc, rel, relevancy, clipName, clipId, segType, transcript, progNum, ...}]}
+
+  S.rows.forEach((row,ri)=>{
+    const kwRaw=(row[kwCol]||'').trim();
+    if(!kwRaw||kwRaw==='[]')return;
+    let tags;
+    try{tags=JSON.parse(kwRaw)}catch{return}
+
+    const clipType=(row[typeCol]||'').trim();
+    const segType=RULES.typeMap[clipType]||'Addresses';
+    const clipName=(row[nameCol]||'').trim();
+    const clipId=row[idCol]||'';
+    const objId=(row[objIdCol]||'').trim();
+    const transcript=(row[transcriptCol]||'').trim();
+    const summary=(row[summaryCol]||'').trim();
+    const progNum=(row[progCol]||'').trim();
+    const pvName=(row[pvNameCol]||'').trim();
+    const pvType=(row[pvTypeCol]||'').trim();
+
+    tags.forEach(tag=>{
+      const name=(tag.name||'').trim();
+      const path=tag.path||'';
+      const desc=(tag.description||'').trim();
+      const rel=tag.relationship||'';
+      const relevancy=tag.relevancy||0;
+      if(!name)return;
+
+      if(!entries[name]){
+        entries[name]={name,path,section:RULES.sectionFromPath(path),results:[],seealso:[],bestbet:null};
+      }
+      entries[name].results.push({
+        desc,rel,relevancy,clipName,clipId,objId,segType,transcript:transcript||summary||'',
+        progNum,pvName,pvType,rowIdx:ri,clipType
+      });
+    });
+  });
+
+  // Group by section and sort
+  const sections={};
+  RULES.sectionOrder.forEach(sec=>{sections[sec]=[]});
+  Object.values(entries).forEach(e=>{
+    const sec=e.section;
+    if(!sections[sec])sections[sec]=[];
+    // Sort results by segment order then alphabetically by description
+    e.results.sort((a,b)=>{
+      const oa=RULES.segOrder.indexOf(a.segType),ob=RULES.segOrder.indexOf(b.segType);
+      if(oa!==ob)return oa-ob;
+      return(a.desc||'').localeCompare(b.desc||'');
+    });
+    sections[sec].push(e);
+  });
+  // Sort entries within each section alphabetically
+  Object.keys(sections).forEach(sec=>{sections[sec].sort((a,b)=>a.name.localeCompare(b.name))});
+
+  S.indexData={sections,totalEntries:Object.keys(entries).length,totalResults:Object.values(entries).reduce((s,e)=>s+e.results.length,0)};
+}
+
+// ── Google Sheets API ─────────────────────────────────────
+let gapiOk=false;
+function initG(){return new Promise((r,j)=>{if(gapiOk)return r();gapi.load('client',async()=>{try{await gapi.client.init({discoveryDocs:[DISC]});gapiOk=true;r()}catch(e){j(e)}})})}
+async function doConnect(cid,sid,ck){
+  S.clientId=cid;S.sheetId=sid;S.claudeKey=ck||'';
+  localStorage.setItem('jw_cid',cid);localStorage.setItem('jw_sid',sid);if(ck)localStorage.setItem('jw_ckey',ck);
+  await initG();
+  return new Promise((r,j)=>{const tc=google.accounts.oauth2.initTokenClient({client_id:cid,scope:SCOPES,callback:async resp=>{
+    if(resp.error){j(new Error(resp.error_description||resp.error));return}
+    try{const u=await(await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+resp.access_token}})).json();S.user={name:u.name||u.email||'User',pic:u.picture||''}}catch{S.user={name:'User',pic:''}}
+    try{const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:sid});S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))}}catch(e){console.error(e)}
+    S.connected=true;r();}});tc.requestAccessToken()});
+}
+async function loadTab(idx){
+  if(!S.sheetMeta?.tabs?.[idx])return;S.loading=true;render();
+  try{const r=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:S.sheetId,range:`'${S.sheetMeta.tabs[idx].title}'`});const v=r.result.values||[];S.headers=v.length?v[0]:[];S.rows=v.length>1?v.slice(1).map(r=>{while(r.length<S.headers.length)r.push('');return r}):[];S.visibleCols=new Set(S.headers.map((_,i)=>i));S.selected=new Set();S.sortCol=null;S.search='';S.editCell=null;S.activeTab=idx;buildIndex()}catch(e){toast('Load failed: '+e.message,'error')}
+  S.loading=false;render();
+}
+async function saveCell(ri,ci,val){const nm=S.sheetMeta.tabs[S.activeTab].title;try{await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:S.sheetId,range:`'${nm}'!${cl(ci)}${ri+2}`,valueInputOption:'USER_ENTERED',resource:{values:[[val]]}});S.rows[ri][ci]=val;toast('Saved','success')}catch(e){toast('Save failed: '+e.message,'error')}}
+async function saveCells(changes){const nm=S.sheetMeta.tabs[S.activeTab].title;try{await gapi.client.sheets.spreadsheets.values.batchUpdate({spreadsheetId:S.sheetId,resource:{valueInputOption:'USER_ENTERED',data:changes.map(c=>({range:`'${nm}'!${cl(c.col)}${c.row+2}`,values:[[c.value]]}))}});changes.forEach(c=>{if(S.rows[c.row])S.rows[c.row][c.col]=c.value});toast(`Updated ${changes.length} cells`,'success')}catch(e){toast('Batch save failed','error')}}
+async function delRows(idxs){const nm=S.sheetMeta.tabs[S.activeTab].title;const sorted=[...idxs].sort((a,b)=>b-a);try{const sid=S.sheetMeta.tabs[S.activeTab].sid;await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:S.sheetId,resource:{requests:sorted.map(i=>({deleteDimension:{range:{sheetId:sid,dimension:'ROWS',startIndex:i+1,endIndex:i+2}}}))}});S.rows=S.rows.filter((_,i)=>!idxs.has(i));S.selected=new Set();toast(`Deleted ${sorted.length} rows`,'success');buildIndex()}catch(e){toast('Delete failed','error')}render()}
+function logout(){try{google.accounts.oauth2.revoke(gapi.client.getToken()?.access_token)}catch{}S.connected=false;S.sheetMeta=null;S.user=null;S.headers=[];S.rows=[];S.indexData=null;S.aiMsgs=[];localStorage.removeItem('jw_cid');localStorage.removeItem('jw_sid');render()}
+
+// ── Bulk delete by type ───────────────────────────────────
+async function bulkDeleteByType(type){
+  const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
+  const pvTypeCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_type');
+  if(typeCol===-1&&pvTypeCol===-1){toast('Cannot find type column','error');return}
+  const matchRows=new Set();
+  S.rows.forEach((r,i)=>{
+    const t=(r[typeCol]||'').trim().toLowerCase();
+    const pv=(r[pvTypeCol]||'').trim().toLowerCase();
+    const q=type.toLowerCase();
+    if(t.includes(q)||pv.includes(q))matchRows.add(i);
+  });
+  if(matchRows.size===0){toast('No matching rows found','error');return}
+  if(!confirm(`Delete ${matchRows.size} rows matching "${type}"?`))return;
+  await delRows(matchRows);
+}
+
+// ── Claude AI ─────────────────────────────────────────────
+async function aiChat(msg){
+  if(!S.claudeKey){toast('No API key','error');return}
+  S.aiMsgs.push({role:'user',content:msg});S.aiTyping=true;S.aiInput='';render();scrollAI();
+  const tabN=S.sheetMeta?.tabs?.[S.activeTab]?.title||'';
+  // Build a lightweight context: schema + index summary, NOT raw rows
+  let idxSummary='';
+  if(S.indexData){
+    idxSummary='\nIndex summary:\n';
+    RULES.sectionOrder.forEach(sec=>{
+      const entries=S.indexData.sections[sec]||[];
+      if(!entries.length)return;
+      idxSummary+=`${sec}: ${entries.length} entries (e.g., ${entries.slice(0,5).map(e=>e.name).join(', ')})\n`;
+    });
+  }
+  // If user mentions a specific entry, include that entry's data
+  let entryCtx='';
+  if(S.indexData){
+    const msgLow=msg.toLowerCase();
+    for(const sec of Object.values(S.indexData.sections)){
+      for(const e of sec){
+        if(msgLow.includes(e.name.toLowerCase())){
+          entryCtx+=`\nEntry "${e.name}" (${e.section}, ${e.results.length} results):\n`;
+          e.results.slice(0,15).forEach(r=>{
+            entryCtx+=`  - [${r.segType}] "${r.desc||'[empty]'}" (${r.rel}) clip:${r.clipId} prog:${r.progNum}\n`;
+          });
+          if(e.results.length>15)entryCtx+=`  ...+${e.results.length-15} more\n`;
+          break; // Only include first matching entry to keep context small
+        }
+      }
+      if(entryCtx)break;
+    }
+  }
+  // Slim sample: just 3 rows with truncated columns (skip keywords/transcript)
+  const skipCols=new Set(['keywords','transcript','summary','long_description','search.keywords_relevancy_1','search.keywords_relevancy_2','search.keywords_relevancy_3','search.keywords_relevancy_4']);
+  const slimHeaders=S.headers.filter(h=>!skipCols.has(h.toLowerCase()));
+  const slimIdx=slimHeaders.map(h=>S.headers.indexOf(h));
+  const sample=S.rows.slice(0,3).map(r=>slimIdx.map(i=>(r[i]||'').toString().slice(0,60)).join(' | ')).join('\n');
+  const ctx=`Tab: "${tabN}"\nColumns: ${S.headers.join(', ')}\nTotal rows: ${S.rows.length}\nSample (3 rows, key cols only):\n${slimHeaders.join(' | ')}\n${sample}${idxSummary}${entryCtx}`;
+  const sys=`You are an AI assistant in the JEM Index Workstation managing video index data from JEM.tv about the Lubavitcher Rebbe. The sheet has ${S.rows.length} clips with tags in a "keywords" JSON column. Each tag has name, path, description, relevancy, relationship.\n\n${ctx}\n\nTo make changes use:\n\`\`\`action\n{"type":"update_cells","changes":[{"row":0,"col":2,"value":"new"}]}\n\`\`\`\nor {"type":"delete_rows","indices":[0,1]}. Be concise.`;
+  try{const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2048,system:sys,messages:S.aiMsgs.slice(-12).map(m=>({role:m.role,content:m.content}))})});
+    if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.error?.message||'API error')}
+    const data=await resp.json(),text=data.content.map(c=>c.text||'').join('');S.aiMsgs.push({role:'assistant',content:text});
+    const am=text.match(/```action\s*([\s\S]*?)```/);if(am){try{const a=JSON.parse(am[1].trim());if(a.type==='update_cells')await saveCells(a.changes);else if(a.type==='update_cell')await saveCell(a.row,a.col,a.value);else if(a.type==='delete_rows')await delRows(new Set(a.indices));buildIndex()}catch{}}
+  }catch(e){S.aiMsgs.push({role:'assistant',content:'Error: '+e.message})}
+  S.aiTyping=false;render();scrollAI();
+}
+function scrollAI(){setTimeout(()=>{const el=$('.ai-msgs');if(el)el.scrollTop=el.scrollHeight},50)}
+
+// ── Generate Index Tab in Google Sheet ────────────────────
+async function generateIndexTab(sectionName){
+  if(!S.indexData||!S.indexData.sections[sectionName]){toast('No data for '+sectionName,'error');return}
+  const tabName='Index - '+sectionName;
+  
+  // Check if tab already exists
+  const existingTabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
+  if(existingTabs.includes(tabName)){toast(`"${tabName}" already exists. Delete it in the sheet first.`,'error');return}
+  
+  S.loading=true;render();
+  toast(`Generating "${tabName}"…`);
+  
+  try{
+    // Step 1: Create the new tab
+    await gapi.client.sheets.spreadsheets.batchUpdate({
+      spreadsheetId:S.sheetId,
+      resource:{requests:[{addSheet:{properties:{title:tabName}}}]}
+    });
+    
+    const entries=S.indexData.sections[sectionName]||[];
+    // Column layout: A-E core, F chapter name, G relevancy, H-I review, J spacer, K-M reference, N spacer, O-P notes
+    var EC=17; // total columns
+    var headers=['Entry Name','Segment Type','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked'];
+    
+    // Step 2: Build rows in indented format
+    const dataRows=[headers];
+    
+    // Safe relationship defaults lookup
+    const relDefaults=(RULES.relDefaults&&RULES.relDefaults[sectionName])?RULES.relDefaults[sectionName]:(RULES.relDefaults&&RULES.relDefaults.Topics?RULES.relDefaults.Topics:{});
+    
+    entries.forEach(function(entry){
+      var entryRow=[];for(var z=0;z<EC;z++)entryRow.push('');
+      entryRow[0]=entry.name||'';
+      dataRows.push(entryRow);
+      
+      var bySeg={};
+      (entry.results||[]).forEach(function(r){
+        var st=r.segType||'Other';
+        if(!bySeg[st])bySeg[st]=[];
+        bySeg[st].push(r);
+      });
+      
+      RULES.segOrder.forEach(function(seg){
+        if(!bySeg[seg])return;
+        
+        var segRow=[];for(var z=0;z<EC;z++)segRow.push('');
+        segRow[1]=seg;
+        dataRows.push(segRow);
+        
+        bySeg[seg].sort(function(a,b){return(a.desc||'').localeCompare(b.desc||'')});
+        
+        bySeg[seg].forEach(function(r){
+          var row=[];for(var z=0;z<EC;z++)row.push('');
+          // C: Description
+          row[2]=r.desc||'';
+          // D: Relationship (only if non-default)
+          var defRel=relDefaults[seg]||'spoken_about';
+          if(r.rel&&r.rel!==defRel){
+            if(sectionName==='Nigunim'){if(r.rel==='spoken_about')row[3]=r.rel}
+            else row[3]=r.rel;
+          }
+          // E: Reference — for films show film title, for others show program number
+          if(r.clipType==='Film Chapter'){
+            row[4]=r.pvName||''; // Film title
+          }else if(r.clipType==='Film'){
+            row[4]=r.clipName||''; // Film name
+          }else{
+            row[4]=r.progNum?('#'+r.progNum):'';
+          }
+          // F: Chapter Name For Film (only for Film Chapters)
+          if(r.clipType==='Film Chapter'){
+            row[5]=r.clipName||''; // Chapter title
+          }
+          // G: Relevancy
+          row[6]=(r.relevancy||'').toString();
+          // H: Review Status — fill from existing reviewData if available
+          var rvk=rvKey(entry.name,seg,r.rowIdx);
+          var rvd=getRV(rvk);
+          if(rvd){
+            var statusLabels={pending:'⏳ Pending',accepted:'✅ Accepted',denied:'❌ Denied',custom:'✏️ Custom',ok:'✓ OK'};
+            row[7]=statusLabels[rvd.status]||(rvd.reviewed?'✓ Reviewed':'');
+            // I: AI Suggestion
+            row[8]=rvd.suggestion||'';
+          }else{
+            row[7]='';
+            row[8]='';
+          }
+          // J: spacer (row[9])
+          // K: Clip link
+          var cid=r.clipId||(r.objId?(r.objId.replace('video_clip-','')):'');
+          row[10]=cid?('https://videos.jem.tv/video-player?clip='+cid):'';
+          // L: Clip title
+          row[11]=r.clipName||'';
+          // M: Transcript excerpt
+          row[12]=(r.transcript||'').substring(0,500);
+          dataRows.push(row);
+        });
+      });
+    });
+    
+    console.log('Total rows to write:',dataRows.length);
+    toast(`Built ${dataRows.length} rows, writing to sheet…`);
+    
+    // Step 3: Write in small batches using append
+    var batchSize=100;
+    for(var i=0;i<dataRows.length;i+=batchSize){
+      var chunk=dataRows.slice(i,i+batchSize);
+      try{
+        await gapi.client.sheets.spreadsheets.values.append({
+          spreadsheetId:S.sheetId,
+          range:tabName+'!A1',
+          valueInputOption:'RAW',
+          insertDataOption:'INSERT_ROWS',
+          resource:{values:chunk}
+        });
+        console.log('Wrote rows '+i+' to '+(i+chunk.length));
+      }catch(writeErr){
+        console.error('Batch write error at row '+i+':',writeErr);
+        toast('Write error at row '+i+', retrying one by one…','error');
+        // Fallback: write one row at a time
+        for(var j=0;j<chunk.length;j++){
+          try{
+            await gapi.client.sheets.spreadsheets.values.append({
+              spreadsheetId:S.sheetId,
+              range:tabName+'!A1',
+              valueInputOption:'RAW',
+              insertDataOption:'INSERT_ROWS',
+              resource:{values:[chunk[j]]}
+            });
+          }catch(singleErr){console.error('Row '+(i+j)+' failed:',singleErr)}
+        }
+      }
+      // Progress toast every 500 rows
+      if(i%500<batchSize)toast('Writing… '+Math.min(i+batchSize,dataRows.length)+'/'+dataRows.length+' rows');
+      await new Promise(function(r){setTimeout(r,250)});
+    }
+    
+    // Refresh sheet metadata
+    var meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+    S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(function(s){return{title:s.properties.title,sid:s.properties.sheetId}})};
+    invalidateTabMapCache(tabName);
+    
+    toast('"'+tabName+'" created with '+(dataRows.length-1)+' rows!','success');
+  }catch(e){
+    toast('Failed: '+e.message,'error');
+    console.error('generateIndexTab error:',e);
+  }
+  S.loading=false;render();
+}
+
+// Toggle review columns visibility in sheet
+async function toggleReviewCols(tabName,show){
+  try{
+    const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+    const sheet=meta.result.sheets.find(s=>s.properties.title===tabName);
+    if(!sheet)return;
+    const sid=sheet.properties.sheetId;
+    // Review cols are G-H (index 6-7)
+    await gapi.client.sheets.spreadsheets.batchUpdate({
+      spreadsheetId:S.sheetId,
+      resource:{requests:[{
+        updateDimensionProperties:{
+          range:{sheetId:sid,dimension:'COLUMNS',startIndex:7,endIndex:9},
+          properties:{hiddenByUser:!show},
+          fields:'hiddenByUser'
+        }
+      }]}
+    });
+    toast(show?'Review columns shown':'Review columns hidden','success');
+  }catch(e){toast('Failed: '+e.message,'error')}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INDEX TAB SYNC — write review data back to Google Sheet
+// ═══════════════════════════════════════════════════════════════
+
+// Build a map from (entryName, clipLink) → sheet row number in an Index tab.
+// The indented format: entry rows have col A filled, segment rows have col B filled,
+// result rows have col C (description) filled and col K (clip link).
+// We use clip link as the unique identifier for a result row.
+async function buildIndexTabMap(tabName){
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${tabName}'!A:L`
+    });
+    const rows=r.result.values||[];
+    const map={}; // key: "entryName|clipLink" → {sheetRow (1-indexed), tabName}
+    let currentEntry='';
+    let currentSeg='';
+    for(let i=1;i<rows.length;i++){ // skip header
+      const row=rows[i]||[];
+      const colA=(row[0]||'').trim();
+      const colB=(row[1]||'').trim();
+      const colK=(row[10]||'').trim(); // clip link
+      if(colA){currentEntry=colA;currentSeg='';continue}
+      if(colB){currentSeg=colB;continue}
+      // Result row — has clip link in col K
+      if(colK&&currentEntry){
+        const mapKey=currentEntry+'|'+colK;
+        map[mapKey]={sheetRow:i+1,tabName,entry:currentEntry,seg:currentSeg}; // +1 because sheets are 1-indexed
+      }
+    }
+    return map;
+  }catch(e){
+    console.error('buildIndexTabMap error:',e);
+    return{};
+  }
+}
+
+// Find the Index tab name for a given section
+function indexTabForSection(sectionName){
+  return'Index - '+sectionName;
+}
+
+// Find which section an entry belongs to
+function sectionForEntry(entryName){
+  if(!S.indexData)return null;
+  for(const sec of RULES.sectionOrder){
+    const entries=S.indexData.sections[sec]||[];
+    if(entries.find(e=>e.name===entryName))return sec;
+  }
+  return null;
+}
+
+// Build clip link from a result object (same logic as generateIndexTab)
+function clipLinkForResult(r){
+  const cid=r.clipId||(r.objId?(r.objId.replace('video_clip-','')):'');
+  return cid?('https://videos.jem.tv/video-player?clip='+cid):'';
+}
+
+// Cache for tab maps to avoid re-reading on every action
+let _tabMapCache={};
+let _tabMapCacheTime={};
+const TAB_MAP_TTL=60000; // 1 minute cache
+
+async function getTabMap(tabName){
+  const now=Date.now();
+  if(_tabMapCache[tabName]&&_tabMapCacheTime[tabName]&&(now-_tabMapCacheTime[tabName]<TAB_MAP_TTL)){
+    return _tabMapCache[tabName];
+  }
+  // Check tab exists
+  const existingTabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
+  if(!existingTabs.includes(tabName))return null;
+  const map=await buildIndexTabMap(tabName);
+  _tabMapCache[tabName]=map;
+  _tabMapCacheTime[tabName]=now;
+  return map;
+}
+
+function invalidateTabMapCache(tabName){
+  if(tabName){delete _tabMapCache[tabName];delete _tabMapCacheTime[tabName]}
+  else{_tabMapCache={};_tabMapCacheTime={}}
+}
+
+// Write Review Status and AI Suggestion to the Index tab for a specific result
+// reviewStatus: 'pending', 'accepted', 'denied', 'custom', 'ok', 'reviewed'
+// suggestion: the AI suggestion text (or empty)
+async function syncToIndexTab(entryName,result,reviewStatus,suggestion){
+  const section=sectionForEntry(entryName);
+  if(!section)return;
+  const tabName=indexTabForSection(section);
+  const map=await getTabMap(tabName);
+  if(!map)return; // Tab doesn't exist yet, skip silently
+
+  const clipLink=clipLinkForResult(result);
+  if(!clipLink)return;
+  const mapKey=entryName+'|'+clipLink;
+  const info=map[mapKey];
+  if(!info)return; // Row not found in tab
+
+  // Write H (Review Status) and I (AI Suggestion) — columns index 7 and 8
+  const statusLabel={pending:'⏳ Pending',accepted:'✅ Accepted',denied:'❌ Denied',custom:'✏️ Custom',ok:'✓ OK',reviewed:'✓ Reviewed'}[reviewStatus]||reviewStatus;
+  try{
+    await gapi.client.sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId:S.sheetId,
+      resource:{
+        valueInputOption:'RAW',
+        data:[
+          {range:`'${tabName}'!H${info.sheetRow}`,values:[[statusLabel]]},
+          {range:`'${tabName}'!I${info.sheetRow}`,values:[[suggestion||'']]}
+        ]
+      }
+    });
+  }catch(e){console.warn('syncToIndexTab write error:',e)}
+}
+
+// Also update the Description column (C) in the Index tab when a description changes
+async function syncDescToIndexTab(entryName,result,newDesc){
+  const section=sectionForEntry(entryName);
+  if(!section)return;
+  const tabName=indexTabForSection(section);
+  const map=await getTabMap(tabName);
+  if(!map)return;
+
+  const clipLink=clipLinkForResult(result);
+  if(!clipLink)return;
+  const mapKey=entryName+'|'+clipLink;
+  const info=map[mapKey];
+  if(!info)return;
+
+  try{
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId:S.sheetId,
+      range:`'${tabName}'!C${info.sheetRow}`,
+      valueInputOption:'RAW',
+      resource:{values:[[newDesc||'']]}
+    });
+  }catch(e){console.warn('syncDescToIndexTab write error:',e)}
+}
+
+// Batch sync: write all current review data to Index tabs
+// Called manually from dashboard or settings
+async function fullSyncToSheets(){
+  if(!S.indexData){toast('No index data','error');return}
+  toast('Syncing review data to sheets…');
+  let synced=0,skipped=0;
+  for(const sec of RULES.sectionOrder){
+    const tabName=indexTabForSection(sec);
+    const map=await getTabMap(tabName);
+    if(!map){skipped++;continue}
+
+    const entries=S.indexData.sections[sec]||[];
+    const batchData=[];
+    entries.forEach(entry=>{
+      entry.results.forEach(r=>{
+        const k=rvKey(entry.name,r.segType,r.rowIdx);
+        const rv=getRV(k);
+        if(!rv)return;
+        const clipLink=clipLinkForResult(r);
+        if(!clipLink)return;
+        const mapKey=entry.name+'|'+clipLink;
+        const info=map[mapKey];
+        if(!info)return;
+        const statusLabel={pending:'⏳ Pending',accepted:'✅ Accepted',denied:'❌ Denied',custom:'✏️ Custom',ok:'✓ OK'}[rv.status]||(rv.reviewed?'✓ Reviewed':'');
+        batchData.push(
+          {range:`'${tabName}'!H${info.sheetRow}`,values:[[statusLabel]]},
+          {range:`'${tabName}'!I${info.sheetRow}`,values:[[rv.suggestion||'']]}
+        );
+      });
+    });
+
+    if(batchData.length){
+      // Write in chunks of 200 ranges (100 rows × 2 cols)
+      for(let i=0;i<batchData.length;i+=200){
+        try{
+          await gapi.client.sheets.spreadsheets.values.batchUpdate({
+            spreadsheetId:S.sheetId,
+            resource:{valueInputOption:'RAW',data:batchData.slice(i,i+200)}
+          });
+          synced+=Math.min(200,batchData.length-i)/2;
+        }catch(e){console.warn('Batch sync error:',e)}
+        if(i+200<batchData.length)await new Promise(r=>setTimeout(r,300));
+      }
+    }
+  }
+  toast(`Synced ${Math.round(synced)} items to ${RULES.sectionOrder.length-skipped} tabs`,'success');
+}
+
+
+async function runAudit(){
+  if(!S.claudeKey||!S.indexData){toast('Need API key and data','error');return}
+  // Gather entries based on audit scope
+  const allEntries=[];
+  const scope=S.auditScope||'all';
+  
+  if(scope==='sections'){
+    const selectedSections=Object.keys(S.auditSections).filter(s=>S.auditSections[s]);
+    if(!selectedSections.length){toast('Select at least one section','error');return}
+    selectedSections.forEach(sec=>{
+      (S.indexData.sections[sec]||[]).forEach(e=>{
+        e.results.forEach(r=>{
+          allEntries.push({entryName:e.name,section:e.section,desc:r.desc,rel:r.rel,transcript:r.transcript,rowIdx:r.rowIdx,clipName:r.clipName,segType:r.segType});
+        });
+      });
+    });
+  }else if(scope==='visible'){
+    // Audit what's currently visible in index preview
+    const q=S.idxSearch.toLowerCase();
+    let sectionsToShow=S.idxActiveSection==='all'?RULES.sectionOrder:[S.idxActiveSection];
+    sectionsToShow.forEach(sec=>{
+      let entries=S.indexData.sections[sec]||[];
+      if(q)entries=entries.filter(e=>e.name.toLowerCase().includes(q)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+      if(S.idxNavMode==='tree'&&S.idxActiveEntry)entries=entries.filter(e=>e.name===S.idxActiveEntry);
+      entries.forEach(e=>{
+        e.results.forEach(r=>{
+          allEntries.push({entryName:e.name,section:e.section,desc:r.desc,rel:r.rel,transcript:r.transcript,rowIdx:r.rowIdx,clipName:r.clipName,segType:r.segType});
+        });
+      });
+    });
+  }else{
+    // 'all' — everything
+    Object.values(S.indexData.sections).forEach(sec=>sec.forEach(e=>{
+      e.results.forEach(r=>{
+        allEntries.push({entryName:e.name,section:e.section,desc:r.desc,rel:r.rel,transcript:r.transcript,rowIdx:r.rowIdx,clipName:r.clipName,segType:r.segType});
+      });
+    }));
+  }
+  
+  if(!allEntries.length){toast('No entries to audit','error');return}
+  
+  S.auditRunning=true;S.auditProgress=0;S.auditTotal=allEntries.length;S.auditLog=[];render();
+  const bs=S.auditBatch;let totalFixed=0;
+  for(let i=0;i<allEntries.length;i+=bs){
+    const batch=allEntries.slice(i,i+bs);
+    S.auditLog.push(`Batch ${Math.floor(i/bs)+1}/${Math.ceil(allEntries.length/bs)}...`);render();
+    try{
+      const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map(c=>c.name).join('; ');
+      const goodEx=RULES.tagDesc.good.map(e=>`${e.tag} → "${e.desc}"`).join(', ');
+      const badEx=RULES.tagDesc.bad.map(e=>`${e.tag} → "${e.desc}"`).join(', ');
+      const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
+      const prompt=`Audit tag descriptions for JEM Video Index.\nRules: ${rulesText}\nGood examples: ${goodEx}\nBad examples: ${badEx}\nSpelling fixes: ${spellingFixes}\nContext: Index is about the Rebbe. Default subject=Rebbe.\nFor each: "ok", "fix" (with suggestion+reason), or "generate" (if empty, use transcript to create 3-6 word desc).\nRespond with JSON array only.\n\n${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,120)}"`).join('\n\n')}`;
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'Expert editor for JEM Video Index book. JSON array only. Each item: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}',messages:[{role:'user',content:prompt}]})});
+      if(!resp.ok)throw new Error('API '+resp.status);
+      const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
+      let parsed;try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{const m=txt.match(/\[[\s\S]*\]/);if(m)parsed=JSON.parse(m[0]);else throw new Error('Parse fail')}
+      let fx=0;const syncQueue=[];
+      parsed.forEach(p=>{
+        if(p.status==='fix'||p.status==='generate'){
+          const e=batch[p.idx!=null?p.idx:p.index];
+          if(e){
+            const k=rvKey(e.entryName,e.segType,e.rowIdx);
+            const existing=getRV(k);
+            // Don't overwrite if already has a pending suggestion or is reviewed
+            if(!existing||(!existing.reviewed&&existing.status!=='pending')){
+              setRV(k,{suggestion:p.suggestion||'',reason:p.reason||'',status:'pending',reviewed:false,deniedHistory:(existing?.deniedHistory||[])});
+              syncQueue.push({entryName:e.entryName,segType:e.segType,rowIdx:e.rowIdx,status:'pending',suggestion:p.suggestion||''});
+            }
+            fx++;
+          }
+        }else{
+          // Mark as OK = reviewed
+          const e=batch[p.idx!=null?p.idx:p.index];
+          if(e){
+            const k=rvKey(e.entryName,e.segType,e.rowIdx);
+            const existing=getRV(k);
+            if(!existing||!existing.reviewed){
+              setRV(k,{...(existing||{}),reviewed:true,status:'ok'});
+              syncQueue.push({entryName:e.entryName,segType:e.segType,rowIdx:e.rowIdx,status:'ok',suggestion:''});
+            }
+          }
+        }
+      });
+      // Batch sync to Index tabs (non-blocking, fire and forget per batch)
+      if(syncQueue.length){
+        (async()=>{
+          for(const sq of syncQueue){
+            const entry=findEntry(sq.entryName);
+            const r=entry?.results.find(x=>x.segType===sq.segType&&x.rowIdx===sq.rowIdx);
+            if(r)syncToIndexTab(sq.entryName,r,sq.status,sq.suggestion).catch(()=>{});
+          }
+        })();
+      }
+      totalFixed+=fx;
+      S.auditLog.push(`  ${fx} need review, ${batch.length-fx} OK`);
+    }catch(e){S.auditLog.push(`  Error: ${e.message}`)}
+    S.auditProgress=Math.min(i+bs,allEntries.length);render();
+    if(i+bs<allEntries.length)await new Promise(r=>setTimeout(r,1500));
+  }
+  S.auditRunning=false;
+  S.auditLog.push(`\nDone! ${totalFixed} items need review.`);toast(`${totalFixed} items to review inline`,'success');render();
+}
+async function reviewAction(item,action,custom){
+  if(action==='accept'||action==='custom'){
+    const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
+    if(kwCol>=0&&S.rows[item.rowIdx]){
+      try{
+        let kw=JSON.parse(S.rows[item.rowIdx][kwCol]);
+        const tag=kw.find(t=>t.name===item.entryName);
+        if(tag){tag.description=action==='custom'?custom:item.suggestion;
+          await saveCell(item.rowIdx,kwCol,JSON.stringify(kw));}
+      }catch{}
+    }
+  }
+  S.reviewQueue=S.reviewQueue.filter(r=>!(r.rowIdx===item.rowIdx&&r.entryName===item.entryName));saveRQ();render();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ICONS
+// ═══════════════════════════════════════════════════════════════
+const IC={
+  dash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
+  idx:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+  sheet:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+  audit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+  review:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+  settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+  ai:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 3-2 5.4-4 6.5V18H9v-2.5C7 14.4 5 12 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>',
+  send:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+  x:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+  search:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>',
+  trash:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  refresh:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
+  play:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
+  check:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>',
+  bookmark:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+  video:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>',
+  doc:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+  note:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>',
+  logout:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+  cols1:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
+  cols2:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>',
+};
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════
+function render(){
+  const app=$('#app');
+  if(!S.connected){rSetup(app);return}
+  if(S.loading&&!S.headers.length){app.innerHTML='<div class="loading-state"><div class="spinner"></div>Loading…</div>';return}
+  let h='';
+  h+=rSidebar();
+  h+='<div class="main"><div class="main-content"><div class="content">';
+  if(S.view==='dashboard')h+=rDash();
+  else if(S.view==='index')h+=rIndex();
+  else if(S.view==='sheet')h+=rSheet();
+  else if(S.view==='auditor')h+=rAuditor();
+  else if(S.view==='review')h+=rReview();
+  else if(S.view==='settings')h+=rSettings();
+  h+='</div>';
+  if(S.aiOpen)h+=rAI();
+  h+='</div></div>';
+  // Transcript popup
+  if(S.transcriptPopup)h+=rTranscript();
+  // Toasts
+  h+='<div class="toasts">';S.toasts.forEach(t=>{h+=`<div class="toast ${t.t}">${esc(t.m)}</div>`});h+='</div>';
+  app.innerHTML=h;bindAll();
+}
+
+function rSidebar(){
+  let h='<div class="sidebar"><div class="sidebar-logo">JEM Index<span>Workstation</span></div>';
+  h+=`<div class="sidebar-sheet">${esc(S.sheetMeta?.title||S.sheetId)}</div>`;
+  h+='<div class="sidebar-nav"><div class="nav-sec">Views</div>';
+  // Count pending suggestions
+  const pendingCount=Object.values(S.reviewData).filter(rv=>rv.status==='pending'&&rv.suggestion).length;
+  [{id:'index',ic:IC.idx,l:'Index Preview'},{id:'dashboard',ic:IC.dash,l:'Dashboard'},{id:'auditor',ic:IC.audit,l:'AI Auditor'},{id:'review',ic:IC.review,l:'Review Queue',b:pendingCount||null},{id:'sheet',ic:IC.sheet,l:'Sheet View'},{id:'settings',ic:IC.settings,l:'Settings'}].forEach(n=>{
+    h+=`<div class="nav-item ${S.view===n.id?'active':''}" data-nav="${n.id}">${n.ic}<span>${n.l}</span>${n.b?`<span class="badge">${n.b}</span>`:''}</div>`;
+  });
+  h+='<div class="nav-sec" style="margin-top:10px">Tools</div>';
+  h+=`<div class="nav-item ${S.aiOpen?'active':''}" id="nav-ai">${IC.ai}<span>AI Chat</span></div>`;
+  // Section progress
+  if(S.indexData){
+    h+='<div class="nav-sec" style="margin-top:10px">Review Progress</div>';
+    RULES.sectionOrder.forEach(sec=>{
+      const prog=sectionReviewProgress(sec);
+      if(!prog.total)return;
+      const pct=Math.round(prog.reviewed/prog.total*100);
+      const done=isSectionReviewed(sec);
+      h+=`<div class="sidebar-progress"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:${done?'var(--green)':'var(--tx-3)'};font-weight:${done?'600':'400'}">${sec}</span><span class="sidebar-progress-text">${prog.reviewed}/${prog.total}</span></div><div class="sidebar-progress-bar"><div class="sidebar-progress-fill" style="width:${pct}%"></div></div></div>`;
+    });
+  }
+  h+='</div>';
+  if(S.sheetMeta?.tabs?.length){h+='<div class="sidebar-tabs"><h4>Sheet Tabs</h4>';S.sheetMeta.tabs.forEach((t,i)=>{h+=`<div class="stab ${i===S.activeTab?'active':''}" data-stab="${i}">${esc(t.title)}</div>`});h+='</div>'}
+  if(S.user)h+=`<div class="sidebar-user"><div class="sidebar-avatar">${S.user.pic?'<img src="'+S.user.pic+'">':esc(S.user.name.charAt(0))}</div><span class="sidebar-uname">${esc(S.user.name)}</span><button class="btn btn-sm btn-icon" id="blo" title="Sign out">${IC.logout}</button></div>`;
+  return h+'</div>';
+}
+
+function rDash(){
+  if(!S.indexData)return'<div class="pad" style="color:var(--tx-3)">Loading index data…</div>';
+  const ix=S.indexData;
+  let h='<div class="page-hd"><h1>Dashboard</h1><p>Overview of your JEM Video Index</p></div><div class="pad">';
+  h+='<div class="grid grid-4" style="margin-bottom:18px">';
+  h+=`<div class="card"><h4>Index Entries</h4><div class="val">${ix.totalEntries.toLocaleString()}</div></div>`;
+  h+=`<div class="card"><h4>Tag Instances</h4><div class="val">${ix.totalResults.toLocaleString()}</div></div>`;
+  h+=`<div class="card"><h4>Pending Review</h4><div class="val" style="color:${S.reviewQueue.length?'var(--purple)':'var(--green)'}">${S.reviewQueue.length}</div></div>`;
+  h+=`<div class="card"><h4>Source Clips</h4><div class="val">${S.rows.length.toLocaleString()}</div></div>`;
+  h+='</div>';
+  // Section breakdown
+  h+='<div class="card" style="margin-bottom:18px"><h4>Entries by Section</h4>';
+  RULES.sectionOrder.forEach(sec=>{
+    const entries=ix.sections[sec]||[];
+    const pct=ix.totalEntries?(entries.length/ix.totalEntries*100):0;
+    h+=`<div class="progress-row"><div class="progress-label">${sec}</div><div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:var(--gold)"></div></div><div class="progress-count">${entries.length}</div></div>`;
+  });
+  h+='</div>';
+  // Generate Index Tabs section
+  const existingTabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
+  h+='<div class="card" style="margin-bottom:18px"><h4>Generate Index Tabs in Google Sheet</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:10px">Create structured index tabs (one per section) in your spreadsheet. Each tab has the indented book format with entry names, segment types, descriptions, references, and full transcripts.</p>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
+  RULES.sectionOrder.forEach(sec=>{
+    const tabName='Index - '+sec;
+    const exists=existingTabs.includes(tabName);
+    const cnt=(ix.sections[sec]||[]).length;
+    if(exists){
+      h+=`<div style="display:flex;align-items:center;gap:4px"><button class="btn btn-sm" disabled style="opacity:.5">${sec} (${cnt})</button><span style="font-size:10px;color:var(--green)">✓ exists</span></div>`;
+    }else{
+      h+=`<button class="btn btn-sm btn-gold" data-gentab="${sec}">${sec} (${cnt} entries)</button>`;
+    }
+  });
+  h+='</div>';
+  // Toggle review columns
+  const indexTabs=existingTabs.filter(t=>t.startsWith('Index - '));
+  if(indexTabs.length>0){
+    h+='<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">';
+    h+=`<button class="btn btn-sm" data-togglerev="show">Show Review Columns</button>`;
+    h+=`<button class="btn btn-sm" data-togglerev="hide">Hide Review Columns</button>`;
+    h+=`<button class="btn btn-sm btn-blue" id="btn-fullsync">⟳ Sync All Review Data to Sheets</button>`;
+    h+='</div>';
+  }
+  h+='</div>';
+  h+=`<div style="display:flex;gap:10px"><button class="btn btn-gold" data-nav="index">${IC.idx} Open Index Preview</button><button class="btn btn-purple" data-nav="auditor">${IC.audit} Run Audit</button></div>`;
+  return h+'</div>';
+}
+
+function rIndex(){
+  if(!S.indexData)return'<div class="pad" style="color:var(--tx-3)">No index data. Load a sheet first.</div>';
+  const ix=S.indexData;
+  const q=S.idxSearch.toLowerCase();
+  let sectionsToShow=S.idxActiveSection==='all'?RULES.sectionOrder:[S.idxActiveSection];
+
+  let h='<div style="display:flex;flex-direction:column;height:100%">';
+  // Toolbar
+  h+='<div class="idx-toolbar">';
+  h+=`<div class="idx-search">${IC.search}<input id="idx-search" placeholder="Search entries…" value="${esc(S.idxSearch)}"></div>`;
+  // Nav mode
+  h+='<div class="idx-nav-mode">';
+  ['all','tabs','tree'].forEach(m=>{const labels={all:'Scroll All',tabs:'Section Tabs',tree:'Tree Nav'};h+=`<div class="idx-nav-btn ${S.idxNavMode===m?'active':''}" data-idxnav="${m}">${labels[m]}</div>`});
+  h+='</div>';
+  // Review filter pills
+  h+='<div class="idx-filter-pills">';
+  [{id:'all',l:'All'},{id:'unreviewed',l:'Unreviewed'},{id:'pending',l:'Pending'},{id:'reviewed',l:'Reviewed'}].forEach(f=>{
+    h+=`<div class="idx-filter-pill ${S.reviewFilter===f.id?'active':''}" data-rvfilter="${f.id}">${f.l}</div>`;
+  });
+  h+='</div>';
+  // Layout toggle
+  h+='<div class="idx-layout-toggle">';
+  h+=`<div class="idx-nav-btn ${S.idxLayout==='single'?'active':''}" data-idxlayout="single">${IC.cols1}</div>`;
+  h+=`<div class="idx-nav-btn ${S.idxLayout==='two'?'active':''}" data-idxlayout="two">${IC.cols2}</div>`;
+  h+='</div>';
+  h+=`<div class="toolbar-spacer"></div>`;
+  // Review mode toggle
+  h+=`<button class="btn btn-sm ${S.reviewMode?'btn-purple':''}" id="idx-review-toggle">${S.reviewMode?'✓ ':' '}Review Mode</button>`;
+  h+=`<button class="btn btn-sm" id="idx-ref">${IC.refresh} Rebuild</button>`;
+  h+='</div>';
+
+  // Review mode banner
+  if(S.reviewMode){
+    const totalPending=Object.values(S.reviewData).filter(rv=>rv.status==='pending'&&rv.suggestion).length;
+    h+=`<div class="review-mode-bar">Review Mode ON — showing items needing attention. <span class="rm-count">${totalPending} pending suggestions</span><div class="toolbar-spacer"></div><button class="btn btn-sm" id="idx-review-off">Exit Review Mode</button></div>`;
+  }
+
+  // Section tabs (if tab mode)
+  if(S.idxNavMode==='tabs'){
+    h+='<div style="display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--bg-white);flex-shrink:0;overflow-x:auto;padding:0 16px">';
+    h+=`<div class="idx-nav-btn ${S.idxActiveSection==='all'?'active':''}" data-idxsec="all" style="padding:8px 14px">All</div>`;
+    RULES.sectionOrder.forEach(sec=>{
+      const cnt=(ix.sections[sec]||[]).length;
+      const done=isSectionReviewed(sec);
+      h+=`<div class="idx-nav-btn ${S.idxActiveSection===sec?'active':''}" data-idxsec="${sec}" style="padding:8px 14px">${done?'<span style="color:var(--green);margin-right:3px">✓</span>':''}${sec} <span style="font-size:9px;color:var(--tx-4);margin-left:3px">${cnt}</span></div>`;
+    });
+    h+='</div>';
+  }
+
+  h+='<div class="idx-main">';
+  // Tree (if tree mode)
+  if(S.idxNavMode==='tree'){
+    h+='<div class="idx-tree">';
+    sectionsToShow.forEach(sec=>{
+      let entries=(ix.sections[sec]||[]).filter(e=>!q||e.name.toLowerCase().includes(q));
+      // Apply review filter in tree
+      entries=applyReviewFilter(entries);
+      if(!entries.length)return;
+      h+=`<div class="idx-tree-section">${sec} <span class="idx-tree-count">(${entries.length})</span></div>`;
+      entries.slice(0,100).forEach(e=>{
+        const entryDone=isEntryReviewed(e);
+        const hasPending=e.results.some(r=>hasPendingSuggestion(e.name,r.segType,r.rowIdx));
+        h+=`<div class="idx-tree-item ${S.idxActiveEntry===e.name?'active':''}" data-tree="${esc(e.name)}">${entryDone?'<span style="color:var(--green);margin-right:3px">✓</span>':''}${hasPending?'<span style="color:var(--purple);margin-right:3px">●</span>':''}${esc(e.name)}</div>`;
+      });
+      if(entries.length>100)h+=`<div style="padding:4px 10px;font-size:10px;color:var(--tx-4)">+${entries.length-100} more…</div>`;
+    });
+    h+='</div>';
+  }
+
+  // Main body
+  h+=`<div class="idx-body ${S.idxLayout==='two'?'two-col':''}">`;
+  let entryCount=0;
+  sectionsToShow.forEach(sec=>{
+    let entries=(ix.sections[sec]||[]);
+    if(q)entries=entries.filter(e=>e.name.toLowerCase().includes(q)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+    if(!entries.length)return;
+    if(S.idxNavMode==='tree'&&S.idxActiveEntry){entries=entries.filter(e=>e.name===S.idxActiveEntry);if(!entries.length)return}
+    // Apply review filter
+    entries=applyReviewFilter(entries);
+    if(!entries.length)return;
+
+    h+=`<div class="idx-section-hd">${sec}${isSectionReviewed(sec)?' <span style="color:var(--green);font-size:14px">✓ reviewed</span>':''}</div>`;
+    entries.forEach(e=>{
+      const isBM=S.idxBookmarks[e.name];
+      const note=S.idxNotes[e.name];
+      const hasEmpty=e.results.some(r=>!r.desc?.trim());
+      const tooMany=e.results.length>=12;
+      const entryDone=isEntryReviewed(e);
+      const entryHasPending=e.results.some(r=>hasPendingSuggestion(e.name,r.segType,r.rowIdx));
+      entryCount++;
+      if(entryCount>300)return;
+
+      h+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''}">`;
+      h+=`<div class="idx-entry-name" data-entry="${esc(e.name)}">${esc(e.name)}`;
+      if(tooMany)h+=` <span class="idx-entry-badge warn">${e.results.length} results</span>`;
+      if(hasEmpty)h+=` <span class="idx-entry-badge empty">missing desc</span>`;
+      // Entry-level review indicator
+      h+=`<span class="idx-entry-review"><input type="checkbox" class="idx-review-chk" data-entry-rv="${esc(e.name)}" ${entryDone?'checked':''} title="Mark all descriptions reviewed"><span class="${entryDone?'reviewed-label':''}">${entryDone?'reviewed':''}</span></span>`;
+      h+=`</div>`;
+      h+=`<div class="idx-entry-meta">${e.section} · ${e.results.length} result${e.results.length!==1?'s':''} · <span data-bm="${esc(e.name)}" style="cursor:pointer;color:${isBM?'var(--gold)':'var(--tx-4)'}">${IC.bookmark}</span>`;
+      if(note)h+=` · 📝`;
+      if(entryHasPending)h+=` · <button class="btn btn-sm btn-green bulk-accept-btn" data-bulkaccept="${esc(e.name)}">Accept All</button>`;
+      h+=`</div>`;
+
+      // Group by segment type
+      const byseg={};
+      e.results.forEach(r=>{if(!byseg[r.segType])byseg[r.segType]=[];byseg[r.segType].push(r)});
+      RULES.segOrder.forEach(seg=>{
+        if(!byseg[seg])return;
+        h+=`<div class="idx-seg"><div class="idx-seg-label">${seg}</div>`;
+        byseg[seg].forEach((r,ri)=>{
+          const descEmpty=!r.desc?.trim();
+          const vidUrl=r.clipId?`https://videos.jem.tv/video-player?clip=${r.clipId}`:(r.objId?`https://videos.jem.tv/video-player?clip=${r.objId.replace('video_clip-','')}`:'');
+          const k=rvKey(e.name,r.segType,r.rowIdx);
+          const rv=getRV(k);
+          const isReviewed=rv&&rv.reviewed;
+          const isPending=rv&&rv.suggestion&&rv.status==='pending';
+
+          // In review mode, skip reviewed items (unless they have pending suggestions)
+          if(S.reviewMode&&isReviewed&&!isPending)return;
+
+          h+=`<div class="idx-result">`;
+          // Review checkbox
+          h+=`<input type="checkbox" class="idx-review-chk" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}" ${isReviewed?'checked':''} title="Mark reviewed">`;
+          h+=`<span class="idx-result-desc ${descEmpty?'empty-desc':'editable'}" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="Double-click to edit">${descEmpty?'[no description]':esc(r.desc)}</span>`;
+          if(r.rel)h+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
+          h+=`<span class="idx-result-ref">`;
+          if(r.clipType==='Film Chapter'||r.clipType==='Film')h+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">${esc(r.pvName||r.clipName)}</a>`;
+          else h+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">#${esc(r.progNum)}</a>`;
+          h+=`</span>`;
+          h+=`<span class="idx-result-actions">`;
+          if(vidUrl)h+=`<a class="idx-mini-btn" href="${vidUrl}" target="_blank" title="Watch">${IC.video}</a>`;
+          if(r.transcript)h+=`<span class="idx-mini-btn" data-showtx="${r.rowIdx}" title="Transcript">${IC.doc}</span>`;
+          h+=`<span class="idx-mini-btn" data-auditone="${esc(e.name)}|${r.rowIdx}|${seg}" title="Audit this">${IC.audit}</span>`;
+          h+=`</span></div>`;
+
+          // Inline suggestion (if pending)
+          if(isPending){
+            h+=`<div class="idx-suggestion">`;
+            h+=`<span class="idx-sug-arrow">→</span>`;
+            if(r.desc)h+=`<span class="idx-sug-old">${esc(r.desc)}</span>`;
+            h+=`<span class="idx-sug-new">${esc(rv.suggestion)}</span>`;
+            if(rv.reason)h+=`<span class="idx-sug-reason" title="${esc(rv.reason)}">${esc(rv.reason)}</span>`;
+            h+=`<span class="idx-sug-actions">`;
+            h+=`<span class="idx-sug-btn accept" data-sugaccept="${esc(e.name)}|${seg}|${r.rowIdx}" title="Accept">${IC.check}</span>`;
+            h+=`<span class="idx-sug-btn deny" data-sugdeny="${esc(e.name)}|${seg}|${r.rowIdx}" title="Deny">${IC.x}</span>`;
+            h+=`<span class="idx-sug-btn custom" data-sugcustom="${esc(e.name)}|${seg}|${r.rowIdx}" title="Custom edit">✎</span>`;
+            h+=`</span></div>`;
+          }
+        });
+        h+='</div>';
+      });
+      h+='</div>';
+    });
+  });
+  if(entryCount>300)h+=`<div style="padding:20px;text-align:center;color:var(--tx-3);font-size:12px">Showing 300 of ${entryCount} entries. Use search or section tabs to narrow.</div>`;
+  h+='</div></div></div>';
+  return h;
+}
+
+// Apply review filter to entries
+function applyReviewFilter(entries){
+  const f=S.reviewFilter;
+  if(f==='all'&&!S.reviewMode)return entries;
+  return entries.filter(e=>{
+    if(f==='reviewed')return isEntryReviewed(e);
+    if(f==='unreviewed')return!isEntryReviewed(e);
+    if(f==='pending')return e.results.some(r=>hasPendingSuggestion(e.name,r.segType,r.rowIdx));
+    // 'all' with review mode — show only unreviewed or with pending
+    if(S.reviewMode)return!isEntryReviewed(e)||e.results.some(r=>hasPendingSuggestion(e.name,r.segType,r.rowIdx));
+    return true;
+  });
+}
+
+function rSheet(){
+  const pr=getProc(),vc=S.headers.map((h,i)=>({h,i})).filter(c=>S.visibleCols.has(c.i)),dr=pr.slice(0,500);
+  let h='<div style="display:flex;flex-direction:column;height:100%">';
+  h+='<div class="table-toolbar">';
+  h+=`<div class="idx-search">${IC.search}<input id="si" placeholder="Search…" value="${esc(S.search)}"></div>`;
+  if(S.selected.size>0)h+=`<div class="sel-bar">${S.selected.size} sel <button class="btn btn-sm btn-red" id="btn-del">${IC.trash}</button><button class="btn btn-sm" id="btn-desel">Clear</button></div>`;
+  h+=`<div class="toolbar-spacer"></div><span class="toolbar-count">${pr.length.toLocaleString()} rows</span>`;
+  h+=`<button class="btn btn-sm" id="btn-ref">${IC.refresh}</button>`;
+  h+='</div>';
+  h+='<div class="table-wrap"><table><thead><tr>';
+  h+=`<th class="col-chk"><input type="checkbox" id="chk-all" ${S.selected.size===pr.length&&pr.length?'checked':''}></th><th class="col-num">#</th>`;
+  for(const c of vc)h+=`<th data-col="${c.i}">${esc(c.h)}</th>`;
+  h+='</tr></thead><tbody>';
+  for(const{d,i:idx}of dr){
+    h+=`<tr class="${S.selected.has(idx)?'sel':''}" data-idx="${idx}"><td class="col-chk"><input type="checkbox" data-chk="${idx}" ${S.selected.has(idx)?'checked':''}></td><td class="col-num" style="color:var(--tx-4);font-size:10px">${idx+1}</td>`;
+    for(const c of vc){const val=d[c.i]||'',ed=S.editCell&&S.editCell.r===idx&&S.editCell.c===c.i;
+      if(ed)h+=`<td class="editing"><input class="cell-input" id="ei" value="${esc(S.editVal)}"></td>`;
+      else h+=`<td data-dbl="${idx}-${c.i}" title="${esc(val)}">${esc((val+'').slice(0,100))}</td>`}
+    h+='</tr>'}
+  h+='</tbody></table>';
+  if(pr.length>500)h+=`<div style="padding:12px;text-align:center;color:var(--tx-4);font-size:11px">Showing 500 of ${pr.length.toLocaleString()}</div>`;
+  return h+'</div></div>';
+}
+function getProc(){let r=S.rows.map((d,i)=>({d,i}));if(S.search.trim()){const q=S.search.toLowerCase();r=r.filter(x=>x.d.some(c=>c&&c.toString().toLowerCase().includes(q)))}if(S.sortCol!==null){const c=S.sortCol,dir=S.sortDir;r.sort((a,b)=>{const va=(a.d[c]||'').toString(),vb=(b.d[c]||'').toString(),na=parseFloat(va),nb=parseFloat(vb);if(!isNaN(na)&&!isNaN(nb))return dir==='asc'?na-nb:nb-na;return dir==='asc'?va.localeCompare(vb):vb.localeCompare(va)})}return r}
+
+function rAuditor(){
+  let h='<div class="page-hd"><h1>AI Tag Description Auditor</h1><p>Check descriptions against your rules — results appear inline in Index Preview</p></div><div class="pad">';
+  if(!S.indexData)return h+'<p>Load data first.</p></div>';
+  const ix=S.indexData;
+  const pendingCount=Object.values(S.reviewData).filter(rv=>rv.status==='pending'&&rv.suggestion).length;
+  const reviewedCount=Object.values(S.reviewData).filter(rv=>rv.reviewed).length;
+  h+='<div class="grid grid-4" style="margin-bottom:16px">';
+  h+=`<div class="audit-stat"><div class="num">${ix.totalEntries}</div><div class="lbl">Entries</div></div>`;
+  h+=`<div class="audit-stat"><div class="num">${ix.totalResults}</div><div class="lbl">Tag Instances</div></div>`;
+  h+=`<div class="audit-stat"><div class="num" style="color:var(--purple)">${pendingCount}</div><div class="lbl">Pending</div></div>`;
+  h+=`<div class="audit-stat"><div class="num" style="color:var(--green)">${reviewedCount}</div><div class="lbl">Reviewed</div></div>`;
+  h+='</div>';
+
+  // Audit scope selector
+  h+='<div class="audit-scope"><h4>Audit Scope</h4><div class="audit-scope-options">';
+  [{id:'all',l:'Everything'},{id:'sections',l:'Selected Sections'},{id:'visible',l:'Currently Visible'}].forEach(o=>{
+    h+=`<div class="audit-scope-opt ${S.auditScope===o.id?'active':''}" data-auditscope="${o.id}">${o.l}</div>`;
+  });
+  h+='</div>';
+  // Section checkboxes (if scope=sections)
+  if(S.auditScope==='sections'){
+    h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">';
+    RULES.sectionOrder.forEach(sec=>{
+      const cnt=(ix.sections[sec]||[]).length;
+      const active=S.auditSections[sec];
+      h+=`<div class="audit-scope-opt section-opt ${active?'active':''}" data-auditsec="${sec}">${sec} (${cnt})</div>`;
+    });
+    h+='</div>';
+  }
+  h+='</div>';
+
+  h+='<div class="card" style="margin-bottom:14px"><h4>Active Rules</h4>';
+  RULES.tagDesc.checks.forEach(c=>{h+=`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px"><span style="color:${c.on?'var(--green)':'var(--tx-4)'}">${c.on?'✓':'✗'}</span>${c.name}</div>`});
+  h+='</div>';
+  if(S.auditRunning){
+    h+=`<div style="padding:14px;background:var(--bg-0);border:1px solid var(--border);border-radius:var(--radius)"><div style="font-size:13px;font-weight:600">Auditing… ${S.auditProgress}/${S.auditTotal}</div><div class="audit-progress-bar"><div class="audit-progress-fill" style="width:${S.auditTotal?(S.auditProgress/S.auditTotal*100):0}%"></div></div><div class="audit-log">`;
+    S.auditLog.forEach(l=>{h+=`<div>${esc(l)}</div>`});h+='</div></div>';
+  }else{
+    h+=`<button class="btn btn-gold" id="btn-audit" style="height:40px;padding:0 24px;font-size:13px;font-weight:600">${IC.play} Run Audit</button>`;
+    h+=`<span style="font-size:11px;color:var(--tx-3);margin-left:10px">${S.auditBatch} per batch · Results appear inline in Index Preview</span>`;
+    if(pendingCount>0)h+=`<button class="btn btn-sm btn-purple" data-nav="index" style="margin-left:10px">View ${pendingCount} Pending →</button>`;
+    if(S.auditLog.length){h+='<div class="audit-log" style="margin-top:12px">';S.auditLog.forEach(l=>{h+=`<div>${esc(l)}</div>`});h+='</div>'}
+  }
+  return h+'</div>';
+}
+
+function rReview(){
+  const pendingItems=Object.entries(S.reviewData).filter(([k,rv])=>rv.status==='pending'&&rv.suggestion).map(([k,rv])=>({key:k,...rv,parts:k.split('|')}));
+  const deniedItems=Object.entries(S.reviewData).filter(([k,rv])=>rv.deniedHistory&&rv.deniedHistory.length>0).map(([k,rv])=>({key:k,...rv,parts:k.split('|')}));
+  let h=`<div class="page-hd"><h1>Review Queue</h1><p>${pendingItems.length} pending suggestions · Suggestions also appear inline in Index Preview</p><div class="page-hd-actions"><button class="btn btn-purple" data-nav="index" onclick="S.reviewFilter='pending';render()">View in Index Preview →</button></div></div><div class="pad">`;
+  if(!pendingItems.length){
+    h+=`<div style="text-align:center;padding:50px;color:var(--tx-3)"><div style="font-size:40px;margin-bottom:10px">✓</div><div style="font-size:15px;font-weight:600;color:var(--tx-2)">All clear</div><button class="btn btn-purple" data-nav="auditor" style="margin-top:14px">Run Audit</button></div>`;
+  }else{
+    pendingItems.slice(0,50).forEach((item,qi)=>{
+      const entryName=item.parts[0],seg=item.parts[1],rowIdx=+item.parts[2];
+      h+=`<div class="review-item"><div class="review-tag">${esc(entryName)}</div><div class="review-section">${esc(seg)} · Row ${rowIdx+1}</div>`;
+      // Find current description
+      const entry=findEntry(entryName);
+      const curDesc=entry?entry.results.find(r=>r.segType===seg&&r.rowIdx===rowIdx)?.desc:'';
+      h+=`<div class="review-row"><div style="flex:1"><div class="review-label">Original</div><div class="${curDesc?'review-old':''}">${curDesc?esc(curDesc):'<i style="color:var(--tx-4)">[empty]</i>'}</div></div><div style="flex:1"><div class="review-label">Suggested</div><div class="review-new">${esc(item.suggestion)}</div></div></div>`;
+      if(item.reason)h+=`<div class="review-reason">${esc(item.reason)}</div>`;
+      h+=`<div class="review-actions"><button class="btn btn-sm btn-green" data-sugaccept="${esc(entryName)}|${seg}|${rowIdx}">${IC.check} Accept</button><button class="btn btn-sm btn-red" data-sugdeny="${esc(entryName)}|${seg}|${rowIdx}">${IC.x} Deny</button><input class="review-custom-input" data-rcinput2="${qi}" placeholder="Custom…"><button class="btn btn-sm btn-purple" data-sugcustom2="${esc(entryName)}|${seg}|${rowIdx}|${qi}">Custom</button></div></div>`;
+    });
+    if(pendingItems.length>50)h+=`<div style="text-align:center;color:var(--tx-3);font-size:12px;padding:12px">Showing 50 of ${pendingItems.length}</div>`;
+  }
+
+  // Denied history
+  if(deniedItems.length){
+    h+='<div style="margin-top:24px"><h3 style="font-family:var(--serif);font-size:16px;margin-bottom:8px">Denied Suggestion History</h3>';
+    h+='<div class="denied-drawer">';
+    deniedItems.forEach(item=>{
+      const entryName=item.parts[0];
+      (item.deniedHistory||[]).forEach(d=>{
+        h+=`<div class="denied-item"><strong>${esc(entryName)}</strong><span style="color:var(--tx-4);margin:0 6px">→</span><span style="text-decoration:line-through">${esc(d.suggestion)}</span><span style="margin-left:auto;font-size:9px;color:var(--tx-4)">${d.time?new Date(d.time).toLocaleDateString():''}</span></div>`;
+      });
+    });
+    h+='</div></div>';
+  }
+  return h+'</div>';
+}
+
+function rSettings(){
+  let h='<div class="page-hd"><h1>Settings</h1><p>Configure rules, connections, and preferences. All changes persist across sessions.</p></div><div class="pad">';
+
+  // ── Tag Description Rules (editable, toggleable) ──
+  h+='<div style="margin-bottom:24px"><h3 style="font-family:var(--serif);font-size:16px;margin-bottom:10px">Tag Description Rules</h3>';
+  RULES.tagDesc.checks.forEach((c,i)=>{
+    h+=`<div class="rule-edit-row"><button class="rule-toggle ${c.on?'on':''}" data-ruletoggle="${i}"></button><input class="rule-edit-input" data-ruleedit="${i}" value="${esc(c.name)}"><button class="btn btn-sm btn-red btn-icon" data-ruledelete="${i}" title="Delete">${IC.x}</button></div>`;
+  });
+  h+=`<div style="display:flex;gap:6px;margin-top:8px"><button class="btn btn-sm btn-green" id="add-rule">${IC.play} Add Rule</button></div>`;
+  h+='</div>';
+
+  // ── Good Examples (editable) ──
+  h+='<div style="margin-bottom:24px"><h3 style="font-family:var(--serif);font-size:16px;margin-bottom:10px">Good Style Examples</h3>';
+  (RULES.tagDesc.good||[]).forEach((e,i)=>{
+    h+=`<div class="example-row"><input class="rule-edit-input" style="max-width:100px" data-goodtag="${i}" value="${esc(e.tag)}" placeholder="Tag"><span style="color:var(--tx-4)">→</span><input class="rule-edit-input" data-gooddesc="${i}" value="${esc(e.desc)}" placeholder="Description"><button class="btn btn-sm btn-red btn-icon" data-gooddel="${i}">${IC.x}</button></div>`;
+  });
+  h+=`<button class="btn btn-sm btn-green" id="add-good-ex" style="margin-top:6px">+ Add Good Example</button>`;
+  h+='</div>';
+
+  // ── Bad Examples (editable) ──
+  h+='<div style="margin-bottom:24px"><h3 style="font-family:var(--serif);font-size:16px;margin-bottom:10px">Bad Style Examples</h3>';
+  (RULES.tagDesc.bad||[]).forEach((e,i)=>{
+    h+=`<div class="example-row"><input class="rule-edit-input" style="max-width:100px" data-badtag="${i}" value="${esc(e.tag)}" placeholder="Tag"><span style="color:var(--tx-4)">→</span><input class="rule-edit-input" data-baddesc="${i}" value="${esc(e.desc)}" placeholder="Description"><button class="btn btn-sm btn-red btn-icon" data-baddel="${i}">${IC.x}</button></div>`;
+  });
+  h+=`<button class="btn btn-sm btn-green" id="add-bad-ex" style="margin-top:6px">+ Add Bad Example</button>`;
+  h+='</div>';
+
+  // ── Spelling Fixes (editable) ──
+  h+='<div style="margin-bottom:24px"><h3 style="font-family:var(--serif);font-size:16px;margin-bottom:10px">Spelling Corrections</h3>';
+  (RULES.tagDesc.spelling||[]).forEach((s,i)=>{
+    h+=`<div class="spelling-row"><input class="rule-edit-input" style="max-width:100px" data-spellwrong="${i}" value="${esc(s.wrong)}" placeholder="Wrong"><span style="color:var(--tx-4)">→</span><input class="rule-edit-input" style="max-width:100px" data-spellright="${i}" value="${esc(s.right)}" placeholder="Correct"><button class="btn btn-sm btn-red btn-icon" data-spelldel="${i}">${IC.x}</button></div>`;
+  });
+  h+=`<button class="btn btn-sm btn-green" id="add-spelling" style="margin-top:6px">+ Add Correction</button>`;
+  h+='</div>';
+
+  // ── Import/Export/Reset ──
+  h+='<div style="margin-bottom:24px"><h3 style="font-family:var(--serif);font-size:16px;margin-bottom:10px">Rules Management</h3>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  h+=`<button class="btn btn-sm" id="export-rules">Export Rules</button>`;
+  h+=`<button class="btn btn-sm" id="import-rules">Import Rules</button>`;
+  h+=`<input type="file" id="import-rules-file" accept=".json" style="display:none">`;
+  h+=`<button class="btn btn-sm btn-red" id="reset-rules">Reset to Defaults</button>`;
+  h+='</div></div>';
+
+  // ── Review Data Management ──
+  h+='<div style="margin-bottom:24px"><h3 style="font-family:var(--serif);font-size:16px;margin-bottom:10px">Review Data</h3>';
+  const rvCount=Object.keys(S.reviewData).length;
+  const pendingCount=Object.values(S.reviewData).filter(rv=>rv.status==='pending').length;
+  const reviewedCount=Object.values(S.reviewData).filter(rv=>rv.reviewed).length;
+  h+=`<div style="font-size:12px;color:var(--tx-2);margin-bottom:8px">${rvCount} total entries tracked · ${pendingCount} pending · ${reviewedCount} reviewed</div>`;
+  h+=`<div style="display:flex;gap:8px"><button class="btn btn-sm btn-red" id="clear-review-data">Clear All Review Data</button><button class="btn btn-sm" id="clear-pending">Clear Pending Only</button></div>`;
+  h+='</div>';
+
+  // ── Bulk Delete by Type ──
+  h+=`<div style="margin-bottom:24px"><h3 style="font-family:var(--serif);font-size:16px;margin-bottom:8px">Bulk Delete by Type</h3><p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Delete all rows matching a content type (e.g., "Good Night", "Connection Point")</p><div style="display:flex;gap:8px"><input class="s-input" id="bulk-type" placeholder="Type name…" style="margin:0;flex:1"><button class="btn btn-red" id="bulk-del-btn">${IC.trash} Delete Matching</button></div></div>`;
+
+  // ── Connection ──
+  h+=`<div><h3 style="font-family:var(--serif);font-size:16px;margin-bottom:8px">Connection</h3><div style="font-size:12px;color:var(--tx-2)">Sheet: <code>${esc(S.sheetId.slice(0,30))}…</code></div><div style="font-size:12px;color:var(--tx-2)">Claude: <span style="color:${S.claudeKey?'var(--green)':'var(--red)'}">${S.claudeKey?'Connected':'Not set'}</span></div></div>`;
+  return h+'</div>';
+}
+
+function rAI(){
+  let h='<div class="ai-panel"><div class="ai-head"><div class="ai-dot"></div><h3>Claude AI</h3><button class="btn btn-sm btn-icon" id="ai-close">${IC.x}</button></div><div class="ai-msgs">';
+  if(!S.aiMsgs.length)h+=`<div class="ai-msg system">Ask me about your data, or request changes.</div>`;
+  S.aiMsgs.forEach(m=>{const d=rmd(m.content);if(d)h+=`<div class="ai-msg ${m.role}">${d}</div>`});
+  if(S.aiTyping)h+='<div class="ai-typing">Thinking…</div>';
+  h+=`</div><div class="ai-input-area"><textarea class="ai-input" id="ain" placeholder="Ask about your data…" rows="1">${esc(S.aiInput)}</textarea><button class="ai-send" id="ais" ${S.aiTyping?'disabled':''}>${IC.send}</button></div></div>`;
+  return h;
+}
+
+function rTranscript(){
+  const t=S.transcriptPopup;
+  return `<div class="popup-overlay" id="tx-close"></div><div class="transcript-popup"><div class="transcript-popup-hd"><h3>${esc(t.clipName)}</h3><button class="btn btn-sm btn-icon" id="tx-x">${IC.x}</button></div><div class="transcript-popup-body">${esc(t.transcript)}</div></div>`;
+}
+
+function rSetup(app){
+  app.innerHTML=`<div class="setup-screen"><div class="setup-card"><h1>JEM Index Workstation</h1><p class="sub">Connect your Google Sheet and Claude AI to start editing your video index.</p>
+  <div class="setup-steps"><h3>Google Setup (one-time)</h3><ol><li>Go to <code>console.cloud.google.com</code></li><li>Enable <code>Google Sheets API</code></li><li>Create <strong>OAuth 2.0 Client ID</strong> (Web app)</li><li>Add JS origin: <strong>your GitHub Pages URL</strong></li><li>Add yourself as <strong>test user</strong></li></ol></div>
+  <label>Google OAuth Client ID</label><input class="s-input" id="ic" placeholder="…apps.googleusercontent.com" value="${esc(S.clientId)}">
+  <label>Google Sheet ID</label><input class="s-input" id="is" placeholder="From spreadsheet URL" value="${esc(S.sheetId)}">
+  <div class="setup-ai"><h3>🤖 Claude AI</h3><p>Powers auditing, chat, and intelligent features.</p><label style="color:var(--purple)">Anthropic API Key</label><input class="s-input" id="ik" type="password" placeholder="sk-ant-…" value="${esc(S.claudeKey)}"></div>
+  <div class="setup-err" id="se"></div>
+  <button class="btn btn-gold" id="btn-con" style="width:100%;height:42px;font-size:14px;font-weight:600">Sign in & Connect</button></div></div>`;
+  $('#btn-con').onclick=async()=>{const c=$('#ic').value.trim(),s=$('#is').value.trim(),k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Both required';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadTab(0);render()}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign in & Connect';$('#btn-con').disabled=false}};
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EVENT BINDING
+// ═══════════════════════════════════════════════════════════════
+function bindAll(){
+  const on=(sel,ev,fn)=>{const el=$(sel);if(el)el.addEventListener(ev,fn)};
+  // Nav
+  $$('[data-nav]').forEach(el=>el.onclick=()=>{S.view=el.dataset.nav;render()});
+  on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
+  on('#blo','click',logout);
+  $$('[data-stab]').forEach(el=>el.onclick=()=>loadTab(+el.dataset.stab));
+
+  // Index
+  on('#idx-search','input',()=>{S.idxSearch=$('#idx-search').value;render();setTimeout(()=>{const e=$('#idx-search');if(e){e.focus();e.selectionStart=e.selectionEnd=e.value.length}},0)});
+  $$('[data-idxnav]').forEach(el=>el.onclick=()=>{S.idxNavMode=el.dataset.idxnav;if(S.idxNavMode!=='tabs')S.idxActiveSection='all';render()});
+  $$('[data-idxlayout]').forEach(el=>el.onclick=()=>{S.idxLayout=el.dataset.idxlayout;render()});
+  $$('[data-idxsec]').forEach(el=>el.onclick=()=>{S.idxActiveSection=el.dataset.idxsec;render()});
+  $$('[data-tree]').forEach(el=>el.onclick=()=>{S.idxActiveEntry=el.dataset.tree;render()});
+  on('#idx-ref','click',()=>{buildIndex();render()});
+
+  // Review filter pills
+  $$('[data-rvfilter]').forEach(el=>el.onclick=()=>{S.reviewFilter=el.dataset.rvfilter;render()});
+
+  // Review mode toggle
+  on('#idx-review-toggle','click',()=>{S.reviewMode=!S.reviewMode;render()});
+  on('#idx-review-off','click',()=>{S.reviewMode=false;render()});
+
+  // Inline suggestion accept/deny/custom
+  $$('[data-sugaccept]').forEach(el=>el.onclick=()=>{
+    const[en,seg,ri]=el.dataset.sugaccept.split('|');
+    acceptSuggestion(en,seg,+ri);
+  });
+  $$('[data-sugdeny]').forEach(el=>el.onclick=()=>{
+    const[en,seg,ri]=el.dataset.sugdeny.split('|');
+    denySuggestion(en,seg,+ri);
+  });
+  $$('[data-sugcustom]').forEach(el=>el.onclick=()=>{
+    const[en,seg,ri]=el.dataset.sugcustom.split('|');
+    const val=prompt('Enter custom description:');
+    if(val&&val.trim())applyCustomDesc(en,seg,+ri,val.trim());
+  });
+  // Custom from review queue page
+  $$('[data-sugcustom2]').forEach(el=>el.onclick=()=>{
+    const parts=el.dataset.sugcustom2.split('|');
+    const en=parts[0],seg=parts[1],ri=+parts[2],qi=+parts[3];
+    const inp=$(`[data-rcinput2="${qi}"]`);
+    if(inp&&inp.value.trim())applyCustomDesc(en,seg,ri,inp.value.trim());
+  });
+
+  // Description-level review checkboxes
+  $$('[data-desc-rv]').forEach(el=>el.onchange=()=>{
+    const[en,seg,ri]=el.dataset.descRv.split('|');
+    toggleDescReviewed(en,seg,+ri);
+    render();
+  });
+  // Entry-level review checkboxes
+  $$('[data-entry-rv]').forEach(el=>el.onchange=()=>{
+    const en=el.dataset.entryRv;
+    const entry=findEntry(en);
+    if(!entry)return;
+    const allReviewed=isEntryReviewed(entry);
+    // If currently all reviewed, uncheck all. Otherwise check all.
+    entry.results.forEach(r=>{
+      const k=rvKey(en,r.segType,r.rowIdx);
+      const rv=getRV(k)||{};
+      rv.reviewed=!allReviewed;
+      setRV(k,rv);
+    });
+    render();
+  });
+
+  // Bulk accept
+  $$('[data-bulkaccept]').forEach(el=>el.onclick=(e)=>{
+    e.stopPropagation();
+    bulkAcceptEntry(el.dataset.bulkaccept);
+  });
+
+  // Audit one description inline
+  $$('[data-auditone]').forEach(el=>el.onclick=()=>{
+    const parts=el.dataset.auditone.split('|');
+    const entryName=parts[0],rowIdx=+parts[1],segType=parts[2]||'';
+    auditSingleDesc(entryName,rowIdx,segType);
+  });
+
+  // Generate index tabs
+  $$('[data-gentab]').forEach(el=>el.onclick=()=>generateIndexTab(el.dataset.gentab));
+  // Toggle review columns
+  $$('[data-togglerev]').forEach(el=>el.onclick=()=>{
+    const show=el.dataset.togglerev==='show';
+    const indexTabs=(S.sheetMeta?.tabs||[]).filter(t=>t.title.startsWith('Index - '));
+    indexTabs.forEach(t=>toggleReviewCols(t.title,show));
+  });
+  on('#btn-fullsync','click',()=>fullSyncToSheets());
+
+  // Bookmarks
+  $$('[data-bm]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();const n=el.dataset.bm;S.idxBookmarks[n]=!S.idxBookmarks[n];if(!S.idxBookmarks[n])delete S.idxBookmarks[n];saveBM();render()});
+
+  // Description editing (double-click)
+  $$('[data-editdesc]').forEach(el=>el.ondblclick=()=>{
+    const[entryName,segType,ri]=el.dataset.editdesc.split('|');
+    S.editingDesc={entryName,segType,ri:+ri};
+    const entry=findEntry(entryName);
+    if(!entry)return;
+    const byseg={};entry.results.forEach(r=>{if(!byseg[r.segType])byseg[r.segType]=[];byseg[r.segType].push(r)});
+    const result=byseg[segType]?.[+ri];
+    if(!result)return;
+    el.outerHTML=`<span class="idx-inline-edit"><input class="idx-inline-input" id="desc-edit" value="${esc(result.desc||'')}"><button class="btn btn-sm btn-green" id="desc-save">${IC.check}</button><button class="btn btn-sm" id="desc-cancel">${IC.x}</button></span>`;
+    const inp=$('#desc-edit');if(inp)inp.focus();
+    on('#desc-save','click',async()=>{
+      const newVal=$('#desc-edit')?.value||'';
+      const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
+      if(kwCol>=0){
+        try{
+          let kw=JSON.parse(S.rows[result.rowIdx][kwCol]);
+          const tag=kw.find(t=>t.name===entryName);
+          if(tag){
+            tag.description=newVal;
+            await saveCell(result.rowIdx,kwCol,JSON.stringify(kw));
+            // Sync to Index tab
+            syncDescToIndexTab(entryName,result,newVal).catch(()=>{});
+            buildIndex();render();
+          }
+        }catch(e){toast('Save error','error')}
+      }
+    });
+    on('#desc-cancel','click',()=>{S.editingDesc=null;render()});
+    if(inp)inp.onkeydown=e=>{if(e.key==='Enter')$('#desc-save')?.click();if(e.key==='Escape')$('#desc-cancel')?.click()};
+  });
+
+  // Transcript popup
+  $$('[data-showtx]').forEach(el=>el.onclick=()=>{
+    const ri=+el.dataset.showtx;
+    const txCol=S.headers.findIndex(h=>h.toLowerCase()==='transcript');
+    const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
+    if(txCol>=0&&S.rows[ri]){
+      S.transcriptPopup={clipName:(S.rows[ri][nameCol]||'Clip'),transcript:S.rows[ri][txCol]||'No transcript available'};render()
+    }
+  });
+  on('#tx-close','click',()=>{S.transcriptPopup=null;render()});
+  on('#tx-x','click',()=>{S.transcriptPopup=null;render()});
+
+  // Sheet view
+  on('#si','input',()=>{S.search=$('#si').value;render();setTimeout(()=>{const e=$('#si');if(e){e.focus();e.selectionStart=e.selectionEnd=e.value.length}},0)});
+  on('#chk-all','change',()=>{const p=getProc();S.selected=$('#chk-all').checked?new Set(p.map(r=>r.i)):new Set();render()});
+  $$('[data-chk]').forEach(el=>el.onchange=()=>{const i=+el.dataset.chk;S.selected.has(i)?S.selected.delete(i):S.selected.add(i);render()});
+  $$('th[data-col]').forEach(el=>el.onclick=()=>{const c=+el.dataset.col;if(S.sortCol===c)S.sortDir=S.sortDir==='asc'?'desc':'asc';else{S.sortCol=c;S.sortDir='asc'}render()});
+  $$('[data-dbl]').forEach(el=>el.ondblclick=()=>{const[r,c]=el.dataset.dbl.split('-').map(Number);S.editCell={r,c};S.editVal=(S.rows[r]||[])[c]||'';render();setTimeout(()=>{const e=$('#ei');if(e)e.focus()},0)});
+  const ei=$('#ei');if(ei){ei.oninput=()=>{S.editVal=ei.value};ei.onblur=()=>{if(S.editCell){saveCell(S.editCell.r,S.editCell.c,S.editVal).then(()=>{S.editCell=null;buildIndex();render()})}};ei.onkeydown=e=>{if(e.key==='Enter')ei.blur();if(e.key==='Escape'){S.editCell=null;render()}}}
+  on('#btn-del','click',()=>delRows(S.selected));
+  on('#btn-desel','click',()=>{S.selected=new Set();render()});
+  on('#btn-ref','click',()=>loadTab(S.activeTab));
+
+  // Auditor
+  on('#btn-audit','click',runAudit);
+  // Audit scope
+  $$('[data-auditscope]').forEach(el=>el.onclick=()=>{S.auditScope=el.dataset.auditscope;render()});
+  $$('[data-auditsec]').forEach(el=>el.onclick=()=>{const s=el.dataset.auditsec;S.auditSections[s]=!S.auditSections[s];render()});
+
+  // Settings — Rule toggles and edits
+  $$('[data-ruletoggle]').forEach(el=>el.onclick=()=>{const i=+el.dataset.ruletoggle;RULES.tagDesc.checks[i].on=!RULES.tagDesc.checks[i].on;saveRules();render()});
+  $$('[data-ruleedit]').forEach(el=>el.onchange=()=>{const i=+el.dataset.ruleedit;RULES.tagDesc.checks[i].name=el.value;saveRules()});
+  $$('[data-ruledelete]').forEach(el=>el.onclick=()=>{const i=+el.dataset.ruledelete;if(confirm('Delete this rule?')){RULES.tagDesc.checks.splice(i,1);saveRules();render()}});
+  on('#add-rule','click',()=>{const name=prompt('Rule name:');if(name){RULES.tagDesc.checks.push({id:'custom_'+Date.now(),name,on:true});saveRules();render()}});
+
+  // Good examples
+  $$('[data-goodtag]').forEach(el=>el.onchange=()=>{const i=+el.dataset.goodtag;RULES.tagDesc.good[i].tag=el.value;saveRules()});
+  $$('[data-gooddesc]').forEach(el=>el.onchange=()=>{const i=+el.dataset.gooddesc;RULES.tagDesc.good[i].desc=el.value;saveRules()});
+  $$('[data-gooddel]').forEach(el=>el.onclick=()=>{const i=+el.dataset.gooddel;RULES.tagDesc.good.splice(i,1);saveRules();render()});
+  on('#add-good-ex','click',()=>{RULES.tagDesc.good.push({tag:'',desc:''});saveRules();render()});
+
+  // Bad examples
+  $$('[data-badtag]').forEach(el=>el.onchange=()=>{const i=+el.dataset.badtag;RULES.tagDesc.bad[i].tag=el.value;saveRules()});
+  $$('[data-baddesc]').forEach(el=>el.onchange=()=>{const i=+el.dataset.baddesc;RULES.tagDesc.bad[i].desc=el.value;saveRules()});
+  $$('[data-baddel]').forEach(el=>el.onclick=()=>{const i=+el.dataset.baddel;RULES.tagDesc.bad.splice(i,1);saveRules();render()});
+  on('#add-bad-ex','click',()=>{RULES.tagDesc.bad.push({tag:'',desc:''});saveRules();render()});
+
+  // Spelling
+  $$('[data-spellwrong]').forEach(el=>el.onchange=()=>{const i=+el.dataset.spellwrong;RULES.tagDesc.spelling[i].wrong=el.value;saveRules()});
+  $$('[data-spellright]').forEach(el=>el.onchange=()=>{const i=+el.dataset.spellright;RULES.tagDesc.spelling[i].right=el.value;saveRules()});
+  $$('[data-spelldel]').forEach(el=>el.onclick=()=>{const i=+el.dataset.spelldel;RULES.tagDesc.spelling.splice(i,1);saveRules();render()});
+  on('#add-spelling','click',()=>{RULES.tagDesc.spelling.push({wrong:'',right:''});saveRules();render()});
+
+  // Import/Export/Reset rules
+  on('#export-rules','click',()=>{
+    const data=JSON.stringify({tagDesc:RULES.tagDesc},null,2);
+    const blob=new Blob([data],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='jem-index-rules.json';a.click();
+    toast('Rules exported','success');
+  });
+  on('#import-rules','click',()=>{$('#import-rules-file')?.click()});
+  on('#import-rules-file','change',(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      try{const data=JSON.parse(ev.target.result);
+        if(data.tagDesc){
+          RULES.tagDesc=data.tagDesc;
+          if(!RULES.tagDesc.spelling)RULES.tagDesc.spelling=[];
+          saveRules();toast('Rules imported','success');render();
+        }else throw new Error('Invalid');
+      }catch{toast('Invalid rules file','error')}
+    };reader.readAsText(file);
+  });
+  on('#reset-rules','click',()=>{
+    if(!confirm('Reset all rules to defaults?'))return;
+    const def=JSON.parse(JSON.stringify(DEFAULT_RULES));
+    RULES.tagDesc=def.tagDesc;saveRules();toast('Rules reset to defaults','success');render();
+  });
+
+  // Review data management
+  on('#clear-review-data','click',()=>{if(confirm('Clear ALL review data?')){S.reviewData={};saveRV();toast('Review data cleared');render()}});
+  on('#clear-pending','click',()=>{
+    Object.keys(S.reviewData).forEach(k=>{if(S.reviewData[k].status==='pending'){delete S.reviewData[k]}});
+    saveRV();toast('Pending cleared');render();
+  });
+
+  on('#bulk-del-btn','click',()=>{const t=$('#bulk-type')?.value;if(t)bulkDeleteByType(t)});
+
+  // AI
+  const ain=$('#ain');if(ain){ain.oninput=()=>{S.aiInput=ain.value;ain.style.height='auto';ain.style.height=Math.min(ain.scrollHeight,90)+'px'};ain.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();doSendAI()}}}
+  on('#ais','click',doSendAI);
+  on('#ai-close','click',()=>{S.aiOpen=false;render()});
+
+  // Keyboard shortcuts (when index view is active)
+  if(S.view==='index'){
+    document.onkeydown=handleKeyShortcut;
+  }else{
+    document.onkeydown=null;
+  }
+}
+
+// Keyboard shortcuts for review
+function handleKeyShortcut(e){
+  // Don't intercept when typing in inputs
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  // 'r' toggles review mode
+  if(e.key==='r'&&!e.ctrlKey&&!e.metaKey){S.reviewMode=!S.reviewMode;render();return}
+}
+
+// Audit a single description
+async function auditSingleDesc(entryName,rowIdx,segType){
+  if(!S.claudeKey){toast('No API key','error');return}
+  const entry=findEntry(entryName);
+  if(!entry)return;
+  const r=entry.results.find(x=>x.rowIdx===rowIdx);
+  if(!r)return;
+  toast('Auditing…');
+  try{
+    const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map(c=>c.name).join('; ');
+    const goodEx=RULES.tagDesc.good.map(e=>`${e.tag} → "${e.desc}"`).join(', ');
+    const prompt=`Audit this single tag description:\nEntry:"${entryName}" Section:${entry.section} Rel:${r.rel}\nDesc:"${r.desc||'[empty]'}"\nTranscript:"${(r.transcript||'').slice(0,300)}"\n\nRules: ${rulesText}\nGood examples: ${goodEx}\n\nRespond with JSON: {status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}`;
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:512,system:'Expert editor. JSON only.',messages:[{role:'user',content:prompt}]})});
+    if(!resp.ok)throw new Error('API '+resp.status);
+    const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
+    let parsed;try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{throw new Error('Parse fail')}
+    const k=rvKey(entryName,segType||r.segType,rowIdx);
+    if(parsed.status==='fix'||parsed.status==='generate'){
+      setRV(k,{suggestion:parsed.suggestion||'',reason:parsed.reason||'',status:'pending',reviewed:false,deniedHistory:(getRV(k)?.deniedHistory||[])});
+      syncToIndexTab(entryName,r,'pending',parsed.suggestion||'').catch(()=>{});
+      toast('Suggestion ready','success');
+    }else{
+      setRV(k,{...(getRV(k)||{}),reviewed:true,status:'ok'});
+      syncToIndexTab(entryName,r,'ok','').catch(()=>{});
+      toast('Looks good!','success');
+    }
+  }catch(e){toast('Audit error: '+e.message,'error')}
+  render();
+}
+
+function doSendAI(){const v=(S.aiInput||'').trim();if(!v||S.aiTyping)return;aiChat(v)}
+function findEntry(name){if(!S.indexData)return null;for(const sec of Object.values(S.indexData.sections)){const e=sec.find(x=>x.name===name);if(e)return e}return null}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+migrateOldQueue();
+render();
+</script>
+</body>
+</html>
