@@ -105,7 +105,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-tree-count{font-size:9px;color:var(--tx-4);font-family:var(--mono)}
 
 .idx-body{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px 32px}
-.idx-body.two-col{columns:2;column-gap:40px;column-rule:1px solid var(--border);overflow-x:hidden}
+.idx-body.two-col{column-count:2;column-gap:40px;column-rule:1px solid var(--border);column-fill:auto}
 
 /* Section headers in index */
 .idx-section-hd{font-family:var(--serif);font-size:22px;font-weight:700;color:var(--tx-1);padding:16px 0 10px;border-bottom:2px solid var(--gold);margin-bottom:16px;break-after:avoid;letter-spacing:-.3px}
@@ -130,15 +130,14 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-seg-label{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--tx-4);margin-bottom:2px}
 
 /* Individual result */
-.idx-result{display:flex;align-items:baseline;gap:6px;padding:1px 0;font-size:12.5px;line-height:1.5}
-.idx-result-desc{color:var(--tx-2);flex:1}
+.idx-result{display:flex;align-items:baseline;gap:4px;padding:2px 0;font-size:12.5px;line-height:1.5;flex-wrap:wrap}
+.idx-result-desc{color:var(--tx-2)}
 .idx-result-desc.empty-desc{color:var(--red);font-style:italic;background:rgba(176,80,80,.05);padding:0 4px;border-radius:3px}
 .idx-result-desc.editable:hover{background:var(--bg-1);cursor:text;border-radius:3px;padding:0 4px}
 .idx-result-rel{font-size:10px;color:var(--tx-4);font-style:italic}
 .idx-result-ref{font-family:var(--mono);font-size:10.5px;color:var(--blue);white-space:nowrap}
 .idx-result-ref a{color:var(--blue)}
-.idx-result-actions{display:flex;gap:3px;opacity:0;transition:opacity .1s;flex-shrink:0}
-.idx-result:hover .idx-result-actions{opacity:1}
+.idx-result-actions{display:flex;gap:3px;flex-shrink:0}
 .idx-mini-btn{width:20px;height:20px;border:1px solid var(--border);border-radius:4px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx-4);font-size:10px;transition:all .1s}
 .idx-mini-btn:hover{background:var(--bg-1);color:var(--tx-2);border-color:var(--border-hi)}
 .idx-mini-btn.active{color:var(--gold);border-color:var(--gold)}
@@ -261,17 +260,21 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .filter-dd-item .cnt{font-family:var(--mono);font-size:10px;color:var(--tx-4);float:right}
 
 /* ═══ Inline Review System ═══ */
-.idx-suggestion{display:inline-flex;align-items:baseline;gap:5px;padding:2px 8px;margin-left:4px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;font-size:12px;animation:sugIn .2s ease-out;vertical-align:baseline}
 @keyframes sugIn{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:translateX(0)}}
-.idx-sug-old{color:var(--red);font-size:11.5px}
+.idx-sug-old{color:var(--red);font-size:12px}
 .idx-sug-arrow{color:var(--tx-4);font-size:11px;flex-shrink:0}
-.idx-sug-new{color:var(--green);font-weight:600}
-.idx-sug-reason{font-size:9.5px;color:var(--tx-4);font-style:italic;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.idx-sug-new{color:var(--green);font-weight:600;font-size:12.5px}
+.idx-sug-reason{position:relative;font-size:9px;color:var(--purple);background:var(--purple-bg);padding:1px 6px;border-radius:8px;cursor:help;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.idx-sug-reason:hover{overflow:visible;max-width:none;z-index:20}
+.idx-sug-reason:hover::after{content:attr(data-reason);position:absolute;left:0;top:100%;margin-top:4px;background:var(--tx-1);color:#fff;padding:6px 10px;border-radius:6px;font-size:11px;line-height:1.4;white-space:normal;width:280px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.15);pointer-events:none}
 .idx-sug-actions{display:flex;gap:2px;flex-shrink:0}
 .idx-sug-btn{width:20px;height:20px;border:1px solid var(--border);border-radius:4px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;transition:all .1s}
 .idx-sug-btn.accept{color:var(--green);border-color:var(--green-bd)}.idx-sug-btn.accept:hover{background:var(--green-bg)}
 .idx-sug-btn.deny{color:var(--red);border-color:var(--red-bd)}.idx-sug-btn.deny:hover{background:var(--red-bg)}
 .idx-sug-btn.custom{color:var(--blue);border-color:var(--blue-bd)}.idx-sug-btn.custom:hover{background:var(--blue-bg)}
+
+/* Audit selection checkbox */
+.idx-audit-chk{width:13px;height:13px;border-radius:3px;flex-shrink:0;cursor:pointer;margin-right:1px;accent-color:var(--purple)}
 
 /* Review checkboxes */
 .idx-review-chk{width:13px;height:13px;border-radius:3px;flex-shrink:0;cursor:pointer;margin-right:2px}
@@ -395,8 +398,10 @@ transcriptPopup:null,
 reviewData:JSON.parse(localStorage.getItem('jw_rv')||'{}'), // {key: {suggestion, reason, status:'pending'|'accepted'|'denied', deniedHistory:[], reviewed:bool}}
 reviewMode:false, // Toggle: hide reviewed items
 reviewFilter:'all', // 'all','unreviewed','pending','reviewed'
+auditSelectMode:false, // Toggle: show audit checkboxes in index preview
+auditSelected:new Set(), // Set of "entryName|segType|rowIdx" keys selected for audit
 // Audit scope
-auditScope:'all', // 'all','sections','entries','visible'
+auditScope:'all', // 'all','sections','entries','visible','selected'
 auditSections:{}, // {People:true, Topics:false,...}
 auditEntryFilter:'',
 // Sheet
@@ -1384,6 +1389,15 @@ function rIndex(){
   h+=`<div class="idx-nav-btn ${S.idxLayout==='two'?'active':''}" data-idxlayout="two">${IC.cols2}</div>`;
   h+='</div>';
   h+=`<div class="toolbar-spacer"></div>`;
+  // Audit selection mode
+  if(S.auditSelectMode){
+    const selCount=S.auditSelected.size;
+    h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected" ${selCount?'':'disabled'}>${IC.audit} Audit ${selCount} Selected</button>`;
+    h+=`<button class="btn btn-sm" id="idx-audit-selall">Select All Visible</button>`;
+    h+=`<button class="btn btn-sm" id="idx-audit-cancel">Cancel</button>`;
+  }else{
+    h+=`<button class="btn btn-sm btn-purple" id="idx-audit-select">${IC.audit} Select &amp; Audit</button>`;
+  }
   // Review mode toggle
   h+=`<button class="btn btn-sm ${S.reviewMode?'btn-purple':''}" id="idx-review-toggle">${S.reviewMode?'✓ ':' '}Review Mode</button>`;
   h+=`<button class="btn btn-sm" id="idx-ref">${IC.refresh} Rebuild</button>`;
@@ -1480,14 +1494,19 @@ function rIndex(){
           if(S.reviewMode&&isReviewed&&!isPending)return;
 
           h+=`<div class="idx-result">`;
+          // Audit selection checkbox (only in select mode)
+          if(S.auditSelectMode){
+            const selKey=esc(e.name)+'|'+seg+'|'+r.rowIdx;
+            h+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''}>`;
+          }
           // Review checkbox
           h+=`<input type="checkbox" class="idx-review-chk" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}" ${isReviewed?'checked':''} title="Mark reviewed">`;
-          // Description + inline suggestion side by side
+          // Description (or old+new if pending)
           if(isPending){
             h+=`<span class="idx-sug-old">${descEmpty?'[empty]':esc(r.desc)}</span>`;
             h+=`<span class="idx-sug-arrow">→</span>`;
             h+=`<span class="idx-sug-new">${esc(rv.suggestion)}</span>`;
-            if(rv.reason)h+=`<span class="idx-sug-reason" title="${esc(rv.reason)}">${esc(rv.reason)}</span>`;
+            if(rv.reason)h+=`<span class="idx-sug-reason" data-reason="${esc(rv.reason)}">${esc(rv.reason.length>18?rv.reason.slice(0,18)+'…':rv.reason)}</span>`;
             h+=`<span class="idx-sug-actions">`;
             h+=`<span class="idx-sug-btn accept" data-sugaccept="${esc(e.name)}|${seg}|${r.rowIdx}" title="Accept">${IC.check}</span>`;
             h+=`<span class="idx-sug-btn deny" data-sugdeny="${esc(e.name)}|${seg}|${r.rowIdx}" title="Deny">${IC.x}</span>`;
@@ -1496,6 +1515,7 @@ function rIndex(){
           }else{
             h+=`<span class="idx-result-desc ${descEmpty?'empty-desc':'editable'}" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="Double-click to edit">${descEmpty?'[no description]':esc(r.desc)}</span>`;
           }
+          // Relationship + reference + actions — all close together
           if(r.rel)h+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
           h+=`<span class="idx-result-ref">`;
           if(r.clipType==='Film Chapter'||r.clipType==='Film')h+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">${esc(r.pvName||r.clipName)}</a>`;
@@ -1748,6 +1768,27 @@ function bindAll(){
   // Review mode toggle
   on('#idx-review-toggle','click',()=>{S.reviewMode=!S.reviewMode;render()});
   on('#idx-review-off','click',()=>{S.reviewMode=false;render()});
+
+  // Audit select mode
+  on('#idx-audit-select','click',()=>{S.auditSelectMode=true;S.auditSelected=new Set();render()});
+  on('#idx-audit-cancel','click',()=>{S.auditSelectMode=false;S.auditSelected=new Set();render()});
+  on('#idx-audit-selall','click',()=>{
+    // Select all visible results
+    $$('[data-audit-sel]').forEach(el=>{S.auditSelected.add(el.dataset.auditSel);el.checked=true});
+    render();
+  });
+  on('#idx-audit-selected','click',()=>{
+    if(!S.auditSelected.size)return;
+    auditSelectedItems();
+  });
+  // Individual audit selection checkboxes
+  $$('[data-audit-sel]').forEach(el=>el.onchange=()=>{
+    const k=el.dataset.auditSel;
+    if(el.checked)S.auditSelected.add(k);else S.auditSelected.delete(k);
+    // Update the button count without full re-render
+    const btn=$('#idx-audit-selected');
+    if(btn){btn.innerHTML=`${IC.audit} Audit ${S.auditSelected.size} Selected`;btn.disabled=!S.auditSelected.size}
+  });
 
   // Inline suggestion accept/deny/custom
   $$('[data-sugaccept]').forEach(el=>el.onclick=()=>{
@@ -2009,6 +2050,79 @@ Respond with JSON only: {status:"ok"|"fix"|"generate", suggestion:"...", reason:
 
 function doSendAI(){const v=(S.aiInput||'').trim();if(!v||S.aiTyping)return;aiChat(v)}
 function findEntry(name){if(!S.indexData)return null;for(const sec of Object.values(S.indexData.sections)){const e=sec.find(x=>x.name===name);if(e)return e}return null}
+
+// Audit selected items from index preview
+async function auditSelectedItems(){
+  if(!S.claudeKey){toast('No API key','error');return}
+  const items=[];
+  S.auditSelected.forEach(key=>{
+    const[entryName,segType,rowIdx]=key.split('|');
+    const entry=findEntry(entryName);
+    if(!entry)return;
+    const r=entry.results.find(x=>x.segType===segType&&x.rowIdx===+rowIdx);
+    if(!r)return;
+    items.push({entryName,section:entry.section,desc:r.desc,rel:r.rel,transcript:r.transcript,rowIdx:+rowIdx,clipName:r.clipName,segType});
+  });
+  if(!items.length){toast('No valid items selected','error');return}
+  
+  S.auditSelectMode=false;S.auditSelected=new Set();
+  S.auditRunning=true;S.auditProgress=0;S.auditTotal=items.length;S.auditLog=[`Auditing ${items.length} selected items…`];
+  S.view='auditor';render();
+  
+  const bs=S.auditBatch;let totalFixed=0;
+  for(let i=0;i<items.length;i+=bs){
+    const batch=items.slice(i,i+bs);
+    S.auditLog.push(`Batch ${Math.floor(i/bs)+1}/${Math.ceil(items.length/bs)}...`);render();
+    try{
+      const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map(c=>c.name).join('; ');
+      const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
+      const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
+      const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
+      const prompt=`Audit these tag descriptions for the JEM Video Index book.
+
+STRICT RULES — flag as "fix" if ANY rule is violated:
+1. LENGTH: 3-6 words, max 8.
+2. NO TAG NAME REPETITION: Description MUST NOT repeat ANY word from the entry name. This is the #1 error.
+3. "REBBE" RULE: Default subject is always the Rebbe. Do NOT include "Rebbe" unless the Rebbe's specific action IS the point.
+4. NO GENERIC: Must be specific, not vague restating.
+5. SPELLING: Fix: ${spellingFixes}
+
+GOOD: ${goodEx}
+BAD: ${badEx}
+
+BE STRICT. JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}
+
+${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,150)}"`).join('\n\n')}`;
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'Strict editor for JEM Video Index. JSON array only.',messages:[{role:'user',content:prompt}]})});
+      if(!resp.ok)throw new Error('API '+resp.status);
+      const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
+      let parsed;try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{const m2=txt.match(/\[[\s\S]*\]/);if(m2)parsed=JSON.parse(m2[0]);else throw new Error('Parse fail')}
+      let fx=0;
+      parsed.forEach(p=>{
+        const e=batch[p.idx!=null?p.idx:p.index];
+        if(!e)return;
+        const k=rvKey(e.entryName,e.segType,e.rowIdx);
+        if(p.status==='fix'||p.status==='generate'){
+          const existing=getRV(k);
+          setRV(k,{suggestion:p.suggestion||'',reason:p.reason||'',status:'pending',reviewed:false,deniedHistory:(existing?.deniedHistory||[])});
+          const entry=findEntry(e.entryName);
+          const r=entry?.results.find(x=>x.segType===e.segType&&x.rowIdx===e.rowIdx);
+          if(r)syncToIndexTab(e.entryName,r,'pending',p.suggestion||'').catch(()=>{});
+          fx++;
+        }else{
+          setRV(k,{...(getRV(k)||{}),reviewed:true,status:'ok'});
+        }
+      });
+      totalFixed+=fx;
+      S.auditLog.push(`  ${fx} need review, ${batch.length-fx} OK`);
+    }catch(e){S.auditLog.push(`  Error: ${e.message}`)}
+    S.auditProgress=Math.min(i+bs,items.length);render();
+    if(i+bs<items.length)await new Promise(r=>setTimeout(r,1500));
+  }
+  S.auditRunning=false;
+  S.auditLog.push(`Done! ${totalFixed} items need review.`);
+  toast(`${totalFixed} items to review`,'success');render();
+}
 
 // ═══════════════════════════════════════════════════════════════
 // INIT
