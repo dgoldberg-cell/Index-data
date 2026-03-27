@@ -249,7 +249,7 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .rule-toggle.on::after{transform:translateX(16px)}
 
 /* Loading + Toasts */
-.loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--tx-4)}
+.loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100vh;gap:12px;color:var(--tx-4)}
 .spinner{width:22px;height:22px;border:2.5px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 .toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;gap:6px;align-items:center}
@@ -429,6 +429,38 @@ function saveNotes(){localStorage.setItem('jw_notes',JSON.stringify(S.idxNotes))
 function saveRQ(){localStorage.setItem('jw_rq',JSON.stringify(S.reviewQueue))}
 function saveRV(){localStorage.setItem('jw_rv',JSON.stringify(S.reviewData))}
 
+// Update a tag description in both the main keywords column AND the matching search.keywords_relevancy_N column
+async function updateTagDesc(rowIdx,entryName,newDesc){
+  const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
+  if(kwCol<0||!S.rows[rowIdx])return false;
+  try{
+    // 1. Update in main keywords column
+    let kw=JSON.parse(S.rows[rowIdx][kwCol]);
+    const tag=kw.find(t=>t.name===entryName);
+    if(!tag)return false;
+    tag.description=newDesc;
+    await saveCell(rowIdx,kwCol,JSON.stringify(kw));
+    
+    // 2. Find and update in the matching relevancy column
+    const rel=tag.relevancy||0;
+    if(rel>=1&&rel<=4){
+      const relColName='search.keywords_relevancy_'+rel;
+      const relCol=S.headers.findIndex(h=>h.toLowerCase()===relColName.toLowerCase());
+      if(relCol>=0&&S.rows[rowIdx][relCol]){
+        try{
+          let relKw=JSON.parse(S.rows[rowIdx][relCol]);
+          const relTag=relKw.find(t=>t.name===entryName);
+          if(relTag){
+            relTag.description=newDesc;
+            await saveCell(rowIdx,relCol,JSON.stringify(relKw));
+          }
+        }catch(e2){console.warn('Relevancy col update failed:',e2)}
+      }
+    }
+    return true;
+  }catch(e){toast('Save error','error');return false}
+}
+
 // Review data key: entryName|segType|rowIdx
 function rvKey(entryName,segType,rowIdx){return entryName+'|'+segType+'|'+rowIdx}
 function getRV(key){return S.reviewData[key]||null}
@@ -485,14 +517,8 @@ async function acceptSuggestion(entryName,segType,rowIdx){
   const k=rvKey(entryName,segType,rowIdx);
   const rv=getRV(k);
   if(!rv||!rv.suggestion)return;
-  const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
-  if(kwCol>=0&&S.rows[rowIdx]){
-    try{
-      let kw=JSON.parse(S.rows[rowIdx][kwCol]);
-      const tag=kw.find(t=>t.name===entryName);
-      if(tag){tag.description=rv.suggestion;await saveCell(rowIdx,kwCol,JSON.stringify(kw))}
-    }catch(e){toast('Save error','error');return}
-  }
+  const ok=await updateTagDesc(rowIdx,entryName,rv.suggestion);
+  if(!ok)return;
   rv.status='accepted';rv.reviewed=true;setRV(k,rv);
   // Sync to Index tab (non-blocking)
   const entry=findEntry(entryName);
@@ -523,14 +549,8 @@ function denySuggestion(entryName,segType,rowIdx){
 // Apply custom text — update main sheet + Index tab
 async function applyCustomDesc(entryName,segType,rowIdx,customText){
   const k=rvKey(entryName,segType,rowIdx);
-  const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
-  if(kwCol>=0&&S.rows[rowIdx]){
-    try{
-      let kw=JSON.parse(S.rows[rowIdx][kwCol]);
-      const tag=kw.find(t=>t.name===entryName);
-      if(tag){tag.description=customText;await saveCell(rowIdx,kwCol,JSON.stringify(kw))}
-    }catch(e){toast('Save error','error');return}
-  }
+  const ok=await updateTagDesc(rowIdx,entryName,customText);
+  if(!ok)return;
   const rv=getRV(k)||{};
   rv.status='custom';rv.reviewed=true;rv.customApplied=customText;setRV(k,rv);
   // Sync to Index tab (non-blocking)
@@ -1225,15 +1245,8 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
 }
 async function reviewAction(item,action,custom){
   if(action==='accept'||action==='custom'){
-    const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
-    if(kwCol>=0&&S.rows[item.rowIdx]){
-      try{
-        let kw=JSON.parse(S.rows[item.rowIdx][kwCol]);
-        const tag=kw.find(t=>t.name===item.entryName);
-        if(tag){tag.description=action==='custom'?custom:item.suggestion;
-          await saveCell(item.rowIdx,kwCol,JSON.stringify(kw));}
-      }catch{}
-    }
+    const newDesc=action==='custom'?custom:item.suggestion;
+    await updateTagDesc(item.rowIdx,item.entryName,newDesc);
   }
   S.reviewQueue=S.reviewQueue.filter(r=>!(r.rowIdx===item.rowIdx&&r.entryName===item.entryName));saveRQ();render();
 }
@@ -1394,38 +1407,40 @@ function rIndex(){
   let sectionsToShow=S.idxActiveSection==='all'?RULES.sectionOrder:[S.idxActiveSection];
 
   let h='<div class="idx-wrap">';
-  // Toolbar
+  // Single unified toolbar
   h+='<div class="idx-toolbar">';
+  // Left: Search
   h+=`<div class="idx-search">${IC.search}<input id="idx-search" placeholder="Search entries…" value="${esc(S.idxSearch)}"></div>`;
-  // Nav mode
-  h+='<div class="idx-nav-mode">';
-  ['all','tabs','tree'].forEach(m=>{const labels={all:'Scroll All',tabs:'Section Tabs',tree:'Tree Nav'};h+=`<div class="idx-nav-btn ${S.idxNavMode===m?'active':''}" data-idxnav="${m}">${labels[m]}</div>`});
-  h+='</div>';
-  // Review filter pills
+  // Separator
+  h+='<div style="width:1px;height:20px;background:var(--border);flex-shrink:0"></div>';
+  // Filter pills (compact)
   h+='<div class="idx-filter-pills">';
-  [{id:'all',l:'All'},{id:'unreviewed',l:'Unreviewed'},{id:'pending',l:'Pending'},{id:'reviewed',l:'Reviewed'},{id:'bookmarked',l:'🔖'}].forEach(f=>{
+  [{id:'all',l:'All'},{id:'unreviewed',l:'Unrev.'},{id:'pending',l:'Pending'},{id:'reviewed',l:'Done'},{id:'bookmarked',l:'🔖'}].forEach(f=>{
     h+=`<div class="idx-filter-pill ${S.reviewFilter===f.id?'active':''}" data-rvfilter="${f.id}">${f.l}</div>`;
   });
   h+='</div>';
-  // Layout toggle
-  h+='<div class="idx-layout-toggle">';
-  h+=`<div class="idx-nav-btn ${S.idxLayout==='single'?'active':''}" data-idxlayout="single">${IC.cols1}</div>`;
-  h+=`<div class="idx-nav-btn ${S.idxLayout==='two'?'active':''}" data-idxlayout="two">${IC.cols2}</div>`;
+  // Separator
+  h+='<div style="width:1px;height:20px;background:var(--border);flex-shrink:0"></div>';
+  // Layout + Nav as icon group
+  h+='<div style="display:flex;gap:2px">';
+  ['all','tabs','tree'].forEach(m=>{const icons={all:'☰',tabs:'▤',tree:'⊞'};const labels={all:'Scroll All',tabs:'Sections',tree:'Tree'};h+=`<div class="idx-nav-btn ${S.idxNavMode===m?'active':''}" data-idxnav="${m}" title="${labels[m]}" style="padding:4px 8px;font-size:11px">${icons[m]}</div>`});
+  h+='<div style="width:4px"></div>';
+  h+=`<div class="idx-nav-btn ${S.idxLayout==='single'?'active':''}" data-idxlayout="single" title="Single column" style="padding:4px 6px">${IC.cols1}</div>`;
+  h+=`<div class="idx-nav-btn ${S.idxLayout==='two'?'active':''}" data-idxlayout="two" title="Two columns" style="padding:4px 6px">${IC.cols2}</div>`;
   h+='</div>';
-  h+=`<button class="btn btn-sm" id="idx-ref">${IC.refresh} Rebuild</button>`;
-  h+='</div>';
-  // Second toolbar row — audit & review controls
-  h+='<div class="idx-toolbar" style="padding:6px 24px;gap:6px">';
+  // Spacer pushes actions to right
+  h+=`<div class="toolbar-spacer"></div>`;
+  // Right: Action buttons
   if(S.auditSelectMode){
     const selCount=S.auditSelected.size;
-    h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected" ${selCount?'':'disabled'}>${IC.audit} Audit ${selCount} Selected</button>`;
-    h+=`<button class="btn btn-sm" id="idx-audit-selall">Select All Visible</button>`;
-    h+=`<button class="btn btn-sm btn-red" id="idx-audit-cancel">${IC.x} Cancel Selection</button>`;
+    h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected" ${selCount?'':'disabled'}>${IC.audit} Audit ${selCount}</button>`;
+    h+=`<button class="btn btn-sm" id="idx-audit-selall">All Visible</button>`;
+    h+=`<button class="btn btn-sm btn-red" id="idx-audit-cancel">${IC.x}</button>`;
   }else{
     h+=`<button class="btn btn-sm btn-purple" id="idx-audit-select">${IC.audit} Select &amp; Audit</button>`;
   }
-  h+=`<div class="toolbar-spacer"></div>`;
-  h+=`<button class="btn btn-sm ${S.reviewMode?'btn-purple':''}" id="idx-review-toggle">${S.reviewMode?'✓ ':' '}Review Mode</button>`;
+  h+=`<button class="btn btn-sm ${S.reviewMode?'btn-purple':''}" id="idx-review-toggle" title="Toggle review mode">${S.reviewMode?'✓ Review':'Review'}</button>`;
+  h+=`<button class="btn btn-sm btn-icon" id="idx-ref" title="Rebuild index">${IC.refresh}</button>`;
   h+='</div>';
 
   // Review mode banner
@@ -1776,9 +1791,8 @@ function rTranscript(){
 function rSetup(app){
   app.innerHTML=`<div class="setup-screen"><div class="setup-card" style="text-align:center">
   <img src="${JEM_LOGO}" alt="JEM" style="width:120px;margin:0 auto 14px;display:block;border-radius:8px">
-  <h1>JEM Index Workstation</h1><p class="sub">Connect to your JEM Video Index sheet.<br>Google credentials are pre-configured.</p>
-  <div style="background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;text-align:left"><div style="font-size:11px;color:var(--green);font-weight:600">✓ Google Sheet pre-configured</div><div style="font-size:10px;color:var(--tx-3);margin-top:2px;font-family:var(--mono)">${esc(S.sheetId.slice(0,24))}…</div></div>
-  <div class="setup-ai" style="text-align:left"><h3>🤖 Claude AI <span style="font-weight:400;font-size:10px;color:var(--tx-3)">(optional — needed for auditing)</span></h3><label style="color:var(--purple)">Anthropic API Key</label><input class="s-input" id="ik" type="password" placeholder="sk-ant-…" value="${esc(S.claudeKey)}"></div>
+  <h1>JEM Index Workstation</h1>
+  <div class="setup-ai" style="text-align:left;margin-top:14px"><h3>🤖 Claude AI <span style="font-weight:400;font-size:10px;color:var(--tx-3)">(optional — needed for auditing)</span></h3><label style="color:var(--purple)">Anthropic API Key</label><input class="s-input" id="ik" type="password" placeholder="sk-ant-…" value="${esc(S.claudeKey)}"></div>
   <div class="setup-err" id="se"></div>
   <button class="btn btn-gold" id="btn-con" style="width:100%;height:42px;font-size:14px;font-weight:600">Sign in & Connect</button></div></div>`;
   $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadTab(0);render()}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign in & Connect';$('#btn-con').disabled=false}};
@@ -1935,19 +1949,10 @@ function bindAll(){
     const inp=$('#desc-edit');if(inp)inp.focus();
     on('#desc-save','click',async()=>{
       const newVal=$('#desc-edit')?.value||'';
-      const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
-      if(kwCol>=0){
-        try{
-          let kw=JSON.parse(S.rows[result.rowIdx][kwCol]);
-          const tag=kw.find(t=>t.name===entryName);
-          if(tag){
-            tag.description=newVal;
-            await saveCell(result.rowIdx,kwCol,JSON.stringify(kw));
-            // Sync to Index tab
-            syncDescToIndexTab(entryName,result,newVal).catch(()=>{});
-            buildIndex();render();
-          }
-        }catch(e){toast('Save error','error')}
+      const ok=await updateTagDesc(result.rowIdx,entryName,newVal);
+      if(ok){
+        syncDescToIndexTab(entryName,result,newVal).catch(()=>{});
+        buildIndex();render();
       }
     });
     on('#desc-cancel','click',()=>{S.editingDesc=null;render()});
