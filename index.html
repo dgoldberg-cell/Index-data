@@ -278,20 +278,20 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .idx-sug-btn.custom{color:var(--blue);border-color:var(--blue-bd)}.idx-sug-btn.custom:hover{background:var(--blue-bg)}
 
 /* Audit selection checkbox — purple square on LEFT side */
-.idx-audit-chk{width:14px;height:14px;border-radius:2px;flex-shrink:0;cursor:pointer;appearance:none;border:2px solid var(--purple-bd);background:var(--bg-white);position:relative;transition:all .1s}
-.idx-audit-chk:checked{background:var(--purple);border-color:var(--purple)}
+.idx-audit-chk,.idx-audit-chk[type="checkbox"]{width:14px;height:14px;border-radius:2px!important;flex-shrink:0;cursor:pointer;appearance:none;border:2px solid var(--purple)!important;background:var(--bg-white)!important;position:relative;transition:all .1s}
+.idx-audit-chk:checked,.idx-audit-chk[type="checkbox"]:checked{background:var(--purple)!important;border-color:var(--purple)!important}
 .idx-audit-chk:checked::after{content:'✓';position:absolute;top:-2px;left:1px;font-size:11px;color:#fff;font-weight:700}
-.idx-audit-chk:hover{border-color:var(--purple)}
+.idx-audit-chk:hover{border-color:var(--purple)!important}
 
-/* Review button — green pill on RIGHT side, not a checkbox */
-.idx-rv-btn{font-size:9px;padding:1px 7px;border-radius:10px;border:1px solid var(--border);background:var(--bg-white);color:var(--tx-4);cursor:pointer;white-space:nowrap;transition:all .1s;flex-shrink:0;font-family:var(--font);line-height:1.6}
-.idx-rv-btn:hover{border-color:var(--green-bd);color:var(--green);background:var(--green-bg)}
+/* Review button — green pill on RIGHT side */
+.idx-rv-btn{font-size:9px;padding:1px 7px;border-radius:10px;border:1.5px solid var(--green);background:var(--bg-white);color:var(--green);cursor:pointer;white-space:nowrap;transition:all .1s;flex-shrink:0;font-family:var(--font);line-height:1.6;font-weight:500}
+.idx-rv-btn:hover{background:var(--green-bg)}
 .idx-rv-btn.reviewed{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
 .idx-rv-btn.reviewed:hover{background:#3a7a4a}
 
 /* Entry-level review button */
-.idx-entry-rv-btn{font-size:9px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);background:var(--bg-white);color:var(--tx-4);cursor:pointer;white-space:nowrap;transition:all .1s;font-family:var(--font);margin-left:6px}
-.idx-entry-rv-btn:hover{border-color:var(--green-bd);color:var(--green);background:var(--green-bg)}
+.idx-entry-rv-btn{font-size:9.5px;padding:2px 10px;border-radius:10px;border:1.5px solid var(--green);background:var(--bg-white);color:var(--green);cursor:pointer;white-space:nowrap;transition:all .1s;font-family:var(--font);margin-left:6px;font-weight:500}
+.idx-entry-rv-btn:hover{background:var(--green-bg)}
 .idx-entry-rv-btn.reviewed{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
 .idx-entry-rv-btn.reviewed:hover{background:#3a7a4a}
 
@@ -1577,7 +1577,7 @@ function rIndex(){
           eh+=`<span class="idx-mini-btn" data-auditone="${esc(e.name)}|${r.rowIdx}|${seg}" title="Audit this">${IC.audit}</span>`;
           eh+=`</span>`;
           // Review button on RIGHT (green pill)
-          eh+=`<button class="idx-rv-btn ${isReviewed?'reviewed':''}" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}">${isReviewed?'✓':'Review'}</button>`;
+          eh+=`<button class="idx-rv-btn ${isReviewed?'reviewed':''}" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}">${isReviewed?'✓ Reviewed':'Mark Reviewed'}</button>`;
           eh+=`</div>`;
         });
         eh+='</div>';
