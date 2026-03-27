@@ -55,8 +55,8 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .main-content{flex:1;display:flex;overflow:hidden;min-height:0}
 .content{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
-.content:has(.idx-wrap){overflow:hidden}
-.idx-wrap{display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden}
+.content.content-index{overflow:hidden;display:flex;flex-direction:column}
+.idx-wrap{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 
 /* Buttons */
 .btn{display:inline-flex;align-items:center;gap:5px;padding:0 13px;height:32px;border-radius:var(--radius);font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--bg-white);color:var(--tx-2);transition:all .12s;white-space:nowrap}
@@ -1272,9 +1272,10 @@ function render(){
   if(S.loading&&!S.headers.length){app.innerHTML='<div class="loading-state"><div class="spinner"></div>Loading…</div>';return}
   let h='';
   h+=rSidebar();
-  h+='<div class="main"><div class="main-content"><div class="content">';
+  const isIdx=S.view==='index';
+  h+=`<div class="main"><div class="main-content"><div class="content${isIdx?' content-index':''}">`;
   if(S.view==='dashboard')h+=rDash();
-  else if(S.view==='index')h+=rIndex();
+  else if(isIdx)h+=rIndex();
   else if(S.view==='sheet')h+=rSheet();
   else if(S.view==='auditor')h+=rAuditor();
   else if(S.view==='review')h+=rReview();
@@ -1300,6 +1301,15 @@ function rSidebar(){
   });
   h+='<div class="nav-sec" style="margin-top:10px">Tools</div>';
   h+=`<div class="nav-item ${S.aiOpen?'active':''}" id="nav-ai">${IC.ai}<span>AI Chat</span></div>`;
+  // Bookmarks list
+  const bmNames=Object.keys(S.idxBookmarks).filter(k=>S.idxBookmarks[k]);
+  if(bmNames.length){
+    h+=`<div class="nav-sec" style="margin-top:10px">Bookmarks <span style="font-size:8px;font-weight:400;letter-spacing:0">(${bmNames.length})</span></div>`;
+    bmNames.sort().slice(0,20).forEach(name=>{
+      h+=`<div class="stab" data-bmjump="${esc(name)}" style="font-size:10.5px;padding:3px 11px;display:flex;align-items:center;gap:4px;cursor:pointer"><span style="color:var(--gold);font-size:9px">🔖</span>${esc(name.length>22?name.slice(0,22)+'…':name)}</div>`;
+    });
+    if(bmNames.length>20)h+=`<div style="padding:2px 11px;font-size:9px;color:var(--tx-4)">+${bmNames.length-20} more</div>`;
+  }
   // Section progress
   if(S.indexData){
     h+='<div class="nav-sec" style="margin-top:10px">Review Progress</div>';
@@ -1381,7 +1391,7 @@ function rIndex(){
   h+='</div>';
   // Review filter pills
   h+='<div class="idx-filter-pills">';
-  [{id:'all',l:'All'},{id:'unreviewed',l:'Unreviewed'},{id:'pending',l:'Pending'},{id:'reviewed',l:'Reviewed'}].forEach(f=>{
+  [{id:'all',l:'All'},{id:'unreviewed',l:'Unreviewed'},{id:'pending',l:'Pending'},{id:'reviewed',l:'Reviewed'},{id:'bookmarked',l:'🔖'}].forEach(f=>{
     h+=`<div class="idx-filter-pill ${S.reviewFilter===f.id?'active':''}" data-rvfilter="${f.id}">${f.l}</div>`;
   });
   h+='</div>';
@@ -1390,19 +1400,20 @@ function rIndex(){
   h+=`<div class="idx-nav-btn ${S.idxLayout==='single'?'active':''}" data-idxlayout="single">${IC.cols1}</div>`;
   h+=`<div class="idx-nav-btn ${S.idxLayout==='two'?'active':''}" data-idxlayout="two">${IC.cols2}</div>`;
   h+='</div>';
-  h+=`<div class="toolbar-spacer"></div>`;
-  // Audit selection mode
+  h+=`<button class="btn btn-sm" id="idx-ref">${IC.refresh} Rebuild</button>`;
+  h+='</div>';
+  // Second toolbar row — audit & review controls
+  h+='<div class="idx-toolbar" style="padding:6px 24px;gap:6px">';
   if(S.auditSelectMode){
     const selCount=S.auditSelected.size;
     h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected" ${selCount?'':'disabled'}>${IC.audit} Audit ${selCount} Selected</button>`;
     h+=`<button class="btn btn-sm" id="idx-audit-selall">Select All Visible</button>`;
-    h+=`<button class="btn btn-sm" id="idx-audit-cancel">Cancel</button>`;
+    h+=`<button class="btn btn-sm btn-red" id="idx-audit-cancel">${IC.x} Cancel Selection</button>`;
   }else{
     h+=`<button class="btn btn-sm btn-purple" id="idx-audit-select">${IC.audit} Select &amp; Audit</button>`;
   }
-  // Review mode toggle
+  h+=`<div class="toolbar-spacer"></div>`;
   h+=`<button class="btn btn-sm ${S.reviewMode?'btn-purple':''}" id="idx-review-toggle">${S.reviewMode?'✓ ':' '}Review Mode</button>`;
-  h+=`<button class="btn btn-sm" id="idx-ref">${IC.refresh} Rebuild</button>`;
   h+='</div>';
 
   // Review mode banner
@@ -1467,7 +1478,13 @@ function rIndex(){
       if(entryCount>300)return;
 
       h+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''}">`;
-      h+=`<div class="idx-entry-name" data-entry="${esc(e.name)}">${esc(e.name)}`;
+      h+=`<div class="idx-entry-name" data-entry="${esc(e.name)}">`;
+      // Entry-level audit selection (selects all results in this entry)
+      if(S.auditSelectMode){
+        const allSelected=e.results.every(r=>S.auditSelected.has(e.name+'|'+r.segType+'|'+r.rowIdx));
+        h+=`<input type="checkbox" class="idx-audit-chk" data-audit-entry="${esc(e.name)}" ${allSelected?'checked':''} style="margin-right:4px" title="Select all results in this entry for audit">`;
+      }
+      h+=`${esc(e.name)}`;
       if(tooMany)h+=` <span class="idx-entry-badge warn">${e.results.length} results</span>`;
       if(hasEmpty)h+=` <span class="idx-entry-badge empty">missing desc</span>`;
       // Entry-level review indicator
@@ -1547,6 +1564,7 @@ function applyReviewFilter(entries){
     if(f==='reviewed')return isEntryReviewed(e);
     if(f==='unreviewed')return!isEntryReviewed(e);
     if(f==='pending')return e.results.some(r=>hasPendingSuggestion(e.name,r.segType,r.rowIdx));
+    if(f==='bookmarked')return S.idxBookmarks[e.name];
     // 'all' with review mode — show only unreviewed or with pending
     if(S.reviewMode)return!isEntryReviewed(e)||e.results.some(r=>hasPendingSuggestion(e.name,r.segType,r.rowIdx));
     return true;
@@ -1791,6 +1809,21 @@ function bindAll(){
     const btn=$('#idx-audit-selected');
     if(btn){btn.innerHTML=`${IC.audit} Audit ${S.auditSelected.size} Selected`;btn.disabled=!S.auditSelected.size}
   });
+  // Entry-level audit selection — select/deselect all results in an entry
+  $$('[data-audit-entry]').forEach(el=>el.onchange=()=>{
+    const entryName=el.dataset.auditEntry;
+    const entry=findEntry(entryName);
+    if(!entry)return;
+    if(el.checked){
+      entry.results.forEach(r=>S.auditSelected.add(entryName+'|'+r.segType+'|'+r.rowIdx));
+    }else{
+      entry.results.forEach(r=>S.auditSelected.delete(entryName+'|'+r.segType+'|'+r.rowIdx));
+    }
+    // Update individual checkboxes and button
+    $$('[data-audit-sel]').forEach(cb=>{cb.checked=S.auditSelected.has(cb.dataset.auditSel)});
+    const btn=$('#idx-audit-selected');
+    if(btn){btn.innerHTML=`${IC.audit} Audit ${S.auditSelected.size} Selected`;btn.disabled=!S.auditSelected.size}
+  });
 
   // Inline suggestion accept/deny/custom
   $$('[data-sugaccept]').forEach(el=>el.onclick=()=>{
@@ -1861,6 +1894,12 @@ function bindAll(){
 
   // Bookmarks
   $$('[data-bm]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();const n=el.dataset.bm;S.idxBookmarks[n]=!S.idxBookmarks[n];if(!S.idxBookmarks[n])delete S.idxBookmarks[n];saveBM();render()});
+  // Bookmark sidebar jump — switch to index view, search for the entry
+  $$('[data-bmjump]').forEach(el=>el.onclick=()=>{
+    const name=el.dataset.bmjump;
+    S.view='index';S.idxSearch=name;S.idxNavMode='tabs';S.idxActiveSection='all';S.reviewFilter='all';render();
+    setTimeout(()=>{const inp=$('#idx-search');if(inp){inp.focus();inp.selectionStart=inp.selectionEnd=inp.value.length}},50);
+  });
 
   // Description editing (double-click)
   $$('[data-editdesc]').forEach(el=>el.ondblclick=()=>{
