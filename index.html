@@ -97,7 +97,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-search input{background:none;border:none;outline:none;color:var(--tx-1);font-size:12px;width:100%}
 .idx-search input::placeholder{color:var(--tx-4)}
 
-.idx-main{display:flex;flex:1;overflow:hidden}
+.idx-main{display:flex;flex:1;overflow:hidden;min-height:0}
 .idx-tree{width:220px;min-width:220px;border-right:1px solid var(--border);overflow-y:auto;background:var(--bg-white);padding:8px}
 .idx-tree.hidden{display:none}
 .idx-tree-section{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--tx-4);padding:10px 8px 4px}
@@ -284,14 +284,17 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .idx-audit-chk:hover{border-color:var(--purple)!important}
 
 /* Review button — green pill on RIGHT side */
-.idx-rv-btn{font-size:9px;padding:1px 7px;border-radius:10px;border:1.5px solid var(--green);background:var(--bg-white);color:var(--green);cursor:pointer;white-space:nowrap;transition:all .1s;flex-shrink:0;font-family:var(--font);line-height:1.6;font-weight:500}
-.idx-rv-btn:hover{background:var(--green-bg)}
+.idx-rv-btn{font-size:9px;padding:1px 7px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-white);color:var(--tx-4);cursor:pointer;white-space:nowrap;transition:all .1s;flex-shrink:0;font-family:var(--font);line-height:1.6;font-weight:500}
+.idx-rv-btn:hover{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+.idx-rv-btn.ai-ok{border-color:var(--blue);color:var(--blue);background:var(--blue-bg)}
+.idx-rv-btn.ai-ok:hover{background:rgba(74,104,152,.14)}
 .idx-rv-btn.reviewed{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
 .idx-rv-btn.reviewed:hover{background:#3a7a4a}
 
 /* Entry-level review button */
-.idx-entry-rv-btn{font-size:9.5px;padding:2px 10px;border-radius:10px;border:1.5px solid var(--green);background:var(--bg-white);color:var(--green);cursor:pointer;white-space:nowrap;transition:all .1s;font-family:var(--font);margin-left:6px;font-weight:500}
-.idx-entry-rv-btn:hover{background:var(--green-bg)}
+.idx-entry-rv-btn{font-size:9.5px;padding:2px 10px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-white);color:var(--tx-4);cursor:pointer;white-space:nowrap;transition:all .1s;font-family:var(--font);margin-left:6px;font-weight:500}
+.idx-entry-rv-btn:hover{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+.idx-entry-rv-btn.ai-ok{border-color:var(--blue);color:var(--blue);background:var(--blue-bg)}
 .idx-entry-rv-btn.reviewed{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
 .idx-entry-rv-btn.reviewed:hover{background:#3a7a4a}
 
@@ -488,10 +491,27 @@ function isDescReviewed(entryName,segType,rowIdx){
   return rv?rv.reviewed===true:false;
 }
 
-// Check if ALL descriptions under an entry are reviewed
+// Check if AI audited and found OK (but not manually reviewed)
+function isDescAiOk(entryName,segType,rowIdx){
+  const k=rvKey(entryName,segType,rowIdx);
+  const rv=getRV(k);
+  return rv&&rv.status==='ok'&&!rv.reviewed;
+}
+
+// Check if ALL descriptions under an entry are reviewed (manually)
 function isEntryReviewed(entry){
   if(!entry||!entry.results||!entry.results.length)return false;
   return entry.results.every(r=>isDescReviewed(entry.name,r.segType,r.rowIdx));
+}
+
+// Check if ALL descriptions under an entry are at least AI OK
+function isEntryAiOk(entry){
+  if(!entry||!entry.results||!entry.results.length)return false;
+  return entry.results.every(r=>{
+    const k=rvKey(entry.name,r.segType,r.rowIdx);
+    const rv=getRV(k);
+    return rv&&(rv.reviewed||rv.status==='ok');
+  })&&!isEntryReviewed(entry);
 }
 
 // Check if ALL entries in a section are reviewed
@@ -1232,7 +1252,7 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
             const k=rvKey(e.entryName,e.segType,e.rowIdx);
             const existing=getRV(k);
             if(!existing||!existing.reviewed){
-              setRV(k,{...(existing||{}),reviewed:true,status:'ok'});
+              setRV(k,{...(existing||{}),status:'ok'});
               syncQueue.push({entryName:e.entryName,segType:e.segType,rowIdx:e.rowIdx,status:'ok',suggestion:''});
             }
           }
@@ -1527,7 +1547,8 @@ function rIndex(){
       if(tooMany)eh+=` <span class="idx-entry-badge warn">${e.results.length} results</span>`;
       if(hasEmpty)eh+=` <span class="idx-entry-badge empty">missing desc</span>`;
       // Review button on right (green pill)
-      eh+=`<button class="idx-entry-rv-btn ${entryDone?'reviewed':''}" data-entry-rv="${esc(e.name)}">${entryDone?'✓ Reviewed':'Mark Reviewed'}</button>`;
+      const entryAiOk=!entryDone&&isEntryAiOk(e);
+      eh+=`<button class="idx-entry-rv-btn ${entryDone?'reviewed':entryAiOk?'ai-ok':''}" data-entry-rv="${esc(e.name)}">${entryDone?'✓ Reviewed':entryAiOk?'AI ✓ · Mark Reviewed':'Mark Reviewed'}</button>`;
       eh+=`</div>`;
       eh+=`<div class="idx-entry-meta">${e.results.length} result${e.results.length!==1?'s':''} · <span data-bm="${esc(e.name)}" style="cursor:pointer;color:${isBM?'var(--gold)':'var(--tx-4)'}">${IC.bookmark}</span>`;
       if(note)eh+=` · 📝`;
@@ -1577,7 +1598,8 @@ function rIndex(){
           eh+=`<span class="idx-mini-btn" data-auditone="${esc(e.name)}|${r.rowIdx}|${seg}" title="Audit this">${IC.audit}</span>`;
           eh+=`</span>`;
           // Review button on RIGHT (green pill)
-          eh+=`<button class="idx-rv-btn ${isReviewed?'reviewed':''}" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}">${isReviewed?'✓ Reviewed':'Mark Reviewed'}</button>`;
+          const aiOk=!isReviewed&&rv&&rv.status==='ok';
+          eh+=`<button class="idx-rv-btn ${isReviewed?'reviewed':aiOk?'ai-ok':''}" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}">${isReviewed?'✓ Reviewed':aiOk?'AI ✓':'Mark Reviewed'}</button>`;
           eh+=`</div>`;
         });
         eh+='</div>';
@@ -2126,7 +2148,7 @@ Respond with JSON only: {status:"ok"|"fix"|"generate", suggestion:"...", reason:
       syncToIndexTab(entryName,r,'pending',parsed.suggestion||'').catch(()=>{});
       toast('Suggestion ready','success');
     }else{
-      setRV(k,{...(getRV(k)||{}),reviewed:true,status:'ok'});
+      setRV(k,{...(getRV(k)||{}),status:'ok'});
       syncToIndexTab(entryName,r,'ok','').catch(()=>{});
       toast('Looks good!','success');
     }
@@ -2197,7 +2219,7 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
           if(r)syncToIndexTab(e.entryName,r,'pending',p.suggestion||'').catch(()=>{});
           fx++;
         }else{
-          setRV(k,{...(getRV(k)||{}),reviewed:true,status:'ok'});
+          setRV(k,{...(getRV(k)||{}),status:'ok'});
         }
       });
       totalFixed+=fx;
