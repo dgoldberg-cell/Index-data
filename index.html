@@ -53,10 +53,10 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 
 /* Main */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-.main-content{flex:1;display:flex;overflow:hidden;min-height:0}
-.content{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
-.content.content-index{overflow:hidden;display:flex;flex-direction:column}
-.idx-wrap{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.main-content{flex:1;display:flex;overflow:hidden}
+.content{flex:1;overflow-y:auto;overflow-x:hidden}
+.content.content-index{overflow:hidden}
+.idx-wrap{display:flex;flex-direction:column;height:100%}
 
 /* Buttons */
 .btn{display:inline-flex;align-items:center;gap:5px;padding:0 13px;height:32px;border-radius:var(--radius);font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--bg-white);color:var(--tx-2);transition:all .12s;white-space:nowrap}
@@ -97,7 +97,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-search input{background:none;border:none;outline:none;color:var(--tx-1);font-size:12px;width:100%}
 .idx-search input::placeholder{color:var(--tx-4)}
 
-.idx-main{display:flex;flex:1;overflow:hidden;min-height:0}
+.idx-main{display:flex;flex:1;overflow:hidden}
 .idx-tree{width:220px;min-width:220px;border-right:1px solid var(--border);overflow-y:auto;background:var(--bg-white);padding:8px}
 .idx-tree.hidden{display:none}
 .idx-tree-section{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--tx-4);padding:10px 8px 4px}
@@ -106,7 +106,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-tree-item.active{background:var(--gold-bg);color:var(--gold);font-weight:600}
 .idx-tree-count{font-size:9px;color:var(--tx-4);font-family:var(--mono)}
 
-.idx-body{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px 32px}
+.idx-body{overflow-y:auto;overflow-x:hidden;padding:24px 32px}
 .idx-body.two-col{column-count:2;column-gap:40px;column-rule:1px solid var(--border);column-fill:auto}
 
 /* Section headers in index */
@@ -1288,6 +1288,16 @@ function render(){
   // Toasts
   h+='<div class="toasts">';S.toasts.forEach(t=>{h+=`<div class="toast ${t.t}">${esc(t.m)}</div>`});h+='</div>';
   app.innerHTML=h;bindAll();
+  // Fix idx-body scroll height — calculate available space and set explicitly
+  fixIdxScroll();
+}
+function fixIdxScroll(){
+  const body=$('.idx-body');
+  if(!body)return;
+  const main=$('.idx-main');
+  if(!main)return;
+  // Set idx-body height to fill remaining space in idx-main
+  body.style.height=main.clientHeight+'px';
 }
 
 function rSidebar(){
@@ -2170,6 +2180,7 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
 // ═══════════════════════════════════════════════════════════════
 migrateOldQueue();
 render();
+window.addEventListener('resize',fixIdxScroll);
 </script>
 </body>
 </html>
