@@ -1599,7 +1599,22 @@ function rIndex(){
     h+=entryHtmls.join('');
   }
   if(entryCount>300)h+=`<div style="padding:20px;text-align:center;color:var(--tx-3);font-size:12px">Showing 300 of ${entryCount} entries. Use search or section tabs to narrow.</div>`;
-  h+='</div></div></div>';
+  h+='</div></div>';
+  // Floating audit bar at bottom when items selected
+  const fSelCount=S.auditSelected.size;
+  if(fSelCount>0||S.auditRunning){
+    h+='<div style="flex-shrink:0;display:flex;align-items:center;gap:10px;padding:8px 24px;background:var(--purple-bg);border-top:1px solid var(--purple-bd)">';
+    if(S.auditRunning){
+      h+=`<div class="spinner" style="width:16px;height:16px;border-width:2px"></div>`;
+      h+=`<span style="font-size:12px;color:var(--purple);font-weight:500">Auditing… ${S.auditProgress}/${S.auditTotal}</span>`;
+    }else{
+      h+=`<span style="font-size:12px;color:var(--purple);font-weight:600">${fSelCount} selected for audit</span>`;
+      h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected2">${IC.audit} Run Audit Now</button>`;
+      h+=`<button class="btn btn-sm" id="idx-audit-clear2">Clear</button>`;
+    }
+    h+='</div>';
+  }
+  h+='</div>';
   return h;
 }
 
@@ -1837,6 +1852,8 @@ function bindAll(){
 
   // Audit controls
   on('#idx-audit-clear','click',()=>{S.auditSelected=new Set();render()});
+  on('#idx-audit-clear2','click',()=>{S.auditSelected=new Set();render()});
+  on('#idx-audit-selected2','click',()=>{if(S.auditSelected.size)auditSelectedItems()});
   on('#idx-audit-selected','click',()=>{
     if(!S.auditSelected.size)return;
     auditSelectedItems();
@@ -2134,14 +2151,15 @@ async function auditSelectedItems(){
   });
   if(!items.length){toast('No valid items selected','error');return}
   
-  S.auditSelectMode=false;S.auditSelected=new Set();
-  S.auditRunning=true;S.auditProgress=0;S.auditTotal=items.length;S.auditLog=[`Auditing ${items.length} selected items…`];
-  S.view='auditor';render();
+  // Stay on current page — just clear selection and show progress via toasts
+  S.auditSelected=new Set();
+  S.auditRunning=true;S.auditProgress=0;S.auditTotal=items.length;
+  toast(`Auditing ${items.length} items…`);
+  render();
   
   const bs=S.auditBatch;let totalFixed=0;
   for(let i=0;i<items.length;i+=bs){
     const batch=items.slice(i,i+bs);
-    S.auditLog.push(`Batch ${Math.floor(i/bs)+1}/${Math.ceil(items.length/bs)}...`);render();
     try{
       const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map(c=>c.name).join('; ');
       const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
@@ -2183,14 +2201,16 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
         }
       });
       totalFixed+=fx;
-      S.auditLog.push(`  ${fx} need review, ${batch.length-fx} OK`);
-    }catch(e){S.auditLog.push(`  Error: ${e.message}`)}
-    S.auditProgress=Math.min(i+bs,items.length);render();
-    if(i+bs<items.length)await new Promise(r=>setTimeout(r,1500));
+    }catch(e){toast('Audit error: '+e.message,'error')}
+    S.auditProgress=Math.min(i+bs,items.length);
+    if(i+bs<items.length){
+      toast(`Auditing… ${S.auditProgress}/${S.auditTotal}`);
+      await new Promise(r=>setTimeout(r,1500));
+    }
   }
   S.auditRunning=false;
-  S.auditLog.push(`Done! ${totalFixed} items need review.`);
-  toast(`${totalFixed} items to review`,'success');render();
+  toast(`Done! ${totalFixed} suggestions ready`,'success');
+  render();
 }
 
 // ═══════════════════════════════════════════════════════════════
