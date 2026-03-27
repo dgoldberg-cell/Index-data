@@ -107,7 +107,9 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-tree-count{font-size:9px;color:var(--tx-4);font-family:var(--mono)}
 
 .idx-body{overflow-y:auto;overflow-x:hidden;padding:24px 32px}
-.idx-body.two-col{column-count:2;column-gap:40px;column-rule:1px solid var(--border);column-fill:auto}
+.idx-body.two-col{display:flex;gap:40px;padding:24px 32px}
+.idx-body.two-col .idx-col{flex:1;min-width:0}
+.idx-body.two-col .idx-col-divider{width:1px;background:var(--border);flex-shrink:0}
 
 /* Section headers in index */
 .idx-section-hd{font-family:var(--serif);font-size:22px;font-weight:700;color:var(--tx-1);padding:16px 0 10px;border-bottom:2px solid var(--gold);margin-bottom:16px;break-after:avoid;letter-spacing:-.3px}
@@ -1464,8 +1466,10 @@ function rIndex(){
     h+='</div>';
   }
 
-  // Main body
-  h+=`<div class="idx-body ${S.idxLayout==='two'?'two-col':''}">`;
+  // Main body — collect entry HTML, then split into columns if two-col
+  const isTwoCol=S.idxLayout==='two';
+  const entryHtmls=[]; // collect each entry's HTML for column splitting
+  let currentSecHdr='';
   let entryCount=0;
   sectionsToShow.forEach(sec=>{
     let entries=(ix.sections[sec]||[]);
@@ -1476,7 +1480,9 @@ function rIndex(){
     entries=applyReviewFilter(entries);
     if(!entries.length)return;
 
-    h+=`<div class="idx-section-hd">${sec}${isSectionReviewed(sec)?' <span style="color:var(--green);font-size:14px">✓ reviewed</span>':''}</div>`;
+    // Section header
+    entryHtmls.push(`<div class="idx-section-hd">${sec}${isSectionReviewed(sec)?' <span style="color:var(--green);font-size:14px">✓ reviewed</span>':''}</div>`);
+
     entries.forEach(e=>{
       const isBM=S.idxBookmarks[e.name];
       const note=S.idxNotes[e.name];
@@ -1487,30 +1493,28 @@ function rIndex(){
       entryCount++;
       if(entryCount>300)return;
 
-      h+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''}">`;
-      h+=`<div class="idx-entry-name" data-entry="${esc(e.name)}">`;
-      // Entry-level audit selection (selects all results in this entry)
+      let eh='';
+      eh+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''}">`;
+      eh+=`<div class="idx-entry-name" data-entry="${esc(e.name)}">`;
       if(S.auditSelectMode){
         const allSelected=e.results.every(r=>S.auditSelected.has(e.name+'|'+r.segType+'|'+r.rowIdx));
-        h+=`<input type="checkbox" class="idx-audit-chk" data-audit-entry="${esc(e.name)}" ${allSelected?'checked':''} style="margin-right:4px" title="Select all results in this entry for audit">`;
+        eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-entry="${esc(e.name)}" ${allSelected?'checked':''} style="margin-right:4px" title="Select all results in this entry for audit">`;
       }
-      h+=`${esc(e.name)}`;
-      if(tooMany)h+=` <span class="idx-entry-badge warn">${e.results.length} results</span>`;
-      if(hasEmpty)h+=` <span class="idx-entry-badge empty">missing desc</span>`;
-      // Entry-level review indicator
-      h+=`<span class="idx-entry-review"><input type="checkbox" class="idx-review-chk" data-entry-rv="${esc(e.name)}" ${entryDone?'checked':''} title="Mark all descriptions reviewed"><span class="${entryDone?'reviewed-label':''}">${entryDone?'reviewed':''}</span></span>`;
-      h+=`</div>`;
-      h+=`<div class="idx-entry-meta">${e.results.length} result${e.results.length!==1?'s':''} · <span data-bm="${esc(e.name)}" style="cursor:pointer;color:${isBM?'var(--gold)':'var(--tx-4)'}">${IC.bookmark}</span>`;
-      if(note)h+=` · 📝`;
-      if(entryHasPending)h+=` · <button class="btn btn-sm btn-green bulk-accept-btn" data-bulkaccept="${esc(e.name)}">Accept All</button>`;
-      h+=`</div>`;
+      eh+=`${esc(e.name)}`;
+      if(tooMany)eh+=` <span class="idx-entry-badge warn">${e.results.length} results</span>`;
+      if(hasEmpty)eh+=` <span class="idx-entry-badge empty">missing desc</span>`;
+      eh+=`<span class="idx-entry-review"><input type="checkbox" class="idx-review-chk" data-entry-rv="${esc(e.name)}" ${entryDone?'checked':''} title="Mark all descriptions reviewed"><span class="${entryDone?'reviewed-label':''}">${entryDone?'reviewed':''}</span></span>`;
+      eh+=`</div>`;
+      eh+=`<div class="idx-entry-meta">${e.results.length} result${e.results.length!==1?'s':''} · <span data-bm="${esc(e.name)}" style="cursor:pointer;color:${isBM?'var(--gold)':'var(--tx-4)'}">${IC.bookmark}</span>`;
+      if(note)eh+=` · 📝`;
+      if(entryHasPending)eh+=` · <button class="btn btn-sm btn-green bulk-accept-btn" data-bulkaccept="${esc(e.name)}">Accept All</button>`;
+      eh+=`</div>`;
 
-      // Group by segment type
       const byseg={};
       e.results.forEach(r=>{if(!byseg[r.segType])byseg[r.segType]=[];byseg[r.segType].push(r)});
       RULES.segOrder.forEach(seg=>{
         if(!byseg[seg])return;
-        h+=`<div class="idx-seg"><div class="idx-seg-label">${seg}</div>`;
+        eh+=`<div class="idx-seg"><div class="idx-seg-label">${seg}</div>`;
         byseg[seg].forEach((r,ri)=>{
           const descEmpty=!r.desc?.trim();
           const vidUrl=r.clipId?`https://videos.jem.tv/video-player?clip=${r.clipId}`:(r.objId?`https://videos.jem.tv/video-player?clip=${r.objId.replace('video_clip-','')}`:'');
@@ -1518,49 +1522,56 @@ function rIndex(){
           const rv=getRV(k);
           const isReviewed=rv&&rv.reviewed;
           const isPending=rv&&rv.suggestion&&rv.status==='pending';
-
-          // In review mode, skip reviewed items (unless they have pending suggestions)
           if(S.reviewMode&&isReviewed&&!isPending)return;
 
-          h+=`<div class="idx-result">`;
-          // Audit selection checkbox (only in select mode)
+          eh+=`<div class="idx-result">`;
           if(S.auditSelectMode){
             const selKey=esc(e.name)+'|'+seg+'|'+r.rowIdx;
-            h+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''}>`;
+            eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''}>`;
           }
-          // Review checkbox
-          h+=`<input type="checkbox" class="idx-review-chk" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}" ${isReviewed?'checked':''} title="Mark reviewed">`;
-          // Description (or old+new if pending)
+          eh+=`<input type="checkbox" class="idx-review-chk" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}" ${isReviewed?'checked':''} title="Mark reviewed">`;
           if(isPending){
-            h+=`<span class="idx-sug-old">${descEmpty?'[empty]':esc(r.desc)}</span>`;
-            h+=`<span class="idx-sug-arrow">→</span>`;
-            h+=`<span class="idx-sug-new">${esc(rv.suggestion)}</span>`;
-            if(rv.reason)h+=`<span class="idx-sug-reason" data-reason="${esc(rv.reason)}">${esc(rv.reason.length>18?rv.reason.slice(0,18)+'…':rv.reason)}</span>`;
-            h+=`<span class="idx-sug-actions">`;
-            h+=`<span class="idx-sug-btn accept" data-sugaccept="${esc(e.name)}|${seg}|${r.rowIdx}" title="Accept">${IC.check}</span>`;
-            h+=`<span class="idx-sug-btn deny" data-sugdeny="${esc(e.name)}|${seg}|${r.rowIdx}" title="Deny">${IC.x}</span>`;
-            h+=`<span class="idx-sug-btn custom" data-sugcustom="${esc(e.name)}|${seg}|${r.rowIdx}" title="Custom edit">✎</span>`;
-            h+=`</span>`;
+            eh+=`<span class="idx-sug-old">${descEmpty?'[empty]':esc(r.desc)}</span>`;
+            eh+=`<span class="idx-sug-arrow">→</span>`;
+            eh+=`<span class="idx-sug-new">${esc(rv.suggestion)}</span>`;
+            if(rv.reason)eh+=`<span class="idx-sug-reason" data-reason="${esc(rv.reason)}">${esc(rv.reason.length>18?rv.reason.slice(0,18)+'…':rv.reason)}</span>`;
+            eh+=`<span class="idx-sug-actions">`;
+            eh+=`<span class="idx-sug-btn accept" data-sugaccept="${esc(e.name)}|${seg}|${r.rowIdx}" title="Accept">${IC.check}</span>`;
+            eh+=`<span class="idx-sug-btn deny" data-sugdeny="${esc(e.name)}|${seg}|${r.rowIdx}" title="Deny">${IC.x}</span>`;
+            eh+=`<span class="idx-sug-btn custom" data-sugcustom="${esc(e.name)}|${seg}|${r.rowIdx}" title="Custom edit">✎</span>`;
+            eh+=`</span>`;
           }else{
-            h+=`<span class="idx-result-desc ${descEmpty?'empty-desc':'editable'}" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="Double-click to edit">${descEmpty?'[no description]':esc(r.desc)}</span>`;
+            eh+=`<span class="idx-result-desc ${descEmpty?'empty-desc':'editable'}" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="Double-click to edit">${descEmpty?'[no description]':esc(r.desc)}</span>`;
           }
-          // Relationship + reference + actions — all close together
-          if(r.rel)h+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
-          h+=`<span class="idx-result-ref">`;
-          if(r.clipType==='Film Chapter'||r.clipType==='Film')h+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">${esc(r.pvName||r.clipName)}</a>`;
-          else h+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">#${esc(r.progNum)}</a>`;
-          h+=`</span>`;
-          h+=`<span class="idx-result-actions">`;
-          if(vidUrl)h+=`<a class="idx-mini-btn" href="${vidUrl}" target="_blank" title="Watch">${IC.video}</a>`;
-          if(r.transcript)h+=`<span class="idx-mini-btn" data-showtx="${r.rowIdx}" title="Transcript">${IC.doc}</span>`;
-          h+=`<span class="idx-mini-btn" data-auditone="${esc(e.name)}|${r.rowIdx}|${seg}" title="Audit this">${IC.audit}</span>`;
-          h+=`</span></div>`;
+          if(r.rel)eh+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
+          eh+=`<span class="idx-result-ref">`;
+          if(r.clipType==='Film Chapter'||r.clipType==='Film')eh+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">${esc(r.pvName||r.clipName)}</a>`;
+          else eh+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">#${esc(r.progNum)}</a>`;
+          eh+=`</span>`;
+          eh+=`<span class="idx-result-actions">`;
+          if(vidUrl)eh+=`<a class="idx-mini-btn" href="${vidUrl}" target="_blank" title="Watch">${IC.video}</a>`;
+          if(r.transcript)eh+=`<span class="idx-mini-btn" data-showtx="${r.rowIdx}" title="Transcript">${IC.doc}</span>`;
+          eh+=`<span class="idx-mini-btn" data-auditone="${esc(e.name)}|${r.rowIdx}|${seg}" title="Audit this">${IC.audit}</span>`;
+          eh+=`</span></div>`;
         });
-        h+='</div>';
+        eh+='</div>';
       });
-      h+='</div>';
+      eh+='</div>';
+      entryHtmls.push(eh);
     });
   });
+
+  // Render into idx-body — single or two columns
+  h+=`<div class="idx-body ${isTwoCol?'two-col':''}">`;
+  if(isTwoCol&&entryHtmls.length>1){
+    // Split roughly in half
+    const mid=Math.ceil(entryHtmls.length/2);
+    h+='<div class="idx-col">'+entryHtmls.slice(0,mid).join('')+'</div>';
+    h+='<div class="idx-col-divider"></div>';
+    h+='<div class="idx-col">'+entryHtmls.slice(mid).join('')+'</div>';
+  }else{
+    h+=entryHtmls.join('');
+  }
   if(entryCount>300)h+=`<div style="padding:20px;text-align:center;color:var(--tx-3);font-size:12px">Showing 300 of ${entryCount} entries. Use search or section tabs to narrow.</div>`;
   h+='</div></div></div>';
   return h;
