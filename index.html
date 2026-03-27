@@ -277,12 +277,17 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .idx-sug-btn.deny{color:var(--red);border-color:var(--red-bd)}.idx-sug-btn.deny:hover{background:var(--red-bg)}
 .idx-sug-btn.custom{color:var(--blue);border-color:var(--blue-bd)}.idx-sug-btn.custom:hover{background:var(--blue-bg)}
 
-/* Audit selection checkbox */
-.idx-audit-chk{width:13px;height:13px;border-radius:3px;flex-shrink:0;cursor:pointer;margin-right:1px;accent-color:var(--purple)}
+/* Audit selection checkbox — purple square, always visible */
+.idx-audit-chk{width:14px;height:14px;border-radius:2px;flex-shrink:0;cursor:pointer;margin-right:1px;appearance:none;border:2px solid var(--purple-bd);background:var(--bg-white);position:relative;transition:all .1s}
+.idx-audit-chk:checked{background:var(--purple);border-color:var(--purple)}
+.idx-audit-chk:checked::after{content:'✓';position:absolute;top:-2px;left:1px;font-size:11px;color:#fff;font-weight:700}
+.idx-audit-chk:hover{border-color:var(--purple)}
 
-/* Review checkboxes */
-.idx-review-chk{width:13px;height:13px;border-radius:3px;flex-shrink:0;cursor:pointer;margin-right:2px}
+/* Review checkboxes — green round, always visible */
+.idx-review-chk{width:14px;height:14px;border-radius:50%;flex-shrink:0;cursor:pointer;margin-right:2px;appearance:none;border:2px solid var(--green-bd);background:var(--bg-white);position:relative;transition:all .1s}
 .idx-review-chk:checked{background:var(--green);border-color:var(--green)}
+.idx-review-chk:checked::after{content:'✓';position:absolute;top:-2px;left:1px;font-size:11px;color:#fff;font-weight:700}
+.idx-review-chk:hover{border-color:var(--green)}
 .idx-entry-review{display:inline-flex;align-items:center;gap:4px;margin-left:8px;font-size:10px;color:var(--tx-4)}
 .idx-entry-review .reviewed-label{color:var(--green);font-weight:500}
 
@@ -1428,17 +1433,17 @@ function rIndex(){
   h+=`<div class="idx-nav-btn ${S.idxLayout==='single'?'active':''}" data-idxlayout="single" title="Single column" style="padding:4px 6px">${IC.cols1}</div>`;
   h+=`<div class="idx-nav-btn ${S.idxLayout==='two'?'active':''}" data-idxlayout="two" title="Two columns" style="padding:4px 6px">${IC.cols2}</div>`;
   h+='</div>';
+  // Checkbox legend
+  h+='<div style="display:flex;align-items:center;gap:8px;font-size:9px;color:var(--tx-4);margin-left:8px">';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;border:2px solid var(--purple-bd);border-radius:2px;display:inline-block"></span>AI Audit</span>';
+  h+='<span style="display:flex;align-items:center;gap:3px"><span style="width:10px;height:10px;border:2px solid var(--green-bd);border-radius:50%;display:inline-block"></span>Reviewed</span>';
+  h+='</div>';
   // Spacer pushes actions to right
   h+=`<div class="toolbar-spacer"></div>`;
   // Right: Action buttons
-  if(S.auditSelectMode){
-    const selCount=S.auditSelected.size;
-    h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected" ${selCount?'':'disabled'}>${IC.audit} Audit ${selCount}</button>`;
-    h+=`<button class="btn btn-sm" id="idx-audit-selall">All Visible</button>`;
-    h+=`<button class="btn btn-sm btn-red" id="idx-audit-cancel">${IC.x}</button>`;
-  }else{
-    h+=`<button class="btn btn-sm btn-purple" id="idx-audit-select">${IC.audit} Select &amp; Audit</button>`;
-  }
+  const selCount=S.auditSelected.size;
+  h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected" ${selCount?'':'disabled'} title="Run AI audit on selected items">${IC.audit} Audit${selCount?' '+selCount:''}</button>`;
+  if(selCount)h+=`<button class="btn btn-sm" id="idx-audit-clear" title="Clear selection">Clear</button>`;
   h+=`<button class="btn btn-sm ${S.reviewMode?'btn-purple':''}" id="idx-review-toggle" title="Toggle review mode">${S.reviewMode?'✓ Review':'Review'}</button>`;
   h+=`<button class="btn btn-sm btn-icon" id="idx-ref" title="Rebuild index">${IC.refresh}</button>`;
   h+='</div>';
@@ -1511,10 +1516,9 @@ function rIndex(){
       let eh='';
       eh+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''}">`;
       eh+=`<div class="idx-entry-name" data-entry="${esc(e.name)}">`;
-      if(S.auditSelectMode){
-        const allSelected=e.results.every(r=>S.auditSelected.has(e.name+'|'+r.segType+'|'+r.rowIdx));
-        eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-entry="${esc(e.name)}" ${allSelected?'checked':''} style="margin-right:4px" title="Select all results in this entry for audit">`;
-      }
+      // Entry-level audit selection (always visible — purple square)
+      const allSelected=e.results.every(r=>S.auditSelected.has(e.name+'|'+r.segType+'|'+r.rowIdx));
+      eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-entry="${esc(e.name)}" ${allSelected?'checked':''} title="Select for AI audit">`;
       eh+=`${esc(e.name)}`;
       if(tooMany)eh+=` <span class="idx-entry-badge warn">${e.results.length} results</span>`;
       if(hasEmpty)eh+=` <span class="idx-entry-badge empty">missing desc</span>`;
@@ -1540,10 +1544,10 @@ function rIndex(){
           if(S.reviewMode&&isReviewed&&!isPending)return;
 
           eh+=`<div class="idx-result">`;
-          if(S.auditSelectMode){
-            const selKey=esc(e.name)+'|'+seg+'|'+r.rowIdx;
-            eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''}>`;
-          }
+          // Audit checkbox (purple square — always visible)
+          const selKey=esc(e.name)+'|'+seg+'|'+r.rowIdx;
+          eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''} title="Select for AI audit">`;
+          // Review checkbox (green circle — always visible)
           eh+=`<input type="checkbox" class="idx-review-chk" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}" ${isReviewed?'checked':''} title="Mark reviewed">`;
           if(isPending){
             eh+=`<span class="idx-sug-old">${descEmpty?'[empty]':esc(r.desc)}</span>`;
@@ -1824,25 +1828,18 @@ function bindAll(){
   on('#idx-review-toggle','click',()=>{S.reviewMode=!S.reviewMode;render()});
   on('#idx-review-off','click',()=>{S.reviewMode=false;render()});
 
-  // Audit select mode
-  on('#idx-audit-select','click',()=>{S.auditSelectMode=true;S.auditSelected=new Set();render()});
-  on('#idx-audit-cancel','click',()=>{S.auditSelectMode=false;S.auditSelected=new Set();render()});
-  on('#idx-audit-selall','click',()=>{
-    // Select all visible results
-    $$('[data-audit-sel]').forEach(el=>{S.auditSelected.add(el.dataset.auditSel);el.checked=true});
-    render();
-  });
+  // Audit controls
+  on('#idx-audit-clear','click',()=>{S.auditSelected=new Set();render()});
   on('#idx-audit-selected','click',()=>{
     if(!S.auditSelected.size)return;
     auditSelectedItems();
   });
-  // Individual audit selection checkboxes
+  // Individual audit selection checkboxes (always visible)
   $$('[data-audit-sel]').forEach(el=>el.onchange=()=>{
     const k=el.dataset.auditSel;
     if(el.checked)S.auditSelected.add(k);else S.auditSelected.delete(k);
-    // Update the button count without full re-render
     const btn=$('#idx-audit-selected');
-    if(btn){btn.innerHTML=`${IC.audit} Audit ${S.auditSelected.size} Selected`;btn.disabled=!S.auditSelected.size}
+    if(btn){btn.innerHTML=`${IC.audit} Audit${S.auditSelected.size?' '+S.auditSelected.size:''}`;btn.disabled=!S.auditSelected.size}
   });
   // Entry-level audit selection — select/deselect all results in an entry
   $$('[data-audit-entry]').forEach(el=>el.onchange=()=>{
@@ -1854,10 +1851,9 @@ function bindAll(){
     }else{
       entry.results.forEach(r=>S.auditSelected.delete(entryName+'|'+r.segType+'|'+r.rowIdx));
     }
-    // Update individual checkboxes and button
     $$('[data-audit-sel]').forEach(cb=>{cb.checked=S.auditSelected.has(cb.dataset.auditSel)});
     const btn=$('#idx-audit-selected');
-    if(btn){btn.innerHTML=`${IC.audit} Audit ${S.auditSelected.size} Selected`;btn.disabled=!S.auditSelected.size}
+    if(btn){btn.innerHTML=`${IC.audit} Audit${S.auditSelected.size?' '+S.auditSelected.size:''}`;btn.disabled=!S.auditSelected.size}
   });
 
   // Inline suggestion accept/deny/custom
