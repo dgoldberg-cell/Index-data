@@ -85,17 +85,28 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .pad{padding:22px 28px}
 
 /* Index Preview */
-.idx-toolbar{display:flex;align-items:center;gap:8px;padding:10px 24px;border-bottom:1px solid var(--border);background:var(--bg-white);flex-wrap:wrap;flex-shrink:0}
-.idx-nav-mode{display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.idx-nav-btn{padding:5px 12px;font-size:11px;font-weight:500;color:var(--tx-3);background:var(--bg-white);border:none;border-right:1px solid var(--border);cursor:pointer;transition:all .1s}
-.idx-nav-btn:last-child{border-right:none}
-.idx-nav-btn:hover{background:var(--bg-1);color:var(--tx-2)}
-.idx-nav-btn.active{background:var(--gold-bg);color:var(--gold);font-weight:600}
-.idx-layout-toggle{display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-left:auto}
-.idx-search{display:flex;align-items:center;gap:7px;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius);padding:0 10px;height:30px;min-width:180px}
+.idx-toolbar{display:flex;align-items:center;gap:6px;padding:8px 24px;border-bottom:1px solid var(--border);background:var(--bg-white);flex-shrink:0}
+.idx-search{display:flex;align-items:center;gap:7px;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius);padding:0 10px;height:30px;min-width:160px;flex:1;max-width:260px}
 .idx-search:focus-within{border-color:var(--gold)}
 .idx-search input{background:none;border:none;outline:none;color:var(--tx-1);font-size:12px;width:100%}
 .idx-search input::placeholder{color:var(--tx-4)}
+/* Toolbar dropdown button */
+.tb-dd{position:relative}
+.tb-dd-btn{display:flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-white);color:var(--tx-2);font-size:11px;font-weight:500;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all .1s;height:28px}
+.tb-dd-btn:hover{background:var(--bg-1);border-color:var(--border-hi)}
+.tb-dd-btn .tb-dd-val{color:var(--gold);font-weight:600}
+.tb-dd-btn::after{content:'▾';font-size:8px;color:var(--tx-4);margin-left:2px}
+.tb-dd-panel{display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 6px 20px rgba(0,0,0,.1);z-index:90;min-width:150px;padding:4px}
+.tb-dd.open .tb-dd-panel{display:block}
+.tb-dd-item{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:4px;font-size:11px;color:var(--tx-2);cursor:pointer;white-space:nowrap}
+.tb-dd-item:hover{background:var(--bg-1);color:var(--tx-1)}
+.tb-dd-item.active{color:var(--gold);font-weight:600;background:var(--gold-bg)}
+.tb-dd-item .tb-dd-cnt{font-size:9px;color:var(--tx-4);margin-left:auto;font-family:var(--mono)}
+.tb-layout-toggle{display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.tb-layout-btn{padding:4px 8px;font-size:11px;color:var(--tx-3);background:var(--bg-white);cursor:pointer;transition:all .1s;border-right:1px solid var(--border);letter-spacing:-1px}
+.tb-layout-btn:last-child{border-right:none}
+.tb-layout-btn:hover{background:var(--bg-1);color:var(--tx-2)}
+.tb-layout-btn.active{background:var(--gold-bg);color:var(--gold);font-weight:600}
 
 .idx-main{display:flex;flex:1;overflow:hidden;min-height:0}
 .idx-tree{width:220px;min-width:220px;border-right:1px solid var(--border);overflow-y:auto;background:var(--bg-white);padding:8px}
@@ -106,8 +117,8 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-tree-item.active{background:var(--gold-bg);color:var(--gold);font-weight:600}
 .idx-tree-count{font-size:9px;color:var(--tx-4);font-family:var(--mono)}
 
-.idx-body{overflow-y:auto;overflow-x:hidden;padding:24px 32px}
-.idx-body.two-col{display:flex;gap:40px;padding:24px 32px}
+.idx-body{overflow-y:auto;overflow-x:hidden;padding:20px 32px;font-size:13px}
+.idx-body.two-col{display:flex;gap:32px;padding:20px 24px;font-size:12.5px}
 .idx-body.two-col .idx-col{flex:1;min-width:0}
 .idx-body.two-col .idx-col-divider{width:1px;background:var(--border);flex-shrink:0}
 
@@ -1626,7 +1637,7 @@ function updateAuditFloat(){
   }
   bar.innerHTML=`<span class="af-count">${count}</span> selected <button class="af-run" id="idx-audit-float-run">Run Audit</button><span class="af-close" id="idx-audit-float-x" title="Dismiss">✕</span>`;
   bar.querySelector('#idx-audit-float-run').onclick=()=>{if(S.auditSelected.size)auditSelectedItems()};
-  bar.querySelector('#idx-audit-float-x').onclick=()=>{S.auditSelected=new Set();updateAuditFloat()};
+  bar.querySelector('#idx-audit-float-x').onclick=()=>{S.auditSelected=new Set();$$('.idx-audit-chk').forEach(cb=>cb.checked=false);updateAuditFloat()};
 }
 
 function rSidebar(){
@@ -1720,74 +1731,54 @@ function rIndex(){
   if(!S.indexData)return'<div class="pad" style="color:var(--tx-3)">No index data. Load a sheet first.</div>';
   const ix=S.indexData;
   const q=S.idxSearch.toLowerCase();
+  // Always show selected section (no more nav modes — just sections)
   let sectionsToShow=S.idxActiveSection==='all'?RULES.sectionOrder:[S.idxActiveSection];
 
   let h='<div class="idx-wrap">';
-  // Single unified toolbar
+  // Clean toolbar
   h+='<div class="idx-toolbar">';
   // Search
   h+=`<div class="idx-search">${IC.search}<input id="idx-search" placeholder="Search entries…" value="${esc(S.idxSearch)}"></div>`;
-  // Filter pills (compact)
-  h+='<div class="idx-filter-pills">';
-  [{id:'all',l:'All'},{id:'unreviewed',l:'Unrev.'},{id:'pending',l:'Pending'},{id:'reviewed',l:'Done'},{id:'bookmarked',l:'🔖'}].forEach(f=>{
-    h+=`<div class="idx-filter-pill ${S.reviewFilter===f.id?'active':''}" data-rvfilter="${f.id}">${f.l}</div>`;
+  // Section dropdown
+  const secLabel=S.idxActiveSection==='all'?'All Sections':S.idxActiveSection;
+  const secCount=S.idxActiveSection==='all'?Object.values(ix.sections).reduce((a,s)=>a+s.length,0):(ix.sections[S.idxActiveSection]||[]).length;
+  h+=`<div class="tb-dd" data-tbdd="section"><div class="tb-dd-btn">📂 <span class="tb-dd-val">${secLabel}</span> <span style="font-size:9px;color:var(--tx-4)">${secCount}</span></div><div class="tb-dd-panel">`;
+  h+=`<div class="tb-dd-item ${S.idxActiveSection==='all'?'active':''}" data-idxsec="all">All Sections</div>`;
+  RULES.sectionOrder.forEach(sec=>{
+    const cnt=(ix.sections[sec]||[]).length;
+    const done=isSectionReviewed(sec);
+    h+=`<div class="tb-dd-item ${S.idxActiveSection===sec?'active':''}" data-idxsec="${sec}">${done?'✓ ':''}${sec}<span class="tb-dd-cnt">${cnt}</span></div>`;
   });
-  h+='</div>';
+  h+=`</div></div>`;
+  // Filter dropdown
+  const filterLabels={all:'Everything',unreviewed:'Needs Review',pending:'Has Suggestions',reviewed:'Reviewed',bookmarked:'Bookmarked'};
+  h+=`<div class="tb-dd" data-tbdd="filter"><div class="tb-dd-btn">Show: <span class="tb-dd-val">${filterLabels[S.reviewFilter]||'Everything'}</span></div><div class="tb-dd-panel">`;
+  [{id:'all',l:'Everything'},{id:'unreviewed',l:'Needs Review'},{id:'pending',l:'Has Suggestions'},{id:'reviewed',l:'Reviewed ✓'},{id:'bookmarked',l:'🔖 Bookmarked'}].forEach(f=>{
+    h+=`<div class="tb-dd-item ${S.reviewFilter===f.id?'active':''}" data-rvfilter="${f.id}">${f.l}</div>`;
+  });
+  h+=`</div></div>`;
   // Spacer
   h+=`<div class="toolbar-spacer"></div>`;
-  // Right: Layout + Nav icons + sync/rebuild
-  h+='<div style="display:flex;gap:2px">';
-  ['all','tabs','tree'].forEach(m=>{const icons={all:'☰',tabs:'▤',tree:'⊞'};const labels={all:'Scroll All',tabs:'Sections',tree:'Tree'};h+=`<div class="idx-nav-btn ${S.idxNavMode===m?'active':''}" data-idxnav="${m}" title="${labels[m]}" style="padding:4px 8px;font-size:11px">${icons[m]}</div>`});
-  h+='<div style="width:4px"></div>';
-  h+=`<div class="idx-nav-btn ${S.idxLayout==='single'?'active':''}" data-idxlayout="single" title="Single column" style="padding:4px 6px">${IC.cols1}</div>`;
-  h+=`<div class="idx-nav-btn ${S.idxLayout==='two'?'active':''}" data-idxlayout="two" title="Two columns" style="padding:4px 6px">${IC.cols2}</div>`;
+  // Layout toggle — single/double column
+  h+=`<div class="tb-layout-toggle">`;
+  h+=`<div class="tb-layout-btn ${S.idxLayout==='single'?'active':''}" data-idxlayout="single" title="Single column">☰</div>`;
+  h+=`<div class="tb-layout-btn ${S.idxLayout==='two'?'active':''}" data-idxlayout="two" title="Two columns">❘❘</div>`;
+  h+=`</div>`;
+  // Sync button (combines sync + rebuild)
+  h+=`<button class="btn btn-sm btn-icon" id="idx-sync" title="Sync latest data">⟳</button>`;
   h+='</div>';
-  h+=`<button class="btn btn-sm btn-icon" id="idx-sync" title="Sync from sheet">⟳</button>`;
-  h+=`<button class="btn btn-sm btn-icon" id="idx-ref" title="Rebuild index">${IC.refresh}</button>`;
-  h+='</div>';
-
-  // Section tabs (if tab mode)
-  if(S.idxNavMode==='tabs'){
-    h+='<div style="display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--bg-white);flex-shrink:0;overflow-x:auto;padding:0 16px">';
-    h+=`<div class="idx-nav-btn ${S.idxActiveSection==='all'?'active':''}" data-idxsec="all" style="padding:8px 14px">All</div>`;
-    RULES.sectionOrder.forEach(sec=>{
-      const cnt=(ix.sections[sec]||[]).length;
-      const done=isSectionReviewed(sec);
-      h+=`<div class="idx-nav-btn ${S.idxActiveSection===sec?'active':''}" data-idxsec="${sec}" style="padding:8px 14px">${done?'<span style="color:var(--green);margin-right:3px">✓</span>':''}${sec} <span style="font-size:9px;color:var(--tx-4);margin-left:3px">${cnt}</span></div>`;
-    });
-    h+='</div>';
-  }
 
   h+='<div class="idx-main">';
-  // Tree (if tree mode)
-  if(S.idxNavMode==='tree'){
-    h+='<div class="idx-tree">';
-    sectionsToShow.forEach(sec=>{
-      let entries=(ix.sections[sec]||[]).filter(e=>!q||e.name.toLowerCase().includes(q));
-      // Apply review filter in tree
-      entries=applyReviewFilter(entries);
-      if(!entries.length)return;
-      h+=`<div class="idx-tree-section">${sec} <span class="idx-tree-count">(${entries.length})</span></div>`;
-      entries.slice(0,100).forEach(e=>{
-        const entryDone=isEntryReviewed(e);
-        const hasPending=e.results.some(r=>hasPendingSuggestion(e.name,r.segType,r.rowIdx));
-        h+=`<div class="idx-tree-item ${S.idxActiveEntry===e.name?'active':''}" data-tree="${esc(e.name)}">${entryDone?'<span style="color:var(--green);margin-right:3px">✓</span>':''}${hasPending?'<span style="color:var(--purple);margin-right:3px">●</span>':''}${esc(e.name)}</div>`;
-      });
-      if(entries.length>100)h+=`<div style="padding:4px 10px;font-size:10px;color:var(--tx-4)">+${entries.length-100} more…</div>`;
-    });
-    h+='</div>';
-  }
 
   // Main body — collect entry HTML, then split into columns if two-col
   const isTwoCol=S.idxLayout==='two';
-  const entryHtmls=[]; // collect each entry's HTML for column splitting
+  const entryHtmls=[];
   let currentSecHdr='';
   let entryCount=0;
   sectionsToShow.forEach(sec=>{
     let entries=(ix.sections[sec]||[]);
     if(q)entries=entries.filter(e=>e.name.toLowerCase().includes(q)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
     if(!entries.length)return;
-    if(S.idxNavMode==='tree'&&S.idxActiveEntry){entries=entries.filter(e=>e.name===S.idxActiveEntry);if(!entries.length)return}
     // Apply review filter
     entries=applyReviewFilter(entries);
     if(!entries.length)return;
@@ -1896,12 +1887,22 @@ function rIndex(){
   const pageHtmls=entryHtmls.slice(pageStart,pageEnd);
 
   h+=`<div class="idx-body ${isTwoCol?'two-col':''} ${S.auditSelectMode?'select-mode':''}">`;
-  // Select mode button — sits right above the content
+  // Top bar: Select button + pagination (compact, inline)
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">';
   if(S.auditSelectMode){
-    h+=`<div style="margin-bottom:10px"><button class="btn btn-sm" id="idx-audit-cancel" style="font-size:11px">☑ Done Selecting</button></div>`;
+    h+=`<button class="btn btn-sm" id="idx-audit-cancel" style="font-size:11px">☑ Done Selecting</button>`;
   }else{
-    h+=`<div style="margin-bottom:10px"><button class="btn btn-sm" id="idx-audit-select" style="font-size:11px" title="Show checkboxes to select items for AI audit">☐ Select for Audit</button></div>`;
+    h+=`<button class="btn btn-sm" id="idx-audit-select" style="font-size:11px" title="Show checkboxes to select items for AI audit">☐ Select for Audit</button>`;
   }
+  if(totalPages>1){
+    h+=`<div style="display:flex;align-items:center;gap:8px;margin-left:auto;font-size:11px;color:var(--tx-3)">`;
+    h+=`<button class="btn btn-sm" id="idx-page-prev" ${S.idxPage<=0?'disabled':''} style="font-size:10px;padding:2px 8px">←</button>`;
+    h+=`<span>Page <strong style="color:var(--tx-1)">${S.idxPage+1}</strong>/${totalPages}</span>`;
+    h+=`<button class="btn btn-sm" id="idx-page-next" ${S.idxPage>=totalPages-1?'disabled':''} style="font-size:10px;padding:2px 8px">→</button>`;
+    h+=`</div>`;
+  }
+  h+='</div>';
+  // Content
   if(isTwoCol&&pageHtmls.length>1){
     const mid=Math.ceil(pageHtmls.length/2);
     h+='<div class="idx-col">'+pageHtmls.slice(0,mid).join('')+'</div>';
@@ -1910,13 +1911,13 @@ function rIndex(){
   }else{
     h+=pageHtmls.join('');
   }
-  // Pagination controls
+  // Bottom pagination
   if(totalPages>1){
-    h+='<div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:16px 0;border-top:1px solid var(--border);margin-top:12px">';
-    h+=`<button class="btn btn-sm" id="idx-page-prev" ${S.idxPage<=0?'disabled':''}>← Previous</button>`;
-    h+=`<span style="font-size:12px;color:var(--tx-3)">Page <strong style="color:var(--tx-1)">${S.idxPage+1}</strong> of ${totalPages} <span style="font-size:10px;color:var(--tx-4)">(${totalEntries} entries)</span></span>`;
-    h+=`<button class="btn btn-sm" id="idx-page-next" ${S.idxPage>=totalPages-1?'disabled':''}>Next →</button>`;
-    h+='</div>';
+    h+=`<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 0;border-top:1px solid var(--border);margin-top:12px;font-size:11px;color:var(--tx-3)">`;
+    h+=`<button class="btn btn-sm" id="idx-page-prev2" ${S.idxPage<=0?'disabled':''} style="font-size:10px;padding:2px 8px">←</button>`;
+    h+=`<span>Page <strong style="color:var(--tx-1)">${S.idxPage+1}</strong> of ${totalPages} <span style="font-size:10px;color:var(--tx-4)">(${totalEntries} entries)</span></span>`;
+    h+=`<button class="btn btn-sm" id="idx-page-next2" ${S.idxPage>=totalPages-1?'disabled':''} style="font-size:10px;padding:2px 8px">→</button>`;
+    h+=`</div>`;
   }
 
   h+='</div></div></div>';
@@ -2142,19 +2143,13 @@ function bindAll(){
 
   // Index
   on('#idx-search','input',()=>{S.idxSearch=$('#idx-search').value;S.idxPage=0;render();setTimeout(()=>{const e=$('#idx-search');if(e){e.focus();e.selectionStart=e.selectionEnd=e.value.length}},0)});
-  $$('[data-idxnav]').forEach(el=>el.onclick=()=>{S.idxNavMode=el.dataset.idxnav;if(S.idxNavMode!=='tabs')S.idxActiveSection='all';S.idxPage=0;render()});
-  $$('[data-idxlayout]').forEach(el=>el.onclick=()=>{S.idxLayout=el.dataset.idxlayout;render()});
-  $$('[data-idxsec]').forEach(el=>el.onclick=()=>{S.idxActiveSection=el.dataset.idxsec;S.idxPage=0;render()});
   $$('[data-tree]').forEach(el=>el.onclick=()=>{S.idxActiveEntry=el.dataset.tree;render()});
   on('#idx-sync','click',()=>manualRefresh());
   on('#idx-page-prev','click',()=>{if(S.idxPage>0){S.idxPage--;render();$('.idx-body')?.scrollTo(0,0)}});
   on('#idx-page-next','click',()=>{S.idxPage++;render();$('.idx-body')?.scrollTo(0,0)});
-  on('#idx-ref','click',()=>{buildIndex();render()});
+  on('#idx-page-prev2','click',()=>{if(S.idxPage>0){S.idxPage--;render();$('.idx-body')?.scrollTo(0,0)}});
+  on('#idx-page-next2','click',()=>{S.idxPage++;render();$('.idx-body')?.scrollTo(0,0)});
 
-  // Review filter pills
-  $$('[data-rvfilter]').forEach(el=>el.onclick=()=>{S.reviewFilter=el.dataset.rvfilter;S.idxPage=0;render()});
-
-  // Review mode toggle
   // Audit select mode toggle
   on('#idx-audit-select','click',()=>{S.auditSelectMode=true;S.auditSelected=new Set();render()});
   on('#idx-audit-cancel','click',()=>{S.auditSelectMode=false;S.auditSelected=new Set();render()});
@@ -2185,17 +2180,34 @@ function bindAll(){
     if(btn){btn.innerHTML=`${IC.audit} Audit${S.auditSelected.size?' '+S.auditSelected.size:''}`;btn.disabled=!S.auditSelected.size}
   });
 
+  // Toolbar dropdown toggles
+  $$('.tb-dd-btn').forEach(el=>el.onclick=(e)=>{
+    e.stopPropagation();
+    const dd=el.closest('.tb-dd');
+    if(!dd)return;
+    $$('.tb-dd.open').forEach(d=>{if(d!==dd)d.classList.remove('open')});
+    dd.classList.toggle('open');
+  });
+  // Toolbar dropdown item clicks — close dropdown after selection
+  $$('.tb-dd-item[data-idxsec]').forEach(el=>el.onclick=()=>{S.idxActiveSection=el.dataset.idxsec;S.idxPage=0;el.closest('.tb-dd')?.classList.remove('open');render()});
+  $$('.tb-dd-item[data-rvfilter]').forEach(el=>el.onclick=()=>{S.reviewFilter=el.dataset.rvfilter;S.idxPage=0;el.closest('.tb-dd')?.classList.remove('open');render()});
+  $$('.tb-dd-item[data-idxnav]').forEach(el=>el.onclick=()=>{S.idxNavMode=el.dataset.idxnav;if(S.idxNavMode!=='tabs')S.idxActiveSection='all';S.idxPage=0;el.closest('.tb-dd')?.classList.remove('open');render()});
+  $$('.tb-dd-item[data-idxlayout]').forEach(el=>el.onclick=()=>{S.idxLayout=el.dataset.idxlayout;el.closest('.tb-dd')?.classList.remove('open');render()});
+  $$('.tb-layout-btn[data-idxlayout]').forEach(el=>el.onclick=()=>{S.idxLayout=el.dataset.idxlayout;render()});
+  // Close all dropdowns when clicking elsewhere
+  document.addEventListener('click',(e)=>{
+    if(!e.target.closest('.tb-dd'))$$('.tb-dd.open').forEach(d=>d.classList.remove('open'));
+    if(!e.target.closest('[data-clipmenu]'))$$('[data-clipmenu].open').forEach(m=>m.classList.remove('open'));
+  });
+
   // Clip dropdown toggle
   $$('[data-clipbtn]').forEach(el=>el.onclick=(e)=>{
     e.stopPropagation();
     const menu=el.closest('[data-clipmenu]');
     if(!menu)return;
-    // Close all other open menus
     $$('[data-clipmenu].open').forEach(m=>{if(m!==menu)m.classList.remove('open')});
     menu.classList.toggle('open');
   });
-  // Close clip menus when clicking elsewhere
-  document.addEventListener('click',()=>{$$('[data-clipmenu].open').forEach(m=>m.classList.remove('open'))});
 
   // Inline suggestion accept/deny/custom
   $$('[data-sugaccept]').forEach(el=>el.onclick=()=>{
