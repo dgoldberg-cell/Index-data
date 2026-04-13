@@ -142,6 +142,14 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-result-ref{font-family:var(--mono);font-size:10.5px;color:var(--blue);white-space:nowrap}
 .idx-result-ref a{color:var(--blue)}
 .idx-result-actions{display:flex;gap:3px;flex-shrink:0}
+.idx-orig{position:relative;display:inline-flex;align-items:center;cursor:help;flex-shrink:0}
+.idx-orig-dot{width:6px;height:6px;border-radius:50%;background:var(--amber);border:1px solid rgba(154,122,48,.4)}
+.idx-orig-tip{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:6px;background:var(--tx-1);color:#fff;padding:8px 12px;border-radius:6px;font-size:11px;line-height:1.4;white-space:normal;width:240px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.idx-orig:hover .idx-orig-tip{display:block}
+.idx-orig-tip .orig-label{font-size:8px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.5);margin-bottom:3px}
+.idx-orig-tip .orig-text{color:rgba(255,255,255,.9);margin-bottom:6px}
+.idx-orig-tip .orig-revert{font-size:10px;color:var(--amber);cursor:pointer;text-decoration:underline}
+.idx-orig-tip .orig-revert:hover{color:#fff}
 .idx-mini-btn{width:20px;height:20px;border:1px solid var(--border);border-radius:4px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx-4);font-size:10px;transition:all .1s}
 .idx-mini-btn:hover{background:var(--bg-1);color:var(--tx-2);border-color:var(--border-hi)}
 .idx-mini-btn.active{color:var(--gold);border-color:var(--gold)}
@@ -451,10 +459,29 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
   const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
   if(kwCol<0||!S.rows[rowIdx])return false;
   try{
-    // 1. Update in main keywords column
+    // 0. Capture original description before first change
     let kw=JSON.parse(S.rows[rowIdx][kwCol]);
     const tag=kw.find(t=>t.name===entryName);
     if(!tag)return false;
+    const oldDesc=tag.description||'';
+    
+    // Save original in ALL review data entries for this tag on this row
+    // We need segType but don't have it here — save under a generic key too
+    // Find the segType from the result
+    const clipType=(S.rows[rowIdx][S.headers.findIndex(h=>h.toLowerCase()==='type')]||'').trim();
+    const segType=RULES.typeMap[clipType]||'Addresses';
+    const k=rvKey(entryName,segType,rowIdx);
+    const rv=getRV(k)||{};
+    if(!rv.originalDesc&&oldDesc){
+      rv.originalDesc=oldDesc;
+      setRV(k,rv);
+      // Also sync original to Index tab column C
+      const entry=findEntry(entryName);
+      const r=entry?.results.find(x=>x.rowIdx===rowIdx);
+      if(r)syncOriginalToIndexTab(entryName,r,oldDesc).catch(()=>{});
+    }
+    
+    // 1. Update in main keywords column
     tag.description=newDesc;
     await saveCell(rowIdx,kwCol,JSON.stringify(kw));
     
@@ -463,7 +490,6 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
     const relNum=parseInt(rel,10);
     if(relNum>=1&&relNum<=4){
       const relColName='search.keywords_relevancy_'+relNum;
-      // Try exact match first, then case-insensitive
       let relCol=S.headers.findIndex(h=>h===relColName);
       if(relCol<0)relCol=S.headers.findIndex(h=>h.toLowerCase()===relColName.toLowerCase());
       if(relCol>=0){
@@ -475,7 +501,6 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
             if(relTag){
               relTag.description=newDesc;
               const newJson=JSON.stringify(relKw);
-              // Write directly with RAW input option to preserve JSON
               const nm=S.sheetMeta.tabs[S.activeTab].title;
               await gapi.client.sheets.spreadsheets.values.update({
                 spreadsheetId:S.sheetId,
@@ -484,7 +509,6 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
                 resource:{values:[[newJson]]}
               });
               S.rows[rowIdx][relCol]=newJson;
-              console.log('✓ Relevancy column updated (RAW)');
             }
           }catch(e2){console.warn('Relevancy col update failed:',e2)}
         }
@@ -492,6 +516,48 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
     }
     return true;
   }catch(e){toast('Save error','error');console.error('updateTagDesc error:',e);return false}
+}
+
+// Sync original description to Index tab column C
+async function syncOriginalToIndexTab(entryName,result,originalDesc){
+  const section=sectionForEntry(entryName);
+  if(!section)return;
+  const tabName=indexTabForSection(section);
+  const map=await getTabMap(tabName);
+  if(!map)return;
+  const clipLink=clipLinkForResult(result);
+  if(!clipLink)return;
+  const mapKey=entryName+'|'+clipLink;
+  const info=map[mapKey];
+  if(!info)return;
+  try{
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId:S.sheetId,
+      range:`'${tabName}'!C${info.sheetRow}`,
+      valueInputOption:'RAW',
+      resource:{values:[[originalDesc||'']]}
+    });
+  }catch(e){console.warn('syncOriginalToIndexTab error:',e)}
+}
+
+// Revert a description back to its original
+async function revertToOriginal(entryName,segType,rowIdx){
+  const k=rvKey(entryName,segType,rowIdx);
+  const rv=getRV(k);
+  if(!rv||!rv.originalDesc){toast('No original to revert to','error');return}
+  await updateTagDesc(rowIdx,entryName,rv.originalDesc);
+  // Clear the original since we're back to it
+  rv.originalDesc='';rv.status='';rv.suggestion='';rv.reviewed=false;
+  setRV(k,rv);
+  // Sync to Index tab
+  const entry=findEntry(entryName);
+  const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
+  if(r){
+    syncDescToIndexTab(entryName,r,rv.originalDesc||'').catch(()=>{});
+    syncToIndexTab(entryName,r,'','').catch(()=>{});
+  }
+  buildIndex();render();
+  toast('Reverted to original','success');
 }
 
 // Review data key: entryName|segType|rowIdx
@@ -825,9 +891,9 @@ async function generateIndexTab(sectionName){
     });
     
     const entries=S.indexData.sections[sectionName]||[];
-    // Column layout: A-E core, F chapter name, G relevancy, H-I review, J spacer, K-M reference, N spacer, O-P notes
-    var EC=17; // total columns
-    var headers=['Entry Name','Segment Type','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked'];
+    // Column layout: A=Entry, B=Segment, C=Original Desc, D=Description, E=Relationship, F=Reference, G=Chapter, H=Relevancy, I=Review, J=AI Suggestion, K=spacer, L=Clip Link, M=Clip Title, N=Transcript, O=spacer, P=Notes, Q=Bookmarked
+    var EC=18; // total columns (added Original Description)
+    var headers=['Entry Name','Segment Type','Original Description','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked'];
     
     // Step 2: Build rows in indented format
     const dataRows=[headers];
@@ -858,48 +924,50 @@ async function generateIndexTab(sectionName){
         
         bySeg[seg].forEach(function(r){
           var row=[];for(var z=0;z<EC;z++)row.push('');
-          // C: Description
-          row[2]=r.desc||'';
-          // D: Relationship (only if non-default)
-          var defRel=relDefaults[seg]||'spoken_about';
-          if(r.rel&&r.rel!==defRel){
-            if(sectionName==='Nigunim'){if(r.rel==='spoken_about')row[3]=r.rel}
-            else row[3]=r.rel;
-          }
-          // E: Reference — for films show film title, for others show program number
-          if(r.clipType==='Film Chapter'){
-            row[4]=r.pvName||''; // Film title
-          }else if(r.clipType==='Film'){
-            row[4]=r.clipName||''; // Film name
-          }else{
-            row[4]=r.progNum?('#'+r.progNum):'';
-          }
-          // F: Chapter Name For Film (only for Film Chapters)
-          if(r.clipType==='Film Chapter'){
-            row[5]=r.clipName||''; // Chapter title
-          }
-          // G: Relevancy
-          row[6]=(r.relevancy||'').toString();
-          // H: Review Status — fill from existing reviewData if available
+          // C: Original Description — from reviewData if available
           var rvk=rvKey(entry.name,seg,r.rowIdx);
           var rvd=getRV(rvk);
+          row[2]=(rvd&&rvd.originalDesc)?rvd.originalDesc:'';
+          // D: Description (current)
+          row[3]=r.desc||'';
+          // E: Relationship (only if non-default)
+          var defRel=relDefaults[seg]||'spoken_about';
+          if(r.rel&&r.rel!==defRel){
+            if(sectionName==='Nigunim'){if(r.rel==='spoken_about')row[4]=r.rel}
+            else row[4]=r.rel;
+          }
+          // F: Reference — for films show film title, for others show program number
+          if(r.clipType==='Film Chapter'){
+            row[5]=r.pvName||''; // Film title
+          }else if(r.clipType==='Film'){
+            row[5]=r.clipName||''; // Film name
+          }else{
+            row[5]=r.progNum?('#'+r.progNum):'';
+          }
+          // G: Chapter Name For Film (only for Film Chapters)
+          if(r.clipType==='Film Chapter'){
+            row[6]=r.clipName||''; // Chapter title
+          }
+          // H: Relevancy
+          row[7]=(r.relevancy||'').toString();
+          // I: Review Status — fill from existing reviewData if available
           if(rvd){
             var statusLabels={pending:'⏳ Pending',accepted:'✅ Accepted',denied:'❌ Denied',custom:'✏️ Custom',ok:'✓ OK'};
-            row[7]=statusLabels[rvd.status]||(rvd.reviewed?'✓ Reviewed':'');
-            // I: AI Suggestion
-            row[8]=rvd.suggestion||'';
+            row[8]=statusLabels[rvd.status]||(rvd.reviewed?'✓ Reviewed':'');
+            // J: AI Suggestion
+            row[9]=rvd.suggestion||'';
           }else{
-            row[7]='';
             row[8]='';
+            row[9]='';
           }
-          // J: spacer (row[9])
-          // K: Clip link
+          // K: spacer (row[10])
+          // L: Clip link
           var cid=r.clipId||(r.objId?(r.objId.replace('video_clip-','')):'');
-          row[10]=cid?('https://videos.jem.tv/video-player?clip='+cid):'';
-          // L: Clip title
-          row[11]=r.clipName||'';
-          // M: Transcript excerpt
-          row[12]=(r.transcript||'').substring(0,500);
+          row[11]=cid?('https://videos.jem.tv/video-player?clip='+cid):'';
+          // M: Clip title
+          row[12]=r.clipName||'';
+          // N: Transcript excerpt
+          row[13]=(r.transcript||'').substring(0,500);
           dataRows.push(row);
         });
       });
@@ -947,6 +1015,21 @@ async function generateIndexTab(sectionName){
     S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(function(s){return{title:s.properties.title,sid:s.properties.sheetId}})};
     invalidateTabMapCache(tabName);
     
+    // Auto-hide Original Description (col C, index 2) and Review columns (I-J, index 8-9)
+    try{
+      var newSheet=meta.result.sheets.find(function(s){return s.properties.title===tabName});
+      if(newSheet){
+        var newSid=newSheet.properties.sheetId;
+        await gapi.client.sheets.spreadsheets.batchUpdate({
+          spreadsheetId:S.sheetId,
+          resource:{requests:[
+            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:2,endIndex:3},properties:{hiddenByUser:true},fields:'hiddenByUser'}},
+            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:8,endIndex:10},properties:{hiddenByUser:true},fields:'hiddenByUser'}}
+          ]}
+        });
+      }
+    }catch(hideErr){console.warn('Auto-hide columns error:',hideErr)}
+    
     toast('"'+tabName+'" created with '+(dataRows.length-1)+' rows!','success');
   }catch(e){
     toast('Failed: '+e.message,'error');
@@ -962,18 +1045,39 @@ async function toggleReviewCols(tabName,show){
     const sheet=meta.result.sheets.find(s=>s.properties.title===tabName);
     if(!sheet)return;
     const sid=sheet.properties.sheetId;
-    // Review cols are G-H (index 6-7)
+    // Review cols are I-J (index 8-9)
     await gapi.client.sheets.spreadsheets.batchUpdate({
       spreadsheetId:S.sheetId,
       resource:{requests:[{
         updateDimensionProperties:{
-          range:{sheetId:sid,dimension:'COLUMNS',startIndex:7,endIndex:9},
+          range:{sheetId:sid,dimension:'COLUMNS',startIndex:8,endIndex:10},
           properties:{hiddenByUser:!show},
           fields:'hiddenByUser'
         }
       }]}
     });
     toast(show?'Review columns shown':'Review columns hidden','success');
+  }catch(e){toast('Failed: '+e.message,'error')}
+}
+
+// Toggle Original Description column (C, index 2) visibility
+async function toggleOriginalDescCol(tabName,show){
+  try{
+    const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+    const sheet=meta.result.sheets.find(s=>s.properties.title===tabName);
+    if(!sheet)return;
+    const sid=sheet.properties.sheetId;
+    await gapi.client.sheets.spreadsheets.batchUpdate({
+      spreadsheetId:S.sheetId,
+      resource:{requests:[{
+        updateDimensionProperties:{
+          range:{sheetId:sid,dimension:'COLUMNS',startIndex:2,endIndex:3},
+          properties:{hiddenByUser:!show},
+          fields:'hiddenByUser'
+        }
+      }]}
+    });
+    toast(show?'Original Description shown':'Original Description hidden','success');
   }catch(e){toast('Failed: '+e.message,'error')}
 }
 
@@ -989,7 +1093,7 @@ async function buildIndexTabMap(tabName){
   try{
     const r=await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId:S.sheetId,
-      range:`'${tabName}'!A:L`
+      range:`'${tabName}'!A:M`
     });
     const rows=r.result.values||[];
     const map={}; // key: "entryName|clipLink" → {sheetRow (1-indexed), tabName}
@@ -999,12 +1103,12 @@ async function buildIndexTabMap(tabName){
       const row=rows[i]||[];
       const colA=(row[0]||'').trim();
       const colB=(row[1]||'').trim();
-      const colK=(row[10]||'').trim(); // clip link
+      const colL=(row[11]||'').trim(); // clip link (column L)
       if(colA){currentEntry=colA;currentSeg='';continue}
       if(colB){currentSeg=colB;continue}
-      // Result row — has clip link in col K
-      if(colK&&currentEntry){
-        const mapKey=currentEntry+'|'+colK;
+      // Result row — has clip link in col L
+      if(colL&&currentEntry){
+        const mapKey=currentEntry+'|'+colL;
         map[mapKey]={sheetRow:i+1,tabName,entry:currentEntry,seg:currentSeg}; // +1 because sheets are 1-indexed
       }
     }
@@ -1084,8 +1188,8 @@ async function syncToIndexTab(entryName,result,reviewStatus,suggestion){
       resource:{
         valueInputOption:'RAW',
         data:[
-          {range:`'${tabName}'!H${info.sheetRow}`,values:[[statusLabel]]},
-          {range:`'${tabName}'!I${info.sheetRow}`,values:[[suggestion||'']]}
+          {range:`'${tabName}'!I${info.sheetRow}`,values:[[statusLabel]]},
+          {range:`'${tabName}'!J${info.sheetRow}`,values:[[suggestion||'']]}
         ]
       }
     });
@@ -1109,7 +1213,7 @@ async function syncDescToIndexTab(entryName,result,newDesc){
   try{
     await gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId:S.sheetId,
-      range:`'${tabName}'!C${info.sheetRow}`,
+      range:`'${tabName}'!D${info.sheetRow}`,
       valueInputOption:'RAW',
       resource:{values:[[newDesc||'']]}
     });
@@ -1141,8 +1245,8 @@ async function fullSyncToSheets(){
         if(!info)return;
         const statusLabel={pending:'⏳ Pending',accepted:'✅ Accepted',denied:'❌ Denied',custom:'✏️ Custom',ok:'✓ OK'}[rv.status]||(rv.reviewed?'✓ Reviewed':'');
         batchData.push(
-          {range:`'${tabName}'!H${info.sheetRow}`,values:[[statusLabel]]},
-          {range:`'${tabName}'!I${info.sheetRow}`,values:[[rv.suggestion||'']]}
+          {range:`'${tabName}'!I${info.sheetRow}`,values:[[statusLabel]]},
+          {range:`'${tabName}'!J${info.sheetRow}`,values:[[rv.suggestion||'']]}
         );
       });
     });
@@ -1442,6 +1546,8 @@ function rDash(){
     h+='<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">';
     h+=`<button class="btn btn-sm" data-togglerev="show">Show Review Columns</button>`;
     h+=`<button class="btn btn-sm" data-togglerev="hide">Hide Review Columns</button>`;
+    h+=`<button class="btn btn-sm" data-toggleorig="show">Show Original Desc</button>`;
+    h+=`<button class="btn btn-sm" data-toggleorig="hide">Hide Original Desc</button>`;
     h+=`<button class="btn btn-sm btn-blue" id="btn-fullsync">⟳ Sync All Review Data to Sheets</button>`;
     h+='</div>';
   }
@@ -1590,6 +1696,7 @@ function rIndex(){
           const selKey=esc(e.name)+'|'+seg+'|'+r.rowIdx;
           eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''} title="Select for AI audit">`;
           // Description content
+          const hasOriginal=rv&&rv.originalDesc&&rv.originalDesc!==r.desc;
           if(isPending){
             eh+=`<span class="idx-sug-old">${descEmpty?'[empty]':esc(r.desc)}</span>`;
             eh+=`<span class="idx-sug-arrow">→</span>`;
@@ -1602,6 +1709,10 @@ function rIndex(){
             eh+=`</span>`;
           }else{
             eh+=`<span class="idx-result-desc ${descEmpty?'empty-desc':'editable'}" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="Double-click to edit">${descEmpty?'[no description]':esc(r.desc)}</span>`;
+          }
+          // Original description indicator (amber dot with hover tooltip)
+          if(hasOriginal){
+            eh+=`<span class="idx-orig"><span class="idx-orig-dot"></span><span class="idx-orig-tip"><span class="orig-label">Original description</span><span class="orig-text">${esc(rv.originalDesc)}</span><span class="orig-revert" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}">↩ Revert to original</span></span></span>`;
           }
           if(r.rel)eh+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
           eh+=`<span class="idx-result-ref">`;
@@ -1940,6 +2051,13 @@ function bindAll(){
     if(inp&&inp.value.trim())applyCustomDesc(en,seg,ri,inp.value.trim());
   });
 
+  // Revert to original description
+  $$('[data-revert]').forEach(el=>el.onclick=(e)=>{
+    e.stopPropagation();
+    const[en,seg,ri]=el.dataset.revert.split('|');
+    if(confirm('Revert to original description?'))revertToOriginal(en,seg,+ri);
+  });
+
   // Description-level review buttons
   $$('[data-desc-rv]').forEach(el=>el.onclick=()=>{
     const[en,seg,ri]=el.dataset.descRv.split('|');
@@ -1981,6 +2099,11 @@ function bindAll(){
     const show=el.dataset.togglerev==='show';
     const indexTabs=(S.sheetMeta?.tabs||[]).filter(t=>t.title.startsWith('Index - '));
     indexTabs.forEach(t=>toggleReviewCols(t.title,show));
+  });
+  $$('[data-toggleorig]').forEach(el=>el.onclick=()=>{
+    const show=el.dataset.toggleorig==='show';
+    const indexTabs=(S.sheetMeta?.tabs||[]).filter(t=>t.title.startsWith('Index - '));
+    indexTabs.forEach(t=>toggleOriginalDescCol(t.title,show));
   });
   on('#btn-fullsync','click',()=>fullSyncToSheets());
 
