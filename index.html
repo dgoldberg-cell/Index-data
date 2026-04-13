@@ -262,14 +262,16 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;gap:6px;align-items:center}
 
 /* Floating audit selection bar — fixed at bottom center */
-.audit-float{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:12px;padding:10px 24px;background:var(--tx-1);color:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:13px;font-weight:600;animation:floatIn .2s ease-out}
+.audit-float{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:8px;padding:6px 16px;background:var(--tx-1);color:#fff;border-radius:20px;box-shadow:0 4px 16px rgba(0,0,0,.2);font-size:11px;font-weight:500;animation:floatIn .15s ease-out}
 @keyframes floatIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-.audit-float .af-count{font-family:var(--mono);background:rgba(255,255,255,.2);padding:2px 10px;border-radius:8px}
-.audit-float button{background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .1s}
+.audit-float .af-count{font-family:var(--mono);background:rgba(255,255,255,.2);padding:1px 7px;border-radius:6px;font-size:11px}
+.audit-float button{background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:3px 10px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .1s}
 .audit-float button:hover{background:rgba(255,255,255,.35)}
-.audit-float button.af-run{background:#fff;color:var(--purple);border-color:#fff}
+.audit-float button.af-run{background:#fff;color:var(--tx-1);border-color:#fff}
 .audit-float button.af-run:hover{background:rgba(255,255,255,.9)}
-.audit-float .af-spinner{width:16px;height:16px;border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
+.audit-float .af-close{background:none;border:none;color:rgba(255,255,255,.5);font-size:14px;padding:0 2px;cursor:pointer;line-height:1}
+.audit-float .af-close:hover{color:#fff}
+.audit-float .af-spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
 .toast{padding:8px 18px;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius);font-size:11px;color:var(--tx-2);box-shadow:0 4px 16px rgba(0,0,0,.08);animation:toastIn .2s ease-out}
 .toast.success{border-color:var(--green);color:var(--green)}.toast.error{border-color:var(--red);color:var(--red)}
 @keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
@@ -1523,7 +1525,7 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
     if(i+bs<allEntries.length)await new Promise(r=>setTimeout(r,1500));
   }
   S.auditRunning=false;
-  S.auditLog.push(`\nDone! ${totalFixed} items need review.`);toast(`${totalFixed} items to review inline`,'success');render();
+  S.auditLog.push(`\nDone! ${totalFixed} need changes, ${S.auditTotal-totalFixed} look good.`);toast(`${totalFixed} need changes, ${S.auditTotal-totalFixed} look good`,'success');render();
 }
 async function reviewAction(item,action,custom){
   if(action==='accept'||action==='custom'){
@@ -1586,12 +1588,11 @@ function render(){
   if(S.auditSelectMode&&(S.auditSelected.size>0||S.auditRunning)){
     h+='<div class="audit-float" id="audit-float">';
     if(S.auditRunning){
-      h+=`<div class="af-spinner"></div>`;
-      h+=`<span>Auditing… ${S.auditProgress}/${S.auditTotal}</span>`;
+      h+=`<div class="af-spinner"></div> Auditing… ${S.auditProgress}/${S.auditTotal}`;
     }else{
-      h+=`<span class="af-count">${S.auditSelected.size}</span>`;
-      h+=`<span>selected</span>`;
-      h+=`<button class="af-run" id="idx-audit-selected2">${IC.audit} Run Audit</button>`;
+      h+=`<span class="af-count">${S.auditSelected.size}</span> selected `;
+      h+=`<button class="af-run" id="idx-audit-selected2">Run Audit</button>`;
+      h+=`<span class="af-close" id="idx-audit-float-x2" title="Dismiss">✕</span>`;
     }
     h+='</div>';
   }
@@ -1623,9 +1624,9 @@ function updateAuditFloat(){
     bar.id='audit-float';
     document.body.appendChild(bar);
   }
-  bar.innerHTML=`<span class="af-count">${count}</span><span>selected</span><button class="af-run" id="idx-audit-float-run">${IC.audit} Run Audit</button>`;
-  const runBtn=bar.querySelector('#idx-audit-float-run');
-  if(runBtn)runBtn.onclick=()=>{if(S.auditSelected.size)auditSelectedItems()};
+  bar.innerHTML=`<span class="af-count">${count}</span> selected <button class="af-run" id="idx-audit-float-run">Run Audit</button><span class="af-close" id="idx-audit-float-x" title="Dismiss">✕</span>`;
+  bar.querySelector('#idx-audit-float-run').onclick=()=>{if(S.auditSelected.size)auditSelectedItems()};
+  bar.querySelector('#idx-audit-float-x').onclick=()=>{S.auditSelected=new Set();updateAuditFloat()};
 }
 
 function rSidebar(){
@@ -2159,7 +2160,7 @@ function bindAll(){
   on('#idx-audit-cancel','click',()=>{S.auditSelectMode=false;S.auditSelected=new Set();render()});
   on('#idx-audit-selected','click',()=>{if(S.auditSelected.size)auditSelectedItems()});
   on('#idx-audit-selected2','click',()=>{if(S.auditSelected.size)auditSelectedItems()});
-  on('#idx-audit-clear2','click',()=>{S.auditSelected=new Set();updateAuditFloat();render()});
+  on('#idx-audit-float-x2','click',()=>{S.auditSelected=new Set();updateAuditFloat();render()});
   // Individual audit selection checkboxes
   $$('[data-audit-sel]').forEach(el=>el.onchange=()=>{
     const k=el.dataset.auditSel;
@@ -2545,7 +2546,8 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
     }
   }
   S.auditRunning=false;
-  toast(`Done! ${totalFixed} suggestions ready`,'success');
+  const keptCount=items.length-totalFixed;
+  toast(`Done! ${totalFixed} need changes, ${keptCount} look good`,'success');
   render();
 }
 
