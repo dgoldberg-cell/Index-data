@@ -109,18 +109,17 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .tb-layout-btn.active{background:var(--gold-bg);color:var(--gold);font-weight:600}
 
 .idx-main{display:flex;flex:1;overflow:hidden;min-height:0}
-.idx-tree{width:220px;min-width:220px;border-right:1px solid var(--border);overflow-y:auto;background:var(--bg-white);padding:8px}
-.idx-tree.hidden{display:none}
-.idx-tree-section{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--tx-4);padding:10px 8px 4px}
-.idx-tree-item{padding:4px 10px;border-radius:4px;font-size:11.5px;color:var(--tx-3);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .08s}
-.idx-tree-item:hover{background:var(--bg-1);color:var(--tx-2)}
-.idx-tree-item.active{background:var(--gold-bg);color:var(--gold);font-weight:600}
-.idx-tree-count{font-size:9px;color:var(--tx-4);font-family:var(--mono)}
 
-.idx-body{overflow-y:auto;overflow-x:hidden;padding:20px 32px;font-size:13px}
-.idx-body.two-col{display:flex;gap:32px;padding:20px 24px;font-size:12.5px}
-.idx-body.two-col .idx-col{flex:1;min-width:0}
-.idx-body.two-col .idx-col-divider{width:1px;background:var(--border);flex-shrink:0}
+.idx-body{overflow-y:auto;overflow-x:hidden;padding:20px 32px;font-size:13px;flex:1;width:100%}
+/* Two-col content wrapper inside idx-body */
+.idx-cols{display:flex;gap:28px;width:100%}
+.idx-cols .idx-col{flex:1;min-width:0}
+.idx-cols .idx-col-divider{width:1px;background:var(--border);flex-shrink:0}
+/* Pagination bar */
+.idx-pager{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 0;font-size:11px;color:var(--tx-3)}
+.idx-pager input{width:36px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px;font-size:11px;font-family:var(--mono);color:var(--tx-1);outline:none}
+.idx-pager input:focus{border-color:var(--gold)}
+.idx-top-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 
 /* Section headers in index */
 .idx-section-hd{font-family:var(--serif);font-size:22px;font-weight:700;color:var(--tx-1);padding:16px 0 10px;border-bottom:2px solid var(--gold);margin-bottom:16px;break-after:avoid;letter-spacing:-.3px}
@@ -1886,36 +1885,41 @@ function rIndex(){
   const pageEnd=Math.min(pageStart+PAGE_SIZE,totalEntries);
   const pageHtmls=entryHtmls.slice(pageStart,pageEnd);
 
-  h+=`<div class="idx-body ${isTwoCol?'two-col':''} ${S.auditSelectMode?'select-mode':''}">`;
-  // Top bar: Select button + pagination (compact, inline)
-  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">';
+  h+=`<div class="idx-body ${S.auditSelectMode?'select-mode':''}">`;
+  
+  // Top bar: Select button (left) + pagination (right) — always same position
+  h+='<div class="idx-top-bar">';
   if(S.auditSelectMode){
     h+=`<button class="btn btn-sm" id="idx-audit-cancel" style="font-size:11px">☑ Done Selecting</button>`;
   }else{
-    h+=`<button class="btn btn-sm" id="idx-audit-select" style="font-size:11px" title="Show checkboxes to select items for AI audit">☐ Select for Audit</button>`;
+    h+=`<button class="btn btn-sm" id="idx-audit-select" style="font-size:11px">☐ Select for Audit</button>`;
   }
   if(totalPages>1){
-    h+=`<div style="display:flex;align-items:center;gap:8px;margin-left:auto;font-size:11px;color:var(--tx-3)">`;
+    h+=`<div class="idx-pager" style="margin-left:auto">`;
     h+=`<button class="btn btn-sm" id="idx-page-prev" ${S.idxPage<=0?'disabled':''} style="font-size:10px;padding:2px 8px">←</button>`;
-    h+=`<span>Page <strong style="color:var(--tx-1)">${S.idxPage+1}</strong>/${totalPages}</span>`;
+    h+=`<span>Page</span><input id="idx-page-input" type="text" value="${S.idxPage+1}" title="Type page number and press Enter"><span>of ${totalPages}</span>`;
     h+=`<button class="btn btn-sm" id="idx-page-next" ${S.idxPage>=totalPages-1?'disabled':''} style="font-size:10px;padding:2px 8px">→</button>`;
     h+=`</div>`;
   }
   h+='</div>';
-  // Content
+
+  // Content — single or two columns
   if(isTwoCol&&pageHtmls.length>1){
     const mid=Math.ceil(pageHtmls.length/2);
+    h+='<div class="idx-cols">';
     h+='<div class="idx-col">'+pageHtmls.slice(0,mid).join('')+'</div>';
     h+='<div class="idx-col-divider"></div>';
     h+='<div class="idx-col">'+pageHtmls.slice(mid).join('')+'</div>';
+    h+='</div>';
   }else{
     h+=pageHtmls.join('');
   }
+
   // Bottom pagination
   if(totalPages>1){
-    h+=`<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 0;border-top:1px solid var(--border);margin-top:12px;font-size:11px;color:var(--tx-3)">`;
+    h+=`<div class="idx-pager" style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">`;
     h+=`<button class="btn btn-sm" id="idx-page-prev2" ${S.idxPage<=0?'disabled':''} style="font-size:10px;padding:2px 8px">←</button>`;
-    h+=`<span>Page <strong style="color:var(--tx-1)">${S.idxPage+1}</strong> of ${totalPages} <span style="font-size:10px;color:var(--tx-4)">(${totalEntries} entries)</span></span>`;
+    h+=`<span>Page</span><input id="idx-page-input2" type="text" value="${S.idxPage+1}" title="Type page number and press Enter"><span>of ${totalPages} (${totalEntries} entries)</span>`;
     h+=`<button class="btn btn-sm" id="idx-page-next2" ${S.idxPage>=totalPages-1?'disabled':''} style="font-size:10px;padding:2px 8px">→</button>`;
     h+=`</div>`;
   }
@@ -2142,13 +2146,34 @@ function bindAll(){
   $$('[data-stab]').forEach(el=>el.onclick=()=>loadTab(+el.dataset.stab));
 
   // Index
-  on('#idx-search','input',()=>{S.idxSearch=$('#idx-search').value;S.idxPage=0;render();setTimeout(()=>{const e=$('#idx-search');if(e){e.focus();e.selectionStart=e.selectionEnd=e.value.length}},0)});
+  let _searchTimer=null;
+  on('#idx-search','input',()=>{
+    S.idxSearch=$('#idx-search').value;
+    S.idxPage=0;
+    if(_searchTimer)clearTimeout(_searchTimer);
+    _searchTimer=setTimeout(()=>{
+      const val=S.idxSearch;
+      const pos=$('#idx-search')?.selectionStart||val.length;
+      render();
+      setTimeout(()=>{const e=$('#idx-search');if(e){e.focus();e.selectionStart=e.selectionEnd=pos}},0);
+    },300);
+  });
   $$('[data-tree]').forEach(el=>el.onclick=()=>{S.idxActiveEntry=el.dataset.tree;render()});
   on('#idx-sync','click',()=>manualRefresh());
   on('#idx-page-prev','click',()=>{if(S.idxPage>0){S.idxPage--;render();$('.idx-body')?.scrollTo(0,0)}});
   on('#idx-page-next','click',()=>{S.idxPage++;render();$('.idx-body')?.scrollTo(0,0)});
   on('#idx-page-prev2','click',()=>{if(S.idxPage>0){S.idxPage--;render();$('.idx-body')?.scrollTo(0,0)}});
   on('#idx-page-next2','click',()=>{S.idxPage++;render();$('.idx-body')?.scrollTo(0,0)});
+  // Page jump input
+  ['#idx-page-input','#idx-page-input2'].forEach(sel=>{
+    const inp=$(sel);
+    if(inp)inp.onkeydown=e=>{
+      if(e.key==='Enter'){
+        const pg=parseInt(inp.value,10);
+        if(!isNaN(pg)&&pg>=1){S.idxPage=pg-1;render();$('.idx-body')?.scrollTo(0,0)}
+      }
+    };
+  });
 
   // Audit select mode toggle
   on('#idx-audit-select','click',()=>{S.auditSelectMode=true;S.auditSelected=new Set();render()});
