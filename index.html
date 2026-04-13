@@ -262,7 +262,7 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;gap:6px;align-items:center}
 
 /* Floating audit selection bar — fixed at bottom center */
-.audit-float{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:12px;padding:10px 24px;background:var(--purple);color:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(124,94,154,.35);font-size:13px;font-weight:600;animation:floatIn .2s ease-out}
+.audit-float{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:12px;padding:10px 24px;background:var(--tx-1);color:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:13px;font-weight:600;animation:floatIn .2s ease-out}
 @keyframes floatIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .audit-float .af-count{font-family:var(--mono);background:rgba(255,255,255,.2);padding:2px 10px;border-radius:8px}
 .audit-float button{background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .1s}
@@ -429,7 +429,7 @@ activeTab:0,headers:[],rows:[],loading:false,
 view:'index',aiOpen:false,
 // Index
 indexData:null,
-idxSearch:'',idxNavMode:'tabs',idxLayout:'single',idxActiveSection:'all',idxActiveEntry:null,
+idxSearch:'',idxNavMode:'tabs',idxLayout:'single',idxActiveSection:'all',idxActiveEntry:null,idxPage:0,
 idxBookmarks:JSON.parse(localStorage.getItem('jw_bm')||'{}'),
 idxNotes:JSON.parse(localStorage.getItem('jw_notes')||'{}'),
 editingDesc:null,
@@ -1590,9 +1590,8 @@ function render(){
       h+=`<span>Auditing… ${S.auditProgress}/${S.auditTotal}</span>`;
     }else{
       h+=`<span class="af-count">${S.auditSelected.size}</span>`;
-      h+=`<span>selected for audit</span>`;
-      h+=`<button class="af-run" id="idx-audit-selected2">Run Audit Now</button>`;
-      h+=`<button id="idx-audit-clear2">Clear</button>`;
+      h+=`<span>selected</span>`;
+      h+=`<button class="af-run" id="idx-audit-selected2">${IC.audit} Run Audit</button>`;
     }
     h+='</div>';
   }
@@ -1624,11 +1623,9 @@ function updateAuditFloat(){
     bar.id='audit-float';
     document.body.appendChild(bar);
   }
-  bar.innerHTML=`<span class="af-count">${count}</span><span>selected for audit</span><button class="af-run" id="idx-audit-float-run">Run Audit Now</button><button id="idx-audit-float-clear">Clear</button>`;
+  bar.innerHTML=`<span class="af-count">${count}</span><span>selected</span><button class="af-run" id="idx-audit-float-run">${IC.audit} Run Audit</button>`;
   const runBtn=bar.querySelector('#idx-audit-float-run');
-  const clearBtn=bar.querySelector('#idx-audit-float-clear');
   if(runBtn)runBtn.onclick=()=>{if(S.auditSelected.size)auditSelectedItems()};
-  if(clearBtn)clearBtn.onclick=()=>{S.auditSelected=new Set();updateAuditFloat();render()};
 }
 
 function rSidebar(){
@@ -1727,16 +1724,6 @@ function rIndex(){
   let h='<div class="idx-wrap">';
   // Single unified toolbar
   h+='<div class="idx-toolbar">';
-  // Left: Select mode button (near where checkboxes appear)
-  if(S.auditSelectMode){
-    const selCount=S.auditSelected.size;
-    h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected" ${selCount?'':'disabled'}>${IC.audit} Audit${selCount?' '+selCount:''}</button>`;
-    h+=`<button class="btn btn-sm" id="idx-audit-cancel">Done</button>`;
-  }else{
-    h+=`<button class="btn btn-sm" id="idx-audit-select" title="Select items for AI audit">☑ Select</button>`;
-  }
-  // Separator
-  h+='<div style="width:1px;height:20px;background:var(--border);flex-shrink:0"></div>';
   // Search
   h+=`<div class="idx-search">${IC.search}<input id="idx-search" placeholder="Search entries…" value="${esc(S.idxSearch)}"></div>`;
   // Filter pills (compact)
@@ -1815,7 +1802,6 @@ function rIndex(){
       const entryDone=isEntryReviewed(e);
       const entryHasPending=e.results.some(r=>hasPendingSuggestion(e.name,r.segType,r.rowIdx));
       entryCount++;
-      if(entryCount>300)return;
 
       let eh='';
       eh+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''}">`;
@@ -1899,18 +1885,39 @@ function rIndex(){
     });
   });
 
-  // Render into idx-body — single or two columns
+  // Render into idx-body — paginate + single or two columns
+  const PAGE_SIZE=200;
+  const totalEntries=entryHtmls.length;
+  const totalPages=Math.ceil(totalEntries/PAGE_SIZE);
+  if(S.idxPage>=totalPages)S.idxPage=Math.max(0,totalPages-1);
+  const pageStart=S.idxPage*PAGE_SIZE;
+  const pageEnd=Math.min(pageStart+PAGE_SIZE,totalEntries);
+  const pageHtmls=entryHtmls.slice(pageStart,pageEnd);
+
   h+=`<div class="idx-body ${isTwoCol?'two-col':''} ${S.auditSelectMode?'select-mode':''}">`;
-  if(isTwoCol&&entryHtmls.length>1){
-    // Split roughly in half
-    const mid=Math.ceil(entryHtmls.length/2);
-    h+='<div class="idx-col">'+entryHtmls.slice(0,mid).join('')+'</div>';
-    h+='<div class="idx-col-divider"></div>';
-    h+='<div class="idx-col">'+entryHtmls.slice(mid).join('')+'</div>';
+  // Select mode button — sits right above the content
+  if(S.auditSelectMode){
+    h+=`<div style="margin-bottom:10px"><button class="btn btn-sm" id="idx-audit-cancel" style="font-size:11px">☑ Done Selecting</button></div>`;
   }else{
-    h+=entryHtmls.join('');
+    h+=`<div style="margin-bottom:10px"><button class="btn btn-sm" id="idx-audit-select" style="font-size:11px" title="Show checkboxes to select items for AI audit">☐ Select for Audit</button></div>`;
   }
-  if(entryCount>300)h+=`<div style="padding:20px;text-align:center;color:var(--tx-3);font-size:12px">Showing 300 of ${entryCount} entries. Use search or section tabs to narrow.</div>`;
+  if(isTwoCol&&pageHtmls.length>1){
+    const mid=Math.ceil(pageHtmls.length/2);
+    h+='<div class="idx-col">'+pageHtmls.slice(0,mid).join('')+'</div>';
+    h+='<div class="idx-col-divider"></div>';
+    h+='<div class="idx-col">'+pageHtmls.slice(mid).join('')+'</div>';
+  }else{
+    h+=pageHtmls.join('');
+  }
+  // Pagination controls
+  if(totalPages>1){
+    h+='<div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:16px 0;border-top:1px solid var(--border);margin-top:12px">';
+    h+=`<button class="btn btn-sm" id="idx-page-prev" ${S.idxPage<=0?'disabled':''}>← Previous</button>`;
+    h+=`<span style="font-size:12px;color:var(--tx-3)">Page <strong style="color:var(--tx-1)">${S.idxPage+1}</strong> of ${totalPages} <span style="font-size:10px;color:var(--tx-4)">(${totalEntries} entries)</span></span>`;
+    h+=`<button class="btn btn-sm" id="idx-page-next" ${S.idxPage>=totalPages-1?'disabled':''}>Next →</button>`;
+    h+='</div>';
+  }
+
   h+='</div></div></div>';
   return h;
 }
@@ -2133,16 +2140,18 @@ function bindAll(){
   $$('[data-stab]').forEach(el=>el.onclick=()=>loadTab(+el.dataset.stab));
 
   // Index
-  on('#idx-search','input',()=>{S.idxSearch=$('#idx-search').value;render();setTimeout(()=>{const e=$('#idx-search');if(e){e.focus();e.selectionStart=e.selectionEnd=e.value.length}},0)});
-  $$('[data-idxnav]').forEach(el=>el.onclick=()=>{S.idxNavMode=el.dataset.idxnav;if(S.idxNavMode!=='tabs')S.idxActiveSection='all';render()});
+  on('#idx-search','input',()=>{S.idxSearch=$('#idx-search').value;S.idxPage=0;render();setTimeout(()=>{const e=$('#idx-search');if(e){e.focus();e.selectionStart=e.selectionEnd=e.value.length}},0)});
+  $$('[data-idxnav]').forEach(el=>el.onclick=()=>{S.idxNavMode=el.dataset.idxnav;if(S.idxNavMode!=='tabs')S.idxActiveSection='all';S.idxPage=0;render()});
   $$('[data-idxlayout]').forEach(el=>el.onclick=()=>{S.idxLayout=el.dataset.idxlayout;render()});
-  $$('[data-idxsec]').forEach(el=>el.onclick=()=>{S.idxActiveSection=el.dataset.idxsec;render()});
+  $$('[data-idxsec]').forEach(el=>el.onclick=()=>{S.idxActiveSection=el.dataset.idxsec;S.idxPage=0;render()});
   $$('[data-tree]').forEach(el=>el.onclick=()=>{S.idxActiveEntry=el.dataset.tree;render()});
   on('#idx-sync','click',()=>manualRefresh());
+  on('#idx-page-prev','click',()=>{if(S.idxPage>0){S.idxPage--;render();$('.idx-body')?.scrollTo(0,0)}});
+  on('#idx-page-next','click',()=>{S.idxPage++;render();$('.idx-body')?.scrollTo(0,0)});
   on('#idx-ref','click',()=>{buildIndex();render()});
 
   // Review filter pills
-  $$('[data-rvfilter]').forEach(el=>el.onclick=()=>{S.reviewFilter=el.dataset.rvfilter;render()});
+  $$('[data-rvfilter]').forEach(el=>el.onclick=()=>{S.reviewFilter=el.dataset.rvfilter;S.idxPage=0;render()});
 
   // Review mode toggle
   // Audit select mode toggle
@@ -2285,11 +2294,12 @@ function bindAll(){
     if(!result)return;
     el.outerHTML=`<span class="idx-inline-edit"><input class="idx-inline-input" id="desc-edit" value="${esc(result.desc||'')}"><button class="btn btn-sm btn-green" id="desc-save">${IC.check}</button><button class="btn btn-sm" id="desc-cancel">${IC.x}</button></span>`;
     const inp=$('#desc-edit');if(inp)inp.focus();
-    on('#desc-save','click',async()=>{
+    const saveBtn=$('#desc-save');
+    const cancelBtn=$('#desc-cancel');
+    if(saveBtn)saveBtn.onclick=async()=>{
       const newVal=$('#desc-edit')?.value||'';
       const ok=await updateTagDesc(result.rowIdx,entryName,newVal);
       if(ok){
-        // Auto-mark as reviewed on manual edit
         const clipType=(S.rows[result.rowIdx][S.headers.findIndex(h=>h.toLowerCase()==='type')]||'').trim();
         const st=RULES.typeMap[clipType]||'Addresses';
         const k=rvKey(entryName,st,result.rowIdx);
@@ -2299,9 +2309,9 @@ function bindAll(){
         syncDescToIndexTab(entryName,result,newVal).catch(()=>{});
         buildIndex();render();
       }
-    });
-    on('#desc-cancel','click',()=>{S.editingDesc=null;render()});
-    if(inp)inp.onkeydown=e=>{if(e.key==='Enter')$('#desc-save')?.click();if(e.key==='Escape')$('#desc-cancel')?.click()};
+    };
+    if(cancelBtn)cancelBtn.onclick=()=>{S.editingDesc=null;render()};
+    if(inp)inp.onkeydown=e=>{if(e.key==='Enter'&&saveBtn)saveBtn.click();if(e.key==='Escape'&&cancelBtn)cancelBtn.click()};
   });
 
   // Transcript popup
