@@ -401,11 +401,65 @@ const DISC='https://sheets.googleapis.com/$discovery/rest?version=v4',SCOPES='ht
 // sectionFromPath is a function — must never be serialized
 function sectionFromPath(p){if(p.startsWith('People/'))return'People';if(p.includes('History'))return'History';if(p.startsWith('Time/')||p.includes('Calendar'))return'Dates';if(p.startsWith('Place/')||p.includes('Location')||p.includes('Country'))return'Locations';if(p.includes('Nigun'))return'Nigunim';if(p.includes('Organization')||p.includes('Book'))return'Orgs & Books';return'Topics'}
 
-const DEFAULT_RULES={tagDesc:{minWords:3,maxWords:6,absMax:8,
-checks:[{id:'length',name:'Length (3-6 words, max 8)',on:true},{id:'no_repeat',name:'No tag name repetition',on:true},{id:'rebbe',name:'"Rebbe" only when it\'s the point',on:true},{id:'trailing_prep',name:'Preserve trailing prepositions',on:true},{id:'multi_point',name:'Multi-point significance',on:true},{id:'spelling',name:'Spelling & grammar',on:true}],
-good:[{tag:'Tefillin',desc:'With pride'},{tag:'Pesach',desc:'Communal Seders in'},{tag:'Terror',desc:'Following Ma\'alot Massacre'},{tag:'Farbrengen',desc:'Broadcast at'}],
-bad:[{tag:'Tefillin',desc:'Praying publicly with pride wearing tefillin'},{tag:'Shabbos',desc:'The Rebbe speaks about Shabbos'}],
-spelling:[{wrong:'prier',right:'prior'},{wrong:'preformed',right:'performed'},{wrong:'begining',right:'beginning'},{wrong:'Godliness',right:'G-dliness'},{wrong:'Godly',right:'G-dly'},{wrong:"Farbrengen's",right:'Farbrengens'}]},
+const DEFAULT_RULES={tagDesc:{minWords:2,maxWords:6,absMax:8,
+checks:[
+{id:'length',name:'Length: 2-6 words, max 8 absolute. Most should be 3-5 words.',on:true},
+{id:'no_repeat',name:'Never repeat the tag/entry name in the description. If entry is "Tefillin", description cannot contain "Tefillin". If entry is "Jewish Education", cannot say "Education" or "Jewish". This is the #1 error.',on:true},
+{id:'rebbe',name:'"Rebbe" only when his specific action IS the point (e.g. "Gift from Rebbe"). The entire index is about the Rebbe so he is the default subject. Never "The Rebbe speaks about..." or "Rebbe discusses..."',on:true},
+{id:'trailing_prep',name:'Trailing prepositions (at, in, of, by) are OK only when they link FORWARD to the clip reference (a location, person, or event in the clip). Never use if it circles back to the entry name or dangles without clear forward connection.',on:true},
+{id:'no_generic',name:'No generic restating. Description must add info beyond the tag name. A translation of the Hebrew is not a description. Must tell the user WHY this tag appears on this clip - what angle or aspect.',on:true},
+{id:'user_clarity',name:'Must make sense to a browsing user. Someone scanning reads it as "[Entry name]: [description]" like a subtitle. The connection must be clear.',on:true},
+{id:'tighten',name:'Tighten aggressively but keep readable. Remove articles (the, a, an), filler words. Drop "The/A" at start. Collapse verb phrases ("is able to overcome" to "Overcoming", "the need to be involved" to "Involvement"). Every word must earn its place.',on:true},
+{id:'linking_vocab',name:'Use standard linking vocabulary: "at" for events, "following" for responses, "through" for methods, "during" for time periods, "in" for contexts, "attended by" for participation.',on:true},
+{id:'spelling',name:'Fix spelling: G-d not God, G-dly not Godly, G-dliness not Godliness. Fix common typos.',on:true},
+{id:'generate_empty',name:'If description is blank, generate one based on transcript and entry context.',on:true},
+{id:'leave_good',name:'If description already follows all rules, leave it alone. Do not change for the sake of changing.',on:true}
+],
+good:[
+{tag:'Tefillin',desc:'With pride'},
+{tag:'Terror',desc:'Following Ma\'alot Massacre'},
+{tag:'Farbrengen',desc:'Broadcast at'},
+{tag:'Tzitzis',desc:'Significance of'},
+{tag:'Kosher food',desc:'Impact on wellbeing'},
+{tag:'Yizkor',desc:'Brings honor to souls'},
+{tag:'Tanya',desc:'Printing during upheaval'},
+{tag:'Ahavat Yisrael',desc:'Unifying communities'},
+{tag:'Mivtza Chanukah',desc:'Spreading light worldwide'},
+{tag:'Charity',desc:'Given with joy'}
+],
+bad:[
+{tag:'Tefillin',desc:'Praying publicly with pride wearing tefillin'},
+{tag:'Shabbos',desc:'The Rebbe speaks about Shabbos observance'},
+{tag:'Chinuch',desc:'Education'},
+{tag:'Jewish Education',desc:'Jewish education in schools'},
+{tag:'Torah',desc:'Torah study'},
+{tag:'Charity',desc:'The importance of giving charity'},
+{tag:'Israel',desc:'About Israel'},
+{tag:'Farbrengen',desc:'Farbrengen broadcast at'},
+{tag:'Mitzvah',desc:'Performing mitzvos with joy'},
+{tag:'Mezuzah',desc:'Mezuzah on the door'},
+{tag:'Shlichus',desc:'Going on Shlichus'},
+{tag:'Family Purity',desc:'Through observance of'},
+{tag:'Mivtza Chanukah',desc:'Worldwide campaign for'},
+{tag:'Children',desc:'Get the children involved'},
+{tag:'Pesach',desc:'Communal Seders in'},
+{tag:'Rally',desc:'Attended by'}
+],
+tightenExamples:[
+{before:'The power of prayer',after:'Power of prayer'},
+{before:'A lesson in faith',after:'Lesson in faith'},
+{before:'The importance of unity',after:'Importance of unity'},
+{before:'Speaking about the future',after:'Speaking about future'},
+{before:'In the time of exile',after:'In time of exile'},
+{before:'With a sense of urgency',after:'With urgency'},
+{before:'The role that it plays in',after:'Role in'},
+{before:'At the time of the rally',after:'At the rally'},
+{before:'During the period of',after:'During'},
+{before:'Is able to overcome',after:'Overcoming'},
+{before:'The need to be involved in',after:'Involvement in'},
+{before:'A discussion on the topic of',after:'Discussion on'}
+],
+spelling:[{wrong:'prier',right:'prior'},{wrong:'preformed',right:'performed'},{wrong:'begining',right:'beginning'},{wrong:'Godliness',right:'G-dliness'},{wrong:'Godly',right:'G-dly'},{wrong:'God',right:'G-d'},{wrong:"Farbrengen's",right:'Farbrengens'}]},
 segOrder:['Addresses','Timeless Moments','Conversations','My Encounter','Short Films','Films'],
 typeMap:{'LT Sicha':'Addresses','LT Timeless Moment':'Timeless Moments','LT Eye to Eye':'Conversations','LT My Encounter':'My Encounter','Short Film':'Short Films','Film':'Films','Film Chapter':'Films','Living Torah':'Addresses'},
 relDefaults:{People:{Addresses:'spoken_about','Timeless Moments':'seen_in',Conversations:'in_conversation_with','My Encounter':'interviewee','Short Films':'interviewee',Films:'interviewee'},Topics:{Addresses:'spoken_about','Timeless Moments':'seen_in',Conversations:'spoken_about','My Encounter':'spoken_about','Short Films':'spoken_about',Films:'spoken_about'}},
@@ -1481,35 +1535,30 @@ async function runAudit(){
     const batch=allEntries.slice(i,i+bs);
     S.auditLog.push(`Batch ${Math.floor(i/bs)+1}/${Math.ceil(allEntries.length/bs)}...`);render();
     try{
-      const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map(c=>c.name).join('; ');
+      const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
       const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
       const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
       const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
+      const tightenEx=(RULES.tagDesc.tightenExamples||[]).map(e=>`"${e.before}" → "${e.after}"`).join('\n  ');
       const prompt=`Audit these tag descriptions for the JEM Video Index book.
 
-STRICT RULES — flag as "fix" if ANY rule is violated:
+RULES — flag as "fix" if ANY rule is violated:
+${rulesText}
 
-1. LENGTH: Must be 3-6 words. Absolute max 8. Flag anything outside this range.
-2. NO TAG NAME REPETITION: The description MUST NOT repeat ANY word from the entry/tag name. This is the #1 most common error. Check carefully — even partial matches count. For example, if the tag is "Tefillin" the description cannot contain "tefillin". If the tag is "Jewish Education" the description cannot contain "Jewish" or "Education" or "educational".
-3. "REBBE" RULE: The entire index is about the Rebbe. The default subject is ALWAYS the Rebbe. Do NOT include "Rebbe" or "The Rebbe" in descriptions unless the Rebbe doing/saying something specific IS the entire point. "The Rebbe speaks about..." is ALWAYS wrong. "The Rebbe's response" is fine only if the response itself is the topic.
-4. TRAILING PREPOSITIONS: Keep prepositions that create natural links (e.g., "Communal Seders in" links to a location). Do not strip these.
-5. NO GENERIC/VAGUE: Descriptions must be specific and meaningful, not generic restating. "Discussion about the topic" is bad. "Following Ma'alot Massacre" is good.
-6. SPELLING: Fix these known errors: ${spellingFixes}
+SPELLING FIXES: ${spellingFixes}
 
-GOOD EXAMPLES (study these carefully):
+GOOD EXAMPLES:
   ${goodEx}
 
-BAD EXAMPLES (flag anything that resembles these):
+BAD EXAMPLES:
   ${badEx}
 
-BE STRICT. If in doubt, flag it. A description that merely restates the tag name in different words is a violation. A description that says "The Rebbe discusses/speaks about/addresses [topic]" is a violation.
+TIGHTENING EXAMPLES (remove unnecessary words):
+  ${tightenEx}
 
-For each item respond with:
-- "ok" ONLY if ALL rules are satisfied
-- "fix" if any rule is violated (provide suggestion + reason)  
-- "generate" if empty (create a 3-6 word desc from the transcript)
+The description reads as "[Entry name]: [description]" like a subtitle. It must add meaning beyond the entry name.
 
-JSON array only. Each item: {idx, status, suggestion, reason}
+JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}
 
 ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,150)}"`).join('\n\n')}`;
       const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'You are a strict, expert editor auditing tag descriptions for the JEM Video Index book about the Lubavitcher Rebbe. You must enforce all rules rigorously. The most common error is repeating words from the tag name in the description — catch every instance. Respond with a JSON array only. Each item: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}',messages:[{role:'user',content:prompt}]})});
@@ -1633,8 +1682,19 @@ function render(){
   }
   // Toasts
   h+='<div class="toasts">';S.toasts.forEach(t=>{h+=`<div class="toast ${t.t}">${esc(t.m)}</div>`});h+='</div>';
+  // Save scroll positions before DOM replacement
+  const scrollSave={};
+  const idxBody=$('.idx-body');if(idxBody)scrollSave.idxBody=idxBody.scrollTop;
+  const pad=$('.pad');if(pad)scrollSave.pad=pad.scrollTop;
+  const mainContent=$('.main-content');if(mainContent)scrollSave.mainContent=mainContent.scrollTop;
+  const content=$('.content');if(content)scrollSave.content=content.scrollTop;
   app.innerHTML=h;bindAll();
-  // Fix idx-body scroll height — calculate available space and set explicitly
+  // Restore scroll positions
+  const idxBody2=$('.idx-body');if(idxBody2&&scrollSave.idxBody)idxBody2.scrollTop=scrollSave.idxBody;
+  const pad2=$('.pad');if(pad2&&scrollSave.pad)pad2.scrollTop=scrollSave.pad;
+  const mainContent2=$('.main-content');if(mainContent2&&scrollSave.mainContent)mainContent2.scrollTop=scrollSave.mainContent;
+  const content2=$('.content');if(content2&&scrollSave.content)content2.scrollTop=scrollSave.content;
+  // Fix idx-body scroll height
   fixIdxScroll();
 }
 function fixIdxScroll(){
@@ -2453,17 +2513,28 @@ function bindAll(){
     if(!S.claudeKey){toast('No API key','error');return}
     S.testResult=null;render();toast('Testing…');
     try{
+      const rulesText2=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
       const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
       const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
       const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
+      const tightenEx2=(RULES.tagDesc.tightenExamples||[]).map(e=>`"${e.before}" → "${e.after}"`).join('\n  ');
       const prompt=`Audit this tag description for the JEM Video Index book.
 
-STRICT RULES:
-${RULES.tagDesc.checks.filter(c=>c.on).map(c=>c.name).join('\n')}
+RULES:
+${rulesText2}
+
 SPELLING: ${spellingFixes}
 
-GOOD: ${goodEx}
-BAD: ${badEx}
+GOOD EXAMPLES:
+  ${goodEx}
+
+BAD EXAMPLES:
+  ${badEx}
+
+TIGHTENING EXAMPLES:
+  ${tightenEx2}
+
+The description reads as "[Entry name]: [description]" like a subtitle.
 
 JSON only. Return: {status:"ok"|"fix", suggestion:"...", reason:"..."}
 
@@ -2625,23 +2696,30 @@ async function auditSelectedItems(){
   for(let i=0;i<items.length;i+=bs){
     const batch=items.slice(i,i+bs);
     try{
-      const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map(c=>c.name).join('; ');
+      const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
       const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
       const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
       const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
+      const tightenEx=(RULES.tagDesc.tightenExamples||[]).map(e=>`"${e.before}" → "${e.after}"`).join('\n  ');
       const prompt=`Audit these tag descriptions for the JEM Video Index book.
 
-STRICT RULES — flag as "fix" if ANY rule is violated:
-1. LENGTH: 3-6 words, max 8.
-2. NO TAG NAME REPETITION: Description MUST NOT repeat ANY word from the entry name. This is the #1 error.
-3. "REBBE" RULE: Default subject is always the Rebbe. Do NOT include "Rebbe" unless the Rebbe's specific action IS the point.
-4. NO GENERIC: Must be specific, not vague restating.
-5. SPELLING: Fix: ${spellingFixes}
+RULES — flag as "fix" if ANY rule is violated:
+${rulesText}
 
-GOOD: ${goodEx}
-BAD: ${badEx}
+SPELLING FIXES: ${spellingFixes}
 
-BE STRICT. JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}
+GOOD EXAMPLES:
+  ${goodEx}
+
+BAD EXAMPLES:
+  ${badEx}
+
+TIGHTENING EXAMPLES (remove unnecessary words):
+  ${tightenEx}
+
+The description reads as "[Entry name]: [description]" like a subtitle. It must add meaning beyond the entry name.
+
+JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}
 
 ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,150)}"`).join('\n\n')}`;
       const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'Strict editor for JEM Video Index. JSON array only.',messages:[{role:'user',content:prompt}]})});
