@@ -55,8 +55,8 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .main-content{flex:1;display:flex;overflow:hidden}
 .content{flex:1;overflow-y:auto;overflow-x:hidden}
-.content.content-index{overflow:hidden}
-.idx-wrap{display:flex;flex-direction:column;height:100%}
+.content.content-index{overflow:hidden;display:flex;flex-direction:column}
+.idx-wrap{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
 
 /* Buttons */
 .btn{display:inline-flex;align-items:center;gap:5px;padding:0 13px;height:32px;border-radius:var(--radius);font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--bg-white);color:var(--tx-2);transition:all .12s;white-space:nowrap}
@@ -134,7 +134,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-seg-label{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--tx-4);margin-bottom:2px}
 
 /* Individual result */
-.idx-result{display:flex;align-items:baseline;gap:4px;padding:2px 0;font-size:12.5px;line-height:1.5;flex-wrap:wrap}
+.idx-result{display:flex;align-items:center;gap:4px;padding:2px 0;font-size:12.5px;line-height:1.5;flex-wrap:wrap}
 .idx-result-desc{color:var(--tx-2)}
 .idx-result-desc.empty-desc{color:var(--red);font-style:italic;background:rgba(176,80,80,.05);padding:0 4px;border-radius:3px}
 .idx-result-desc.editable:hover{background:var(--bg-1);cursor:text;border-radius:3px;padding:0 4px}
@@ -260,6 +260,16 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .spinner{width:22px;height:22px;border:2.5px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 .toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;gap:6px;align-items:center}
+
+/* Floating audit selection bar — fixed at bottom center */
+.audit-float{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:12px;padding:10px 24px;background:var(--purple);color:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(124,94,154,.35);font-size:13px;font-weight:600;animation:floatIn .2s ease-out}
+@keyframes floatIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.audit-float .af-count{font-family:var(--mono);background:rgba(255,255,255,.2);padding:2px 10px;border-radius:8px}
+.audit-float button{background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .1s}
+.audit-float button:hover{background:rgba(255,255,255,.35)}
+.audit-float button.af-run{background:#fff;color:var(--purple);border-color:#fff}
+.audit-float button.af-run:hover{background:rgba(255,255,255,.9)}
+.audit-float .af-spinner{width:16px;height:16px;border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
 .toast{padding:8px 18px;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius);font-size:11px;color:var(--tx-2);box-shadow:0 4px 16px rgba(0,0,0,.08);animation:toastIn .2s ease-out}
 .toast.success{border-color:var(--green);color:var(--green)}.toast.error{border-color:var(--red);color:var(--red)}
 @keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
@@ -1572,6 +1582,20 @@ function render(){
   h+='</div></div>';
   // Transcript popup
   if(S.transcriptPopup)h+=rTranscript();
+  // Floating audit bar (fixed position, always visible when selections exist)
+  if(S.auditSelectMode&&(S.auditSelected.size>0||S.auditRunning)){
+    h+='<div class="audit-float" id="audit-float">';
+    if(S.auditRunning){
+      h+=`<div class="af-spinner"></div>`;
+      h+=`<span>Auditing… ${S.auditProgress}/${S.auditTotal}</span>`;
+    }else{
+      h+=`<span class="af-count">${S.auditSelected.size}</span>`;
+      h+=`<span>selected for audit</span>`;
+      h+=`<button class="af-run" id="idx-audit-selected2">Run Audit Now</button>`;
+      h+=`<button id="idx-audit-clear2">Clear</button>`;
+    }
+    h+='</div>';
+  }
   // Toasts
   h+='<div class="toasts">';S.toasts.forEach(t=>{h+=`<div class="toast ${t.t}">${esc(t.m)}</div>`});h+='</div>';
   app.innerHTML=h;bindAll();
@@ -1583,8 +1607,28 @@ function fixIdxScroll(){
   if(!body)return;
   const main=$('.idx-main');
   if(!main)return;
-  // Set idx-body height to fill remaining space in idx-main
   body.style.height=main.clientHeight+'px';
+}
+
+// Dynamically show/update/hide the floating audit bar without full re-render
+function updateAuditFloat(){
+  const count=S.auditSelected.size;
+  let bar=$('#audit-float');
+  if(count===0){
+    if(bar)bar.remove();
+    return;
+  }
+  if(!bar){
+    bar=document.createElement('div');
+    bar.className='audit-float';
+    bar.id='audit-float';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML=`<span class="af-count">${count}</span><span>selected for audit</span><button class="af-run" id="idx-audit-float-run">Run Audit Now</button><button id="idx-audit-float-clear">Clear</button>`;
+  const runBtn=bar.querySelector('#idx-audit-float-run');
+  const clearBtn=bar.querySelector('#idx-audit-float-clear');
+  if(runBtn)runBtn.onclick=()=>{if(S.auditSelected.size)auditSelectedItems()};
+  if(clearBtn)clearBtn.onclick=()=>{S.auditSelected=new Set();updateAuditFloat();render()};
 }
 
 function rSidebar(){
@@ -1683,45 +1727,36 @@ function rIndex(){
   let h='<div class="idx-wrap">';
   // Single unified toolbar
   h+='<div class="idx-toolbar">';
-  // Left: Search
-  h+=`<div class="idx-search">${IC.search}<input id="idx-search" placeholder="Search entries…" value="${esc(S.idxSearch)}"></div>`;
+  // Left: Select mode button (near where checkboxes appear)
+  if(S.auditSelectMode){
+    const selCount=S.auditSelected.size;
+    h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected" ${selCount?'':'disabled'}>${IC.audit} Audit${selCount?' '+selCount:''}</button>`;
+    h+=`<button class="btn btn-sm" id="idx-audit-cancel">Done</button>`;
+  }else{
+    h+=`<button class="btn btn-sm" id="idx-audit-select" title="Select items for AI audit">☑ Select</button>`;
+  }
   // Separator
   h+='<div style="width:1px;height:20px;background:var(--border);flex-shrink:0"></div>';
+  // Search
+  h+=`<div class="idx-search">${IC.search}<input id="idx-search" placeholder="Search entries…" value="${esc(S.idxSearch)}"></div>`;
   // Filter pills (compact)
   h+='<div class="idx-filter-pills">';
   [{id:'all',l:'All'},{id:'unreviewed',l:'Unrev.'},{id:'pending',l:'Pending'},{id:'reviewed',l:'Done'},{id:'bookmarked',l:'🔖'}].forEach(f=>{
     h+=`<div class="idx-filter-pill ${S.reviewFilter===f.id?'active':''}" data-rvfilter="${f.id}">${f.l}</div>`;
   });
   h+='</div>';
-  // Separator
-  h+='<div style="width:1px;height:20px;background:var(--border);flex-shrink:0"></div>';
-  // Layout + Nav as icon group
+  // Spacer
+  h+=`<div class="toolbar-spacer"></div>`;
+  // Right: Layout + Nav icons + sync/rebuild
   h+='<div style="display:flex;gap:2px">';
   ['all','tabs','tree'].forEach(m=>{const icons={all:'☰',tabs:'▤',tree:'⊞'};const labels={all:'Scroll All',tabs:'Sections',tree:'Tree'};h+=`<div class="idx-nav-btn ${S.idxNavMode===m?'active':''}" data-idxnav="${m}" title="${labels[m]}" style="padding:4px 8px;font-size:11px">${icons[m]}</div>`});
   h+='<div style="width:4px"></div>';
   h+=`<div class="idx-nav-btn ${S.idxLayout==='single'?'active':''}" data-idxlayout="single" title="Single column" style="padding:4px 6px">${IC.cols1}</div>`;
   h+=`<div class="idx-nav-btn ${S.idxLayout==='two'?'active':''}" data-idxlayout="two" title="Two columns" style="padding:4px 6px">${IC.cols2}</div>`;
   h+='</div>';
-  // Spacer pushes actions to right
-  h+=`<div class="toolbar-spacer"></div>`;
-  // Right: Action buttons
-  if(S.auditSelectMode){
-    const selCount=S.auditSelected.size;
-    h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected" ${selCount?'':'disabled'}>${IC.audit} Audit${selCount?' '+selCount:''}</button>`;
-    h+=`<button class="btn btn-sm" id="idx-audit-cancel">Done Selecting</button>`;
-  }else{
-    h+=`<button class="btn btn-sm" id="idx-audit-select" title="Enter selection mode to pick items for AI audit">☑ Select</button>`;
-  }
-  h+=`<button class="btn btn-sm ${S.reviewMode?'btn-purple':''}" id="idx-review-toggle" title="Toggle review mode">${S.reviewMode?'✓ Review':'Review'}</button>`;
   h+=`<button class="btn btn-sm btn-icon" id="idx-sync" title="Sync from sheet">⟳</button>`;
   h+=`<button class="btn btn-sm btn-icon" id="idx-ref" title="Rebuild index">${IC.refresh}</button>`;
   h+='</div>';
-
-  // Review mode banner
-  if(S.reviewMode){
-    const totalPending=Object.values(S.reviewData).filter(rv=>rv.status==='pending'&&rv.suggestion).length;
-    h+=`<div class="review-mode-bar">Review Mode ON — showing items needing attention. <span class="rm-count">${totalPending} pending suggestions</span><div class="toolbar-spacer"></div><button class="btn btn-sm" id="idx-review-off">Exit Review Mode</button></div>`;
-  }
 
   // Section tabs (if tab mode)
   if(S.idxNavMode==='tabs'){
@@ -1876,22 +1911,7 @@ function rIndex(){
     h+=entryHtmls.join('');
   }
   if(entryCount>300)h+=`<div style="padding:20px;text-align:center;color:var(--tx-3);font-size:12px">Showing 300 of ${entryCount} entries. Use search or section tabs to narrow.</div>`;
-  h+='</div></div>';
-  // Floating audit bar at bottom when items selected
-  const fSelCount=S.auditSelected.size;
-  if(fSelCount>0||S.auditRunning){
-    h+='<div style="flex-shrink:0;display:flex;align-items:center;gap:10px;padding:8px 24px;background:var(--purple-bg);border-top:1px solid var(--purple-bd)">';
-    if(S.auditRunning){
-      h+=`<div class="spinner" style="width:16px;height:16px;border-width:2px"></div>`;
-      h+=`<span style="font-size:12px;color:var(--purple);font-weight:500">Auditing… ${S.auditProgress}/${S.auditTotal}</span>`;
-    }else{
-      h+=`<span style="font-size:12px;color:var(--purple);font-weight:600">${fSelCount} selected for audit</span>`;
-      h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected2">${IC.audit} Run Audit Now</button>`;
-      h+=`<button class="btn btn-sm" id="idx-audit-clear2">Clear</button>`;
-    }
-    h+='</div>';
-  }
-  h+='</div>';
+  h+='</div></div></div>';
   return h;
 }
 
@@ -2125,18 +2145,17 @@ function bindAll(){
   $$('[data-rvfilter]').forEach(el=>el.onclick=()=>{S.reviewFilter=el.dataset.rvfilter;render()});
 
   // Review mode toggle
-  on('#idx-review-toggle','click',()=>{S.reviewMode=!S.reviewMode;render()});
-  on('#idx-review-off','click',()=>{S.reviewMode=false;render()});
-
   // Audit select mode toggle
   on('#idx-audit-select','click',()=>{S.auditSelectMode=true;S.auditSelected=new Set();render()});
   on('#idx-audit-cancel','click',()=>{S.auditSelectMode=false;S.auditSelected=new Set();render()});
   on('#idx-audit-selected','click',()=>{if(S.auditSelected.size)auditSelectedItems()});
   on('#idx-audit-selected2','click',()=>{if(S.auditSelected.size)auditSelectedItems()});
+  on('#idx-audit-clear2','click',()=>{S.auditSelected=new Set();updateAuditFloat();render()});
   // Individual audit selection checkboxes
   $$('[data-audit-sel]').forEach(el=>el.onchange=()=>{
     const k=el.dataset.auditSel;
     if(el.checked)S.auditSelected.add(k);else S.auditSelected.delete(k);
+    updateAuditFloat();
     const btn=$('#idx-audit-selected');
     if(btn){btn.innerHTML=`${IC.audit} Audit${S.auditSelected.size?' '+S.auditSelected.size:''}`;btn.disabled=!S.auditSelected.size}
   });
@@ -2151,6 +2170,7 @@ function bindAll(){
       entry.results.forEach(r=>S.auditSelected.delete(entryName+'|'+r.segType+'|'+r.rowIdx));
     }
     $$('[data-audit-sel]').forEach(cb=>{cb.checked=S.auditSelected.has(cb.dataset.auditSel)});
+    updateAuditFloat();
     const btn=$('#idx-audit-selected');
     if(btn){btn.innerHTML=`${IC.audit} Audit${S.auditSelected.size?' '+S.auditSelected.size:''}`;btn.disabled=!S.auditSelected.size}
   });
