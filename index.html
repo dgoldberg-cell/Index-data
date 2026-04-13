@@ -449,10 +449,127 @@ function esc(s){const d=document.createElement('div');d.textContent=s;return d.i
 function cl(n){let s='',c=n;while(c>=0){s=String.fromCharCode(c%26+65)+s;c=Math.floor(c/26)-1}return s}
 function toast(m,t=''){const tid=++S.tid;S.toasts.push({id:tid,m,t});render();setTimeout(()=>{S.toasts=S.toasts.filter(x=>x.id!==tid);render()},3500)}
 function rmd(t){return t.replace(/```action[\s\S]*?```/g,'').replace(/```([\s\S]*?)```/g,'<pre>$1</pre>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>')}
-function saveBM(){localStorage.setItem('jw_bm',JSON.stringify(S.idxBookmarks))}
-function saveNotes(){localStorage.setItem('jw_notes',JSON.stringify(S.idxNotes))}
+function saveBM(){localStorage.setItem('jw_bm',JSON.stringify(S.idxBookmarks));syncSharedDataToSheet()}
+function saveNotes(){localStorage.setItem('jw_notes',JSON.stringify(S.idxNotes));syncSharedDataToSheet()}
 function saveRQ(){localStorage.setItem('jw_rq',JSON.stringify(S.reviewQueue))}
-function saveRV(){localStorage.setItem('jw_rv',JSON.stringify(S.reviewData))}
+function saveRV(){localStorage.setItem('jw_rv',JSON.stringify(S.reviewData));syncSharedDataToSheet()}
+
+// ═══════════════════════════════════════════════════════════════
+// SHARED DATA — stored in a hidden _ReviewData tab in the Google Sheet
+// ═══════════════════════════════════════════════════════════════
+const SHARED_TAB='_ReviewData';
+let _syncTimer=null;
+let _syncPending=false;
+let _syncDebounce=null;
+let _lastSyncTime=0;
+
+// Debounced write — waits 2 seconds after last change before writing to sheet
+function syncSharedDataToSheet(){
+  if(!S.connected)return;
+  if(_syncDebounce)clearTimeout(_syncDebounce);
+  _syncDebounce=setTimeout(()=>doSyncToSheet(),2000);
+}
+
+// Actually write shared data to the _ReviewData tab
+async function doSyncToSheet(){
+  if(!S.connected||_syncPending)return;
+  _syncPending=true;
+  try{
+    // Ensure the tab exists
+    await ensureSharedTab();
+    // Pack all shared data into a single JSON object
+    const data={
+      reviewData:S.reviewData,
+      bookmarks:S.idxBookmarks,
+      notes:S.idxNotes,
+      lastUpdated:Date.now(),
+      updatedBy:S.user?.name||'unknown'
+    };
+    const json=JSON.stringify(data);
+    // Write to cell A2 (A1 is header)
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId:S.sheetId,
+      range:`'${SHARED_TAB}'!A2`,
+      valueInputOption:'RAW',
+      resource:{values:[[json]]}
+    });
+    _lastSyncTime=Date.now();
+  }catch(e){console.warn('Sync to sheet failed:',e)}
+  _syncPending=false;
+}
+
+// Read shared data from the _ReviewData tab
+async function loadSharedDataFromSheet(){
+  if(!S.connected)return;
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${SHARED_TAB}'!A2`
+    });
+    const val=(r.result.values&&r.result.values[0]&&r.result.values[0][0])||'';
+    if(val){
+      const data=JSON.parse(val);
+      if(data.reviewData)S.reviewData=data.reviewData;
+      if(data.bookmarks)S.idxBookmarks=data.bookmarks;
+      if(data.notes)S.idxNotes=data.notes;
+      // Update localStorage cache
+      localStorage.setItem('jw_rv',JSON.stringify(S.reviewData));
+      localStorage.setItem('jw_bm',JSON.stringify(S.idxBookmarks));
+      localStorage.setItem('jw_notes',JSON.stringify(S.idxNotes));
+      _lastSyncTime=Date.now();
+      console.log('Loaded shared data from sheet, updated by:',data.updatedBy,'at:',new Date(data.lastUpdated).toLocaleTimeString());
+    }
+  }catch(e){
+    // Tab might not exist yet — that's OK, use localStorage defaults
+    console.log('No shared data tab yet, using localStorage');
+  }
+}
+
+// Ensure the _ReviewData tab exists, create if not
+async function ensureSharedTab(){
+  const tabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
+  if(tabs.includes(SHARED_TAB))return;
+  try{
+    await gapi.client.sheets.spreadsheets.batchUpdate({
+      spreadsheetId:S.sheetId,
+      resource:{requests:[{addSheet:{properties:{title:SHARED_TAB,hidden:true}}}]}
+    });
+    // Write header
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId:S.sheetId,
+      range:`'${SHARED_TAB}'!A1`,
+      valueInputOption:'RAW',
+      resource:{values:[['SharedData_JSON_DoNotEdit']]}
+    });
+    // Refresh metadata
+    const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+    S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+    console.log('Created _ReviewData tab');
+  }catch(e){console.warn('ensureSharedTab error:',e)}
+}
+
+// Auto-refresh: pull shared data from sheet every 3 minutes
+function startAutoRefresh(){
+  if(_syncTimer)clearInterval(_syncTimer);
+  _syncTimer=setInterval(async()=>{
+    if(!S.connected)return;
+    try{
+      await loadSharedDataFromSheet();
+      render();
+    }catch(e){console.warn('Auto-refresh failed:',e)}
+  },180000); // 3 minutes
+}
+
+// Manual refresh
+async function manualRefresh(){
+  if(!S.connected)return;
+  toast('Refreshing…');
+  try{
+    await loadSharedDataFromSheet();
+    buildIndex();render();
+    toast('Synced','success');
+  }catch(e){toast('Refresh failed','error')}
+}
 
 // Update a tag description in both the main keywords column AND the matching search.keywords_relevancy_N column
 async function updateTagDesc(rowIdx,entryName,newDesc){
@@ -1591,6 +1708,7 @@ function rIndex(){
   h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected" ${selCount?'':'disabled'} title="Run AI audit on selected items">${IC.audit} Audit${selCount?' '+selCount:''}</button>`;
   if(selCount)h+=`<button class="btn btn-sm" id="idx-audit-clear" title="Clear selection">Clear</button>`;
   h+=`<button class="btn btn-sm ${S.reviewMode?'btn-purple':''}" id="idx-review-toggle" title="Toggle review mode">${S.reviewMode?'✓ Review':'Review'}</button>`;
+  h+=`<button class="btn btn-sm btn-icon" id="idx-sync" title="Sync from sheet (pull others' changes)">⟳</button>`;
   h+=`<button class="btn btn-sm btn-icon" id="idx-ref" title="Rebuild index">${IC.refresh}</button>`;
   h+='</div>';
 
@@ -1970,7 +2088,7 @@ function rSetup(app){
   <div class="setup-ai" style="text-align:left;margin-top:14px"><h3>🤖 Claude AI <span style="font-weight:400;font-size:10px;color:var(--tx-3)">(optional — needed for auditing)</span></h3><label style="color:var(--purple)">Anthropic API Key</label><input class="s-input" id="ik" type="password" placeholder="sk-ant-…" value="${esc(S.claudeKey)}"></div>
   <div class="setup-err" id="se"></div>
   <button class="btn btn-gold" id="btn-con" style="width:100%;height:42px;font-size:14px;font-weight:600">Sign in & Connect</button></div></div>`;
-  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadTab(0);render()}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign in & Connect';$('#btn-con').disabled=false}};
+  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadTab(0);startAutoRefresh();render()}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign in & Connect';$('#btn-con').disabled=false}};
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1990,6 +2108,7 @@ function bindAll(){
   $$('[data-idxlayout]').forEach(el=>el.onclick=()=>{S.idxLayout=el.dataset.idxlayout;render()});
   $$('[data-idxsec]').forEach(el=>el.onclick=()=>{S.idxActiveSection=el.dataset.idxsec;render()});
   $$('[data-tree]').forEach(el=>el.onclick=()=>{S.idxActiveEntry=el.dataset.tree;render()});
+  on('#idx-sync','click',()=>manualRefresh());
   on('#idx-ref','click',()=>{buildIndex();render()});
 
   // Review filter pills
