@@ -142,14 +142,13 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-result-ref{font-family:var(--mono);font-size:10.5px;color:var(--blue);white-space:nowrap}
 .idx-result-ref a{color:var(--blue)}
 .idx-result-actions{display:flex;gap:3px;flex-shrink:0}
-.idx-orig{position:relative;display:inline-flex;align-items:center;cursor:help;flex-shrink:0}
-.idx-orig-dot{width:6px;height:6px;border-radius:50%;background:var(--amber);border:1px solid rgba(154,122,48,.4)}
-.idx-orig-tip{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:6px;background:var(--tx-1);color:#fff;padding:8px 12px;border-radius:6px;font-size:11px;line-height:1.4;white-space:normal;width:240px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.2)}
-.idx-orig:hover .idx-orig-tip{display:block}
-.idx-orig-tip .orig-label{font-size:8px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.5);margin-bottom:3px}
-.idx-orig-tip .orig-text{color:rgba(255,255,255,.9);margin-bottom:6px}
-.idx-orig-tip .orig-revert{font-size:10px;color:var(--amber);cursor:pointer;text-decoration:underline}
-.idx-orig-tip .orig-revert:hover{color:#fff}
+/* Original description shown inline — crossed out, clickable to revert */
+.idx-orig-inline{display:inline-flex;align-items:baseline;gap:4px;flex-shrink:0}
+.idx-orig-text{color:var(--tx-4);text-decoration:line-through;font-size:11px;cursor:pointer;padding:0 3px;border-radius:3px;transition:all .1s}
+.idx-orig-text:hover{background:var(--amber-bg);color:var(--amber);text-decoration:line-through}
+.idx-orig-revert{font-size:9px;color:var(--amber);cursor:pointer;padding:1px 5px;border:1px solid rgba(154,122,48,.3);border-radius:8px;background:var(--bg-white);white-space:nowrap;transition:all .1s;font-family:var(--font)}
+.idx-orig-revert:hover{background:var(--amber-bg);border-color:var(--amber)}
+.idx-orig-sep{color:var(--tx-4);font-size:10px}
 .idx-mini-btn{width:20px;height:20px;border:1px solid var(--border);border-radius:4px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx-4);font-size:10px;transition:all .1s}
 .idx-mini-btn:hover{background:var(--bg-1);color:var(--tx-2);border-color:var(--border-hi)}
 .idx-mini-btn.active{color:var(--gold);border-color:var(--gold)}
@@ -285,31 +284,33 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .idx-sug-btn.deny{color:var(--red);border-color:var(--red-bd)}.idx-sug-btn.deny:hover{background:var(--red-bg)}
 .idx-sug-btn.custom{color:var(--blue);border-color:var(--blue-bd)}.idx-sug-btn.custom:hover{background:var(--blue-bg)}
 
-/* Audit selection checkbox — purple square on LEFT side */
-.idx-audit-chk,.idx-audit-chk[type="checkbox"]{width:14px;height:14px;border-radius:2px!important;flex-shrink:0;cursor:pointer;appearance:none;border:2px solid var(--purple)!important;background:var(--bg-white)!important;position:relative;transition:all .1s}
+/* Audit selection checkbox — only visible in select mode */
+.idx-audit-chk,.idx-audit-chk[type="checkbox"]{width:14px;height:14px;border-radius:2px!important;flex-shrink:0;cursor:pointer;appearance:none;border:2px solid var(--purple)!important;background:var(--bg-white)!important;position:relative;transition:all .1s;display:none}
+.select-mode .idx-audit-chk{display:inline-block}
 .idx-audit-chk:checked,.idx-audit-chk[type="checkbox"]:checked{background:var(--purple)!important;border-color:var(--purple)!important}
 .idx-audit-chk:checked::after{content:'✓';position:absolute;top:-2px;left:1px;font-size:11px;color:#fff;font-weight:700}
 .idx-audit-chk:hover{border-color:var(--purple)!important}
 
-/* Review button — green pill on RIGHT side */
-.idx-rv-btn{font-size:9px;padding:1px 7px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-white);color:var(--tx-4);cursor:pointer;white-space:nowrap;transition:all .1s;flex-shrink:0;font-family:var(--font);line-height:1.6;font-weight:500}
-.idx-rv-btn:hover{border-color:var(--green);color:var(--green);background:var(--green-bg)}
-.idx-rv-btn.ai-ok{border-color:var(--blue);color:var(--blue);background:var(--blue-bg)}
-.idx-rv-btn.ai-ok:hover{background:rgba(74,104,152,.14)}
-.idx-rv-btn.reviewed{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
-.idx-rv-btn.reviewed:hover{background:#3a7a4a}
+/* Status toggle — Pending/Reviewed */
+.idx-status{font-size:9px;padding:2px 8px;border-radius:10px;cursor:pointer;white-space:nowrap;transition:all .12s;flex-shrink:0;font-family:var(--font);font-weight:500;border:1.5px solid var(--border);background:var(--bg-white);color:var(--tx-4)}
+.idx-status:hover{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+.idx-status.reviewed{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
+.idx-status.reviewed:hover{background:#3a7a4a}
 
-/* Entry-level review button */
-.idx-entry-rv-btn{font-size:9.5px;padding:2px 10px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-white);color:var(--tx-4);cursor:pointer;white-space:nowrap;transition:all .1s;font-family:var(--font);margin-left:6px;font-weight:500}
-.idx-entry-rv-btn:hover{border-color:var(--green);color:var(--green);background:var(--green-bg)}
-.idx-entry-rv-btn.ai-ok{border-color:var(--blue);color:var(--blue);background:var(--blue-bg)}
-.idx-entry-rv-btn.reviewed{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
-.idx-entry-rv-btn.reviewed:hover{background:#3a7a4a}
+/* Entry-level status */
+.idx-entry-status{font-size:9.5px;padding:2px 10px;border-radius:10px;cursor:pointer;white-space:nowrap;transition:all .12s;font-family:var(--font);margin-left:6px;font-weight:500;border:1.5px solid var(--border);background:var(--bg-white);color:var(--tx-4)}
+.idx-entry-status:hover{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+.idx-entry-status.reviewed{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
+.idx-entry-status.reviewed:hover{background:#3a7a4a}
 
-/* Audit column header label */
-.idx-audit-col-hd{font-size:8px;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;font-weight:600;text-align:center;margin-bottom:2px;width:18px;flex-shrink:0}
-.idx-entry-review{display:inline-flex;align-items:center;gap:4px;margin-left:8px;font-size:10px;color:var(--tx-4)}
-.idx-entry-review .reviewed-label{color:var(--green);font-weight:500}
+/* Clip dropdown menu */
+.idx-clip-menu{position:relative;flex-shrink:0}
+.idx-clip-btn{width:20px;height:20px;border:1px solid var(--border);border-radius:4px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx-4);font-size:12px;transition:all .1s}
+.idx-clip-btn:hover{background:var(--bg-1);color:var(--tx-2);border-color:var(--border-hi)}
+.idx-clip-dd{display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg-white);border:1px solid var(--border);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.1);z-index:80;min-width:140px;padding:4px}
+.idx-clip-menu.open .idx-clip-dd{display:block}
+.idx-clip-dd a,.idx-clip-dd span{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:4px;font-size:11px;color:var(--tx-2);cursor:pointer;text-decoration:none}
+.idx-clip-dd a:hover,.idx-clip-dd span:hover{background:var(--bg-1);color:var(--tx-1)}
 
 /* Section progress in sidebar */
 .sidebar-progress{padding:4px 8px;margin:0 10px 2px}
@@ -1704,11 +1705,15 @@ function rIndex(){
   // Spacer pushes actions to right
   h+=`<div class="toolbar-spacer"></div>`;
   // Right: Action buttons
-  const selCount=S.auditSelected.size;
-  h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected" ${selCount?'':'disabled'} title="Run AI audit on selected items">${IC.audit} Audit${selCount?' '+selCount:''}</button>`;
-  if(selCount)h+=`<button class="btn btn-sm" id="idx-audit-clear" title="Clear selection">Clear</button>`;
+  if(S.auditSelectMode){
+    const selCount=S.auditSelected.size;
+    h+=`<button class="btn btn-sm btn-purple" id="idx-audit-selected" ${selCount?'':'disabled'}>${IC.audit} Audit${selCount?' '+selCount:''}</button>`;
+    h+=`<button class="btn btn-sm" id="idx-audit-cancel">Done Selecting</button>`;
+  }else{
+    h+=`<button class="btn btn-sm" id="idx-audit-select" title="Enter selection mode to pick items for AI audit">☑ Select</button>`;
+  }
   h+=`<button class="btn btn-sm ${S.reviewMode?'btn-purple':''}" id="idx-review-toggle" title="Toggle review mode">${S.reviewMode?'✓ Review':'Review'}</button>`;
-  h+=`<button class="btn btn-sm btn-icon" id="idx-sync" title="Sync from sheet (pull others' changes)">⟳</button>`;
+  h+=`<button class="btn btn-sm btn-icon" id="idx-sync" title="Sync from sheet">⟳</button>`;
   h+=`<button class="btn btn-sm btn-icon" id="idx-ref" title="Rebuild index">${IC.refresh}</button>`;
   h+='</div>';
 
@@ -1780,15 +1785,14 @@ function rIndex(){
       let eh='';
       eh+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''}">`;
       eh+=`<div class="idx-entry-name" data-entry="${esc(e.name)}">`;
-      // Audit checkbox on left (purple square)
+      // Audit checkbox (hidden unless select mode — CSS controls visibility)
       const allSelected=e.results.every(r=>S.auditSelected.has(e.name+'|'+r.segType+'|'+r.rowIdx));
-      eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-entry="${esc(e.name)}" ${allSelected?'checked':''} title="Select all for AI audit">`;
+      eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-entry="${esc(e.name)}" ${allSelected?'checked':''} title="Select for AI audit">`;
       eh+=`${esc(e.name)}`;
       if(tooMany)eh+=` <span class="idx-entry-badge warn">${e.results.length} results</span>`;
       if(hasEmpty)eh+=` <span class="idx-entry-badge empty">missing desc</span>`;
-      // Review button on right (green pill)
-      const entryAiOk=!entryDone&&isEntryAiOk(e);
-      eh+=`<button class="idx-entry-rv-btn ${entryDone?'reviewed':entryAiOk?'ai-ok':''}" data-entry-rv="${esc(e.name)}">${entryDone?'✓ Reviewed':entryAiOk?'AI ✓ · Mark Reviewed':'Mark Reviewed'}</button>`;
+      // Status toggle — Pending/Reviewed
+      eh+=`<button class="idx-entry-status ${entryDone?'reviewed':''}" data-entry-rv="${esc(e.name)}">${entryDone?'✓ Reviewed':'Pending'}</button>`;
       eh+=`</div>`;
       eh+=`<div class="idx-entry-meta">${e.results.length} result${e.results.length!==1?'s':''} · <span data-bm="${esc(e.name)}" style="cursor:pointer;color:${isBM?'var(--gold)':'var(--tx-4)'}">${IC.bookmark}</span>`;
       if(note)eh+=` · 📝`;
@@ -1810,12 +1814,15 @@ function rIndex(){
           if(S.reviewMode&&isReviewed&&!isPending)return;
 
           eh+=`<div class="idx-result">`;
-          // Audit checkbox on LEFT (purple square)
+          // Audit checkbox (hidden unless select mode)
           const selKey=esc(e.name)+'|'+seg+'|'+r.rowIdx;
           eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''} title="Select for AI audit">`;
           // Description content
           const hasOriginal=rv&&rv.originalDesc&&rv.originalDesc!==r.desc;
           if(isPending){
+            if(hasOriginal){
+              eh+=`<span class="idx-orig-inline"><span class="idx-orig-text" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert">${esc(rv.originalDesc)}</span><span class="idx-orig-sep">→</span></span>`;
+            }
             eh+=`<span class="idx-sug-old">${descEmpty?'[empty]':esc(r.desc)}</span>`;
             eh+=`<span class="idx-sug-arrow">→</span>`;
             eh+=`<span class="idx-sug-new">${esc(rv.suggestion)}</span>`;
@@ -1825,26 +1832,29 @@ function rIndex(){
             eh+=`<span class="idx-sug-btn deny" data-sugdeny="${esc(e.name)}|${seg}|${r.rowIdx}" title="Deny">${IC.x}</span>`;
             eh+=`<span class="idx-sug-btn custom" data-sugcustom="${esc(e.name)}|${seg}|${r.rowIdx}" title="Custom edit">✎</span>`;
             eh+=`</span>`;
+          }else if(hasOriginal){
+            eh+=`<span class="idx-orig-inline"><span class="idx-orig-text" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert to original">${esc(rv.originalDesc)}</span><span class="idx-orig-revert" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}">↩</span><span class="idx-orig-sep">→</span></span>`;
+            eh+=`<span class="idx-result-desc editable" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="Double-click to edit">${esc(r.desc)}</span>`;
           }else{
             eh+=`<span class="idx-result-desc ${descEmpty?'empty-desc':'editable'}" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="Double-click to edit">${descEmpty?'[no description]':esc(r.desc)}</span>`;
           }
-          // Original description indicator (amber dot with hover tooltip)
-          if(hasOriginal){
-            eh+=`<span class="idx-orig"><span class="idx-orig-dot"></span><span class="idx-orig-tip"><span class="orig-label">Original description</span><span class="orig-text">${esc(rv.originalDesc)}</span><span class="orig-revert" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}">↩ Revert to original</span></span></span>`;
-          }
+          // Reference info — compact
           if(r.rel)eh+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
           eh+=`<span class="idx-result-ref">`;
           if(r.clipType==='Film Chapter'||r.clipType==='Film')eh+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">${esc(r.pvName||r.clipName)}</a>`;
           else eh+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">#${esc(r.progNum)}</a>`;
           eh+=`</span>`;
-          eh+=`<span class="idx-result-actions">`;
-          if(vidUrl)eh+=`<a class="idx-mini-btn" href="${vidUrl}" target="_blank" title="Watch">${IC.video}</a>`;
-          if(r.transcript)eh+=`<span class="idx-mini-btn" data-showtx="${r.rowIdx}" title="Transcript">${IC.doc}</span>`;
+          // Audit shield icon (always visible)
           eh+=`<span class="idx-mini-btn" data-auditone="${esc(e.name)}|${r.rowIdx}|${seg}" title="Audit this">${IC.audit}</span>`;
-          eh+=`</span>`;
-          // Review button on RIGHT (green pill)
-          const aiOk=!isReviewed&&rv&&rv.status==='ok';
-          eh+=`<button class="idx-rv-btn ${isReviewed?'reviewed':aiOk?'ai-ok':''}" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}">${isReviewed?'✓ Reviewed':aiOk?'AI ✓':'Mark Reviewed'}</button>`;
+          // Clip dropdown (video + transcript)
+          if(vidUrl||r.transcript){
+            eh+=`<span class="idx-clip-menu" data-clipmenu><span class="idx-clip-btn" data-clipbtn>⋮</span><span class="idx-clip-dd">`;
+            if(vidUrl)eh+=`<a href="${vidUrl}" target="_blank">${IC.video} Watch clip</a>`;
+            if(r.transcript)eh+=`<span data-showtx="${r.rowIdx}">${IC.doc} View transcript</span>`;
+            eh+=`</span></span>`;
+          }
+          // Status toggle — Pending/Reviewed
+          eh+=`<button class="idx-status ${isReviewed?'reviewed':''}" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}">${isReviewed?'✓ Reviewed':'Pending'}</button>`;
           eh+=`</div>`;
         });
         eh+='</div>';
@@ -1855,7 +1865,7 @@ function rIndex(){
   });
 
   // Render into idx-body — single or two columns
-  h+=`<div class="idx-body ${isTwoCol?'two-col':''}">`;
+  h+=`<div class="idx-body ${isTwoCol?'two-col':''} ${S.auditSelectMode?'select-mode':''}">`;
   if(isTwoCol&&entryHtmls.length>1){
     // Split roughly in half
     const mid=Math.ceil(entryHtmls.length/2);
@@ -2118,22 +2128,19 @@ function bindAll(){
   on('#idx-review-toggle','click',()=>{S.reviewMode=!S.reviewMode;render()});
   on('#idx-review-off','click',()=>{S.reviewMode=false;render()});
 
-  // Audit controls
-  on('#idx-audit-clear','click',()=>{S.auditSelected=new Set();render()});
-  on('#idx-audit-clear2','click',()=>{S.auditSelected=new Set();render()});
+  // Audit select mode toggle
+  on('#idx-audit-select','click',()=>{S.auditSelectMode=true;S.auditSelected=new Set();render()});
+  on('#idx-audit-cancel','click',()=>{S.auditSelectMode=false;S.auditSelected=new Set();render()});
+  on('#idx-audit-selected','click',()=>{if(S.auditSelected.size)auditSelectedItems()});
   on('#idx-audit-selected2','click',()=>{if(S.auditSelected.size)auditSelectedItems()});
-  on('#idx-audit-selected','click',()=>{
-    if(!S.auditSelected.size)return;
-    auditSelectedItems();
-  });
-  // Individual audit selection checkboxes (always visible)
+  // Individual audit selection checkboxes
   $$('[data-audit-sel]').forEach(el=>el.onchange=()=>{
     const k=el.dataset.auditSel;
     if(el.checked)S.auditSelected.add(k);else S.auditSelected.delete(k);
     const btn=$('#idx-audit-selected');
     if(btn){btn.innerHTML=`${IC.audit} Audit${S.auditSelected.size?' '+S.auditSelected.size:''}`;btn.disabled=!S.auditSelected.size}
   });
-  // Entry-level audit selection — select/deselect all results in an entry
+  // Entry-level audit selection
   $$('[data-audit-entry]').forEach(el=>el.onchange=()=>{
     const entryName=el.dataset.auditEntry;
     const entry=findEntry(entryName);
@@ -2147,6 +2154,18 @@ function bindAll(){
     const btn=$('#idx-audit-selected');
     if(btn){btn.innerHTML=`${IC.audit} Audit${S.auditSelected.size?' '+S.auditSelected.size:''}`;btn.disabled=!S.auditSelected.size}
   });
+
+  // Clip dropdown toggle
+  $$('[data-clipbtn]').forEach(el=>el.onclick=(e)=>{
+    e.stopPropagation();
+    const menu=el.closest('[data-clipmenu]');
+    if(!menu)return;
+    // Close all other open menus
+    $$('[data-clipmenu].open').forEach(m=>{if(m!==menu)m.classList.remove('open')});
+    menu.classList.toggle('open');
+  });
+  // Close clip menus when clicking elsewhere
+  document.addEventListener('click',()=>{$$('[data-clipmenu].open').forEach(m=>m.classList.remove('open'))});
 
   // Inline suggestion accept/deny/custom
   $$('[data-sugaccept]').forEach(el=>el.onclick=()=>{
@@ -2177,13 +2196,13 @@ function bindAll(){
     if(confirm('Revert to original description?'))revertToOriginal(en,seg,+ri);
   });
 
-  // Description-level review buttons
+  // Description-level status toggle (Pending ↔ Reviewed)
   $$('[data-desc-rv]').forEach(el=>el.onclick=()=>{
     const[en,seg,ri]=el.dataset.descRv.split('|');
     toggleDescReviewed(en,seg,+ri);
     render();
   });
-  // Entry-level review buttons
+  // Entry-level status toggle
   $$('[data-entry-rv]').forEach(el=>el.onclick=()=>{
     const en=el.dataset.entryRv;
     const entry=findEntry(en);
@@ -2250,6 +2269,13 @@ function bindAll(){
       const newVal=$('#desc-edit')?.value||'';
       const ok=await updateTagDesc(result.rowIdx,entryName,newVal);
       if(ok){
+        // Auto-mark as reviewed on manual edit
+        const clipType=(S.rows[result.rowIdx][S.headers.findIndex(h=>h.toLowerCase()==='type')]||'').trim();
+        const st=RULES.typeMap[clipType]||'Addresses';
+        const k=rvKey(entryName,st,result.rowIdx);
+        const rv=getRV(k)||{};
+        rv.reviewed=true;rv.status='manual';
+        setRV(k,rv);
         syncDescToIndexTab(entryName,result,newVal).catch(()=>{});
         buildIndex();render();
       }
