@@ -459,6 +459,7 @@ reviewData:JSON.parse(localStorage.getItem('jw_rv')||'{}'), // {key: {suggestion
 reviewMode:false, // Toggle: hide reviewed items
 reviewFilter:'all', // 'all','unreviewed','pending','reviewed'
 auditSelectMode:false, // Toggle: show audit checkboxes in index preview
+toolsOpen:false, // Toggle: show Tools section in sidebar
 auditSelected:new Set(), // Set of "entryName|segType|rowIdx" keys selected for audit
 // Audit scope
 auditScope:'all', // 'all','sections','entries','visible','selected'
@@ -1650,26 +1651,15 @@ function updateAuditFloat(){
 function rSidebar(){
   let h='<div class="sidebar"><div class="sidebar-logo">JEM Index<span>Workstation</span></div>';
   h+=`<div class="sidebar-sheet">${esc(S.sheetMeta?.title||S.sheetId)}</div>`;
-  h+='<div class="sidebar-nav"><div class="nav-sec">Views</div>';
-  // Count pending suggestions
-  const pendingCount=Object.values(S.reviewData).filter(rv=>rv.status==='pending'&&rv.suggestion).length;
-  [{id:'index',ic:IC.idx,l:'Index Preview'},{id:'dashboard',ic:IC.dash,l:'Dashboard'},{id:'auditor',ic:IC.audit,l:'AI Auditor'},{id:'review',ic:IC.review,l:'Review Queue',b:pendingCount||null},{id:'sheet',ic:IC.sheet,l:'Sheet View'},{id:'settings',ic:IC.settings,l:'Settings'}].forEach(n=>{
-    h+=`<div class="nav-item ${S.view===n.id?'active':''}" data-nav="${n.id}">${n.ic}<span>${n.l}</span>${n.b?`<span class="badge">${n.b}</span>`:''}</div>`;
+  h+='<div class="sidebar-nav">';
+  // Main views
+  [{id:'index',ic:IC.idx,l:'Index Preview'},{id:'dashboard',ic:IC.dash,l:'Dashboard'},{id:'settings',ic:IC.settings,l:'Settings'}].forEach(n=>{
+    h+=`<div class="nav-item ${S.view===n.id?'active':''}" data-nav="${n.id}">${n.ic}<span>${n.l}</span></div>`;
   });
-  h+='<div class="nav-sec" style="margin-top:10px">Tools</div>';
-  h+=`<div class="nav-item ${S.aiOpen?'active':''}" id="nav-ai">${IC.ai}<span>AI Chat</span></div>`;
-  // Bookmarks list
-  const bmNames=Object.keys(S.idxBookmarks).filter(k=>S.idxBookmarks[k]);
-  if(bmNames.length){
-    h+=`<div class="nav-sec" style="margin-top:10px">Bookmarks <span style="font-size:8px;font-weight:400;letter-spacing:0">(${bmNames.length})</span></div>`;
-    bmNames.sort().slice(0,20).forEach(name=>{
-      h+=`<div class="stab" data-bmjump="${esc(name)}" style="font-size:10.5px;padding:3px 11px;display:flex;align-items:center;gap:4px;cursor:pointer"><span style="color:var(--gold);font-size:9px">🔖</span>${esc(name.length>22?name.slice(0,22)+'…':name)}</div>`;
-    });
-    if(bmNames.length>20)h+=`<div style="padding:2px 11px;font-size:9px;color:var(--tx-4)">+${bmNames.length-20} more</div>`;
-  }
-  // Section progress
+
+  // Review Progress — right after main nav
   if(S.indexData){
-    h+='<div class="nav-sec" style="margin-top:10px">Review Progress</div>';
+    h+='<div class="nav-sec" style="margin-top:14px">Review Progress</div>';
     RULES.sectionOrder.forEach(sec=>{
       const prog=sectionReviewProgress(sec);
       if(!prog.total)return;
@@ -1678,6 +1668,27 @@ function rSidebar(){
       h+=`<div class="sidebar-progress"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:${done?'var(--green)':'var(--tx-3)'};font-weight:${done?'600':'400'}">${sec}</span><span class="sidebar-progress-text">${prog.reviewed}/${prog.total}</span></div><div class="sidebar-progress-bar"><div class="sidebar-progress-fill" style="width:${pct}%"></div></div></div>`;
     });
   }
+
+  // Bookmarks
+  const bmNames=Object.keys(S.idxBookmarks).filter(k=>S.idxBookmarks[k]);
+  if(bmNames.length){
+    h+=`<div class="nav-sec" style="margin-top:14px">Bookmarks <span style="font-size:8px;font-weight:400;letter-spacing:0">(${bmNames.length})</span></div>`;
+    bmNames.sort().slice(0,20).forEach(name=>{
+      h+=`<div class="stab" data-bmjump="${esc(name)}" style="font-size:10.5px;padding:3px 11px;display:flex;align-items:center;gap:4px;cursor:pointer"><span style="color:var(--gold);font-size:9px">🔖</span>${esc(name.length>22?name.slice(0,22)+'…':name)}</div>`;
+    });
+    if(bmNames.length>20)h+=`<div style="padding:2px 11px;font-size:9px;color:var(--tx-4)">+${bmNames.length-20} more</div>`;
+  }
+
+  // Tools — collapsible
+  h+=`<div class="nav-sec" style="margin-top:14px;cursor:pointer" id="tools-toggle">Tools <span style="font-size:8px;color:var(--tx-4)">${S.toolsOpen?'▾':'▸'}</span></div>`;
+  if(S.toolsOpen){
+    const pendingCount=Object.values(S.reviewData).filter(rv=>rv.status==='pending'&&rv.suggestion).length;
+    [{id:'auditor',ic:IC.audit,l:'AI Auditor'},{id:'review',ic:IC.review,l:'Review Queue',b:pendingCount||null},{id:'sheet',ic:IC.sheet,l:'Sheet View'}].forEach(n=>{
+      h+=`<div class="nav-item ${S.view===n.id?'active':''}" data-nav="${n.id}">${n.ic}<span>${n.l}</span>${n.b?`<span class="badge">${n.b}</span>`:''}</div>`;
+    });
+    h+=`<div class="nav-item ${S.aiOpen?'active':''}" id="nav-ai">${IC.ai}<span>AI Chat</span></div>`;
+  }
+
   h+='</div>';
   if(S.sheetMeta?.tabs?.length){h+='<div class="sidebar-tabs"><h4>Sheet Tabs</h4>';S.sheetMeta.tabs.forEach((t,i)=>{h+=`<div class="stab ${i===S.activeTab?'active':''}" data-stab="${i}">${esc(t.title)}</div>`});h+='</div>'}
   if(S.user)h+=`<div class="sidebar-user"><div class="sidebar-avatar">${S.user.pic?'<img src="'+S.user.pic+'">':esc(S.user.name.charAt(0))}</div><span class="sidebar-uname">${esc(S.user.name)}</span><button class="btn btn-sm btn-icon" id="blo" title="Sign out">${IC.logout}</button></div>`;
@@ -2150,6 +2161,7 @@ function bindAll(){
   // Nav
   $$('[data-nav]').forEach(el=>el.onclick=()=>{S.view=el.dataset.nav;render()});
   on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
+  on('#tools-toggle','click',()=>{S.toolsOpen=!S.toolsOpen;render()});
   on('#blo','click',logout);
   $$('[data-stab]').forEach(el=>el.onclick=()=>loadTab(+el.dataset.stab));
 
