@@ -129,8 +129,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-entry{margin-bottom:14px;break-inside:avoid;position:relative}
 .idx-entry.flagged{border-left:3px solid var(--amber);padding-left:10px}
 .idx-entry.bookmarked::before{content:'🔖';position:absolute;left:-20px;top:0;font-size:12px}
-.idx-entry-name{font-family:var(--serif);font-size:15px;font-weight:700;color:var(--tx-1);margin-bottom:2px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-.idx-entry-name:hover{color:var(--gold)}
+.idx-entry-name{font-family:var(--serif);font-size:15px;font-weight:700;color:var(--tx-1);margin-bottom:2px;display:flex;align-items:center;gap:6px}
 .idx-entry-badge{font-size:9px;font-weight:500;font-family:var(--font);padding:1px 6px;border-radius:8px;vertical-align:middle}
 .idx-entry-badge.warn{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(154,122,48,.2)}
 .idx-entry-badge.empty{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
@@ -140,18 +139,27 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-bestbet{display:inline-block;font-size:10px;background:var(--gold-bg);color:var(--gold);padding:1px 8px;border-radius:8px;margin-bottom:4px;border:1px solid rgba(140,122,80,.2)}
 
 /* Segment group */
-.idx-seg{margin-bottom:6px}
-.idx-seg-label{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--tx-4);margin-bottom:2px}
+.idx-seg{margin-bottom:8px}
+.idx-seg-label{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--tx-4);margin-bottom:3px}
 
-/* Individual result */
-.idx-result{display:flex;align-items:center;gap:4px;padding:2px 0;font-size:12.5px;line-height:1.5;flex-wrap:wrap}
-.idx-result-desc{color:var(--tx-2)}
+/* Individual result — full width row, actions pushed right */
+.idx-result{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:13px;line-height:1.6}
+.idx-result-desc{color:var(--tx-2);flex:1}
 .idx-result-desc.empty-desc{color:var(--red);font-style:italic;background:rgba(176,80,80,.05);padding:0 4px;border-radius:3px}
 .idx-result-desc.editable:hover{background:var(--bg-1);cursor:text;border-radius:3px;padding:0 4px}
-.idx-result-rel{font-size:10px;color:var(--tx-4);font-style:italic}
-.idx-result-ref{font-family:var(--mono);font-size:10.5px;color:var(--blue);white-space:nowrap}
+.idx-result-rel{font-size:10px;color:var(--tx-4);font-style:italic;flex-shrink:0}
+.idx-result-ref{font-family:var(--mono);font-size:10.5px;color:var(--blue);white-space:nowrap;flex-shrink:0}
 .idx-result-ref a{color:var(--blue)}
-.idx-result-actions{display:flex;gap:3px;flex-shrink:0}
+
+/* Single column — bigger text, more spread out */
+.idx-body:not(.two-col-mode) .idx-entry{margin-bottom:20px}
+.idx-body:not(.two-col-mode) .idx-entry-name{font-size:18px}
+.idx-body:not(.two-col-mode) .idx-result{font-size:14px;padding:5px 0}
+.idx-body:not(.two-col-mode) .idx-seg{margin-bottom:10px}
+.idx-body:not(.two-col-mode) .idx-seg-label{font-size:10px;margin-bottom:4px}
+.idx-body:not(.two-col-mode) .idx-entry-meta{font-size:11px;margin-bottom:6px}
+.idx-body:not(.two-col-mode) .idx-result-rel{font-size:11px}
+.idx-body:not(.two-col-mode) .idx-result-ref{font-size:11px}
 /* Original description shown inline — crossed out, clickable to revert */
 .idx-orig-inline{display:inline-flex;align-items:baseline;gap:4px;flex-shrink:0}
 .idx-orig-text{color:var(--tx-4);text-decoration:line-through;font-size:11px;cursor:pointer;padding:0 3px;border-radius:3px;transition:all .1s}
@@ -1885,7 +1893,7 @@ function rIndex(){
   const pageEnd=Math.min(pageStart+PAGE_SIZE,totalEntries);
   const pageHtmls=entryHtmls.slice(pageStart,pageEnd);
 
-  h+=`<div class="idx-body ${S.auditSelectMode?'select-mode':''}">`;
+  h+=`<div class="idx-body ${isTwoCol?'two-col-mode':''} ${S.auditSelectMode?'select-mode':''}">`;
   
   // Top bar: Select button (left) + pagination (right) — always same position
   h+='<div class="idx-top-bar">';
