@@ -459,23 +459,44 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
     await saveCell(rowIdx,kwCol,JSON.stringify(kw));
     
     // 2. Find and update in the matching relevancy column
-    const rel=tag.relevancy||0;
-    if(rel>=1&&rel<=4){
-      const relColName='search.keywords_relevancy_'+rel;
-      const relCol=S.headers.findIndex(h=>h.toLowerCase()===relColName.toLowerCase());
-      if(relCol>=0&&S.rows[rowIdx][relCol]){
-        try{
-          let relKw=JSON.parse(S.rows[rowIdx][relCol]);
-          const relTag=relKw.find(t=>t.name===entryName);
-          if(relTag){
-            relTag.description=newDesc;
-            await saveCell(rowIdx,relCol,JSON.stringify(relKw));
-          }
-        }catch(e2){console.warn('Relevancy col update failed:',e2)}
+    const rel=tag.relevancy;
+    const relNum=parseInt(rel,10);
+    console.log(`updateTagDesc: "${entryName}" row=${rowIdx} relevancy=${rel} (parsed=${relNum})`);
+    if(relNum>=1&&relNum<=4){
+      const relColName='search.keywords_relevancy_'+relNum;
+      const relCol=S.headers.findIndex(h=>h===relColName);
+      console.log(`  Looking for column "${relColName}" → index=${relCol}`);
+      if(relCol<0){
+        // Try case-insensitive
+        const relCol2=S.headers.findIndex(h=>h.toLowerCase()===relColName.toLowerCase());
+        console.log(`  Case-insensitive search → index=${relCol2}`);
       }
+      if(relCol>=0){
+        const cellVal=S.rows[rowIdx][relCol]||'';
+        console.log(`  Cell value length=${cellVal.length}, starts with: ${cellVal.slice(0,30)}`);
+        if(cellVal&&cellVal!==''){
+          try{
+            let relKw=JSON.parse(cellVal);
+            const relTag=relKw.find(t=>t.name===entryName);
+            console.log(`  Found tag in relevancy col: ${!!relTag}`);
+            if(relTag){
+              relTag.description=newDesc;
+              await saveCell(rowIdx,relCol,JSON.stringify(relKw));
+              console.log(`  ✓ Updated relevancy column`);
+            }
+          }catch(e2){console.warn('Relevancy col parse/update failed:',e2)}
+        }else{
+          console.log(`  Cell is empty, skipping`);
+        }
+      }else{
+        console.log(`  Column not found in headers`);
+        console.log(`  Available headers:`,S.headers.filter(h=>h.includes('relev')));
+      }
+    }else{
+      console.log(`  Relevancy ${rel} out of range 1-4, skipping`);
     }
     return true;
-  }catch(e){toast('Save error','error');return false}
+  }catch(e){toast('Save error','error');console.error('updateTagDesc error:',e);return false}
 }
 
 // Review data key: entryName|segType|rowIdx
