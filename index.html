@@ -318,6 +318,17 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 /* Audit selection checkbox — only visible in select mode */
 .idx-audit-chk,.idx-audit-chk[type="checkbox"]{width:14px;height:14px;border-radius:2px!important;flex-shrink:0;cursor:pointer;appearance:none;border:2px solid var(--purple)!important;background:var(--bg-white)!important;position:relative;transition:all .1s;display:none}
 .select-mode .idx-audit-chk{display:inline-block}
+
+/* Move checkbox — orange, entry level only, hidden unless move mode */
+.idx-move-chk,.idx-move-chk[type="checkbox"]{width:14px;height:14px;border-radius:2px!important;flex-shrink:0;cursor:pointer;appearance:none;border:2px solid var(--amber)!important;background:var(--bg-white)!important;position:relative;transition:all .1s;display:none}
+.move-mode .idx-move-chk{display:inline-block}
+.idx-move-chk:checked,.idx-move-chk[type="checkbox"]:checked{background:var(--amber)!important;border-color:var(--amber)!important}
+.idx-move-chk:checked::after{content:'✓';position:absolute;top:-2px;left:1px;font-size:11px;color:#fff;font-weight:700}
+
+/* Move floating bar */
+.move-float{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:8px;padding:6px 16px;background:var(--tx-1);color:#fff;border-radius:20px;box-shadow:0 4px 16px rgba(0,0,0,.2);font-size:11px;font-weight:500;animation:floatIn .15s ease-out}
+.move-float select{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:3px 8px;font-size:10px;font-family:var(--font);cursor:pointer;outline:none}
+.move-float select option{color:var(--tx-1);background:var(--bg-white)}
 .idx-audit-chk:checked,.idx-audit-chk[type="checkbox"]:checked{background:var(--purple)!important;border-color:var(--purple)!important}
 .idx-audit-chk:checked::after{content:'✓';position:absolute;top:-2px;left:1px;font-size:11px;color:#fff;font-weight:700}
 .idx-audit-chk:hover{border-color:var(--purple)!important}
@@ -554,6 +565,9 @@ reviewData:JSON.parse(localStorage.getItem('jw_rv')||'{}'), // {key: {suggestion
 reviewMode:false, // Toggle: hide reviewed items
 reviewFilter:'all', // 'all','unreviewed','pending','reviewed'
 auditSelectMode:false, // Toggle: show audit checkboxes in index preview
+moveSelectMode:false, // Toggle: show move checkboxes at entry level
+moveSelected:new Set(), // Set of entry names selected for moving
+sectionOverrides:{}, // {entryName: newSection} — persisted in shared data
 toolsOpen:false, // Toggle: show Tools section in sidebar
 testEntry:'',testDesc:'',testSection:'Topics',testResult:null, // Test audit
 consistencyResults:null,consistencyRunning:false,consistencyProgress:0,consistencyTotal:0, // Consistency check
@@ -611,6 +625,7 @@ async function doSyncToSheet(){
       reviewData:S.reviewData,
       bookmarks:S.idxBookmarks,
       notes:S.idxNotes,
+      sectionOverrides:S.sectionOverrides,
       rules:{tagDesc:RULES.tagDesc,consistency:RULES.consistency,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults},
       lastUpdated:Date.now(),
       updatedBy:S.user?.name||'unknown'
@@ -642,6 +657,7 @@ async function loadSharedDataFromSheet(){
       if(data.reviewData)S.reviewData=data.reviewData;
       if(data.bookmarks)S.idxBookmarks=data.bookmarks;
       if(data.notes)S.idxNotes=data.notes;
+      if(data.sectionOverrides)S.sectionOverrides=data.sectionOverrides;
       // Load shared rules
       if(data.rules&&data.rules.tagDesc){
         RULES.tagDesc=data.rules.tagDesc;
@@ -1020,13 +1036,15 @@ function buildIndex(){
     });
   });
 
-  // Group by section and sort
+  // Group by section and sort — apply sectionOverrides
   const sections={};
   RULES.sectionOrder.forEach(sec=>{sections[sec]=[]});
   Object.values(entries).forEach(e=>{
-    const sec=e.section;
+    // Check if this entry has been moved to a different section
+    const overrideSec=S.sectionOverrides[e.name];
+    const sec=overrideSec||e.section;
     if(!sections[sec])sections[sec]=[];
-    // Sort results by segment order then alphabetically by description
+    e.section=sec; // Update the entry's section so everything downstream uses it
     e.results.sort((a,b)=>{
       const oa=RULES.segOrder.indexOf(a.segType),ob=RULES.segOrder.indexOf(b.segType);
       if(oa!==ob)return oa-ob;
@@ -1708,7 +1726,7 @@ function render(){
   h+='</div></div>';
   // Transcript popup
   if(S.transcriptPopup)h+=rTranscript();
-  // Floating audit bar (fixed position, always visible when selections exist)
+  // Floating audit bar
   if(S.auditSelectMode&&(S.auditSelected.size>0||S.auditRunning)){
     h+='<div class="audit-float" id="audit-float">';
     if(S.auditRunning){
@@ -1718,6 +1736,18 @@ function render(){
       h+=`<button class="af-run" id="idx-audit-selected2">Run Audit</button>`;
       h+=`<span class="af-close" id="idx-audit-float-x2" title="Dismiss">✕</span>`;
     }
+    h+='</div>';
+  }
+  // Floating move bar
+  if(S.moveSelectMode&&S.moveSelected.size>0){
+    h+='<div class="move-float" id="move-float">';
+    h+=`<span class="af-count">${S.moveSelected.size}</span> entries `;
+    h+=`<span>Move to:</span>`;
+    h+=`<select id="move-target">`;
+    RULES.sectionOrder.forEach(sec=>{h+=`<option value="${sec}">${sec}</option>`});
+    h+=`</select>`;
+    h+=`<button class="af-run" id="move-execute">Move</button>`;
+    h+=`<span class="af-close" id="move-float-x" title="Dismiss">✕</span>`;
     h+='</div>';
   }
   // Toasts
@@ -1932,9 +1962,11 @@ function rIndex(){
       let eh='';
       eh+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''}">`;
       eh+=`<div class="idx-entry-name" data-entry="${esc(e.name)}">`;
-      // Audit checkbox (hidden unless select mode — CSS controls visibility)
+      // Audit checkbox (hidden unless select mode)
       const allSelected=e.results.every(r=>S.auditSelected.has(e.name+'|'+r.segType+'|'+r.rowIdx));
       eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-entry="${esc(e.name)}" ${allSelected?'checked':''} title="Select for AI audit">`;
+      // Move checkbox (hidden unless move mode)
+      eh+=`<input type="checkbox" class="idx-move-chk" data-move-entry="${esc(e.name)}" ${S.moveSelected.has(e.name)?'checked':''} title="Select to move">`;
       eh+=`${esc(e.name)}`;
       if(tooMany)eh+=` <span class="idx-entry-badge warn">${e.results.length} results</span>`;
       if(hasEmpty)eh+=` <span class="idx-entry-badge empty">missing desc</span>`;
@@ -2020,14 +2052,17 @@ function rIndex(){
   const pageEnd=Math.min(pageStart+PAGE_SIZE,totalEntries);
   const pageHtmls=entryHtmls.slice(pageStart,pageEnd);
 
-  h+=`<div class="idx-body ${isTwoCol?'two-col-mode':''} ${S.auditSelectMode?'select-mode':''}">`;
+  h+=`<div class="idx-body ${isTwoCol?'two-col-mode':''} ${S.auditSelectMode?'select-mode':''} ${S.moveSelectMode?'move-mode':''}">`;
   
-  // Top bar: Select button (left) + pagination (right) — always same position
+  // Top bar: Select/Move buttons (left) + pagination (right)
   h+='<div class="idx-top-bar">';
   if(S.auditSelectMode){
     h+=`<button class="btn btn-sm" id="idx-audit-cancel" style="font-size:11px">☑ Done Selecting</button>`;
+  }else if(S.moveSelectMode){
+    h+=`<button class="btn btn-sm" id="idx-move-cancel" style="font-size:11px">✦ Done Moving</button>`;
   }else{
     h+=`<button class="btn btn-sm" id="idx-audit-select" style="font-size:11px">☐ Select for Audit</button>`;
+    h+=`<button class="btn btn-sm" id="idx-move-select" style="font-size:11px">✦ Move Entries</button>`;
   }
   if(totalPages>1){
     h+=`<div class="idx-pager" style="margin-left:auto">`;
@@ -2040,22 +2075,21 @@ function rIndex(){
 
   // Content — single or two columns
   if(isTwoCol&&pageHtmls.length>1){
-    // Balance columns by estimated weight (entry HTML length as proxy for height)
+    // Find the split point that minimizes the difference in total weight between columns
     const weights=pageHtmls.map(h=>h.length);
     const totalWeight=weights.reduce((a,b)=>a+b,0);
-    const halfWeight=totalWeight/2;
-    let leftWeight=0,splitAt=0;
-    for(let i=0;i<weights.length;i++){
-      if(leftWeight+weights[i]>halfWeight&&i>0)break;
-      leftWeight+=weights[i];
-      splitAt=i+1;
+    let bestSplit=Math.ceil(pageHtmls.length/2);
+    let bestDiff=Infinity;
+    for(let s=1;s<pageHtmls.length;s++){
+      const leftW=weights.slice(0,s).reduce((a,b)=>a+b,0);
+      const rightW=totalWeight-leftW;
+      const diff=Math.abs(leftW-rightW);
+      if(diff<bestDiff){bestDiff=diff;bestSplit=s}
     }
-    // Ensure left column is at least as long as right (never shorter)
-    if(splitAt<Math.ceil(pageHtmls.length/2))splitAt=Math.ceil(pageHtmls.length/2);
     h+='<div class="idx-cols">';
-    h+='<div class="idx-col">'+pageHtmls.slice(0,splitAt).join('')+'</div>';
+    h+='<div class="idx-col">'+pageHtmls.slice(0,bestSplit).join('')+'</div>';
     h+='<div class="idx-col-divider"></div>';
-    h+='<div class="idx-col">'+pageHtmls.slice(splitAt).join('')+'</div>';
+    h+='<div class="idx-col">'+pageHtmls.slice(bestSplit).join('')+'</div>';
     h+='</div>';
   }else{
     h+=pageHtmls.join('');
@@ -2372,11 +2406,43 @@ function bindAll(){
   });
 
   // Audit select mode toggle
-  on('#idx-audit-select','click',()=>{S.auditSelectMode=true;S.auditSelected=new Set();render()});
+  on('#idx-audit-select','click',()=>{S.auditSelectMode=true;S.moveSelectMode=false;S.auditSelected=new Set();render()});
   on('#idx-audit-cancel','click',()=>{S.auditSelectMode=false;S.auditSelected=new Set();render()});
   on('#idx-audit-selected','click',()=>{if(S.auditSelected.size)auditSelectedItems()});
   on('#idx-audit-selected2','click',()=>{if(S.auditSelected.size)auditSelectedItems()});
   on('#idx-audit-float-x2','click',()=>{S.auditSelected=new Set();updateAuditFloat();render()});
+
+  // Move mode
+  on('#idx-move-select','click',()=>{S.moveSelectMode=true;S.auditSelectMode=false;S.moveSelected=new Set();render()});
+  on('#idx-move-cancel','click',()=>{S.moveSelectMode=false;S.moveSelected=new Set();render()});
+  on('#move-float-x','click',()=>{S.moveSelected=new Set();render()});
+  // Move checkboxes
+  $$('[data-move-entry]').forEach(el=>el.onchange=()=>{
+    const name=el.dataset.moveEntry;
+    if(el.checked)S.moveSelected.add(name);else S.moveSelected.delete(name);
+    render();
+  });
+  // Execute move
+  on('#move-execute','click',()=>{
+    const target=$('#move-target')?.value;
+    if(!target||!S.moveSelected.size)return;
+    const names=[...S.moveSelected];
+    const currentSec=S.idxActiveSection;
+    // Confirm
+    if(!confirm(`Move ${names.length} entry/entries to "${target}"?`))return;
+    // Apply overrides
+    names.forEach(name=>{
+      S.sectionOverrides[name]=target;
+    });
+    // Sync to shared data
+    syncSharedDataToSheet();
+    // Clear move mode
+    S.moveSelectMode=false;S.moveSelected=new Set();
+    // Rebuild index with new overrides
+    buildIndex();
+    toast(`Moved ${names.length} entries to ${target}`,'success');
+    render();
+  });
   // Individual audit selection checkboxes
   $$('[data-audit-sel]').forEach(el=>el.onchange=()=>{
     const k=el.dataset.auditSel;
