@@ -861,12 +861,16 @@ async function manualRefresh(){
 // Update a tag description in both the main keywords column AND the matching search.keywords_relevancy_N column
 async function updateTagDesc(rowIdx,entryName,newDesc){
   const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
-  if(kwCol<0||!S.rows[rowIdx])return false;
+  if(kwCol<0||!S.rows[rowIdx]){console.error('updateTagDesc: no kwCol or row',{kwCol,rowIdx});return false}
   try{
-    // 0. Capture original description before first change
     let kw=JSON.parse(S.rows[rowIdx][kwCol]);
     const tag=kw.find(t=>t.name===entryName);
-    if(!tag)return false;
+    if(!tag){
+      console.error('updateTagDesc: tag not found!',{entryName,availableTags:kw.map(t=>t.name)});
+      toast('Tag "'+entryName+'" not found in row '+rowIdx,'error');
+      return false;
+    }
+    console.log('updateTagDesc: found tag',{entryName,oldDesc:tag.description,newDesc});
     const oldDesc=tag.description||'';
     
     // Save original in ALL review data entries for this tag on this row
