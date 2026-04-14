@@ -624,8 +624,7 @@ function doUndo(){
   if(!S.undoStack.length){toast('Nothing to undo');return}
   const action=S.undoStack.pop();
   switch(action.type){
-    case 'move':
-      // Restore entries to original sections
+    case 'move': {
       (action.data.entries||[]).forEach(e=>{
         if(action.data.originalSections[e]){
           S.sectionOverrides[e]=action.data.originalSections[e];
@@ -638,14 +637,26 @@ function doUndo(){
       logActivity(`Undid move: ${action.label}`);
       toast(`Undid: ${action.label}`,'success');
       render();
+      (async()=>{
+        const existingTabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
+        const affectedSections=new Set([action.data.target]);
+        Object.values(action.data.originalSections).forEach(s=>{if(s)affectedSections.add(s)});
+        for(const sec of affectedSections){
+          const tabName='Index - '+sec;
+          if(existingTabs.includes(tabName)){
+            toast(`Regenerating ${tabName}…`);
+            _tabMapCache={};
+            await generateIndexTab(sec);
+          }
+        }
+      })();
       break;
-    case 'accept':
-      // Restore original description
-      const ak=action.data.key;
-      const arv=getRV(ak)||{};
-      arv.status='pending';arv.suggestion=action.data.suggestion;arv.reviewed=false;
-      setRV(ak,arv);
-      // Write original desc back to sheet
+    }
+    case 'accept': {
+      const k=action.data.key;
+      const rv=getRV(k)||{};
+      rv.status='pending';rv.suggestion=action.data.suggestion;rv.reviewed=false;
+      setRV(k,rv);
       if(action.data.rowIdx!=null&&action.data.entryName&&action.data.oldDesc!=null){
         updateTagDesc(action.data.rowIdx,action.data.entryName,action.data.oldDesc).catch(()=>{});
       }
@@ -653,26 +664,29 @@ function doUndo(){
       toast(`Undid: ${action.label}`,'success');
       buildIndex();render();
       break;
-    case 'deny':
-      const dk=action.data.key;
-      const drv=getRV(dk)||{};
-      drv.status='pending';drv.suggestion=action.data.suggestion;
-      setRV(dk,drv);
+    }
+    case 'deny': {
+      const k=action.data.key;
+      const rv=getRV(k)||{};
+      rv.status='pending';rv.suggestion=action.data.suggestion;
+      setRV(k,rv);
       logActivity(`Undid deny: ${action.label}`);
       toast(`Undid: ${action.label}`,'success');
       render();
       break;
-    case 'edit':
+    }
+    case 'edit': {
       if(action.data.rowIdx!=null&&action.data.entryName&&action.data.oldDesc!=null){
         updateTagDesc(action.data.rowIdx,action.data.entryName,action.data.oldDesc).catch(()=>{});
-        const ek=action.data.key;
-        if(ek){const erv=getRV(ek)||{};erv.reviewed=false;erv.status='';setRV(ek,erv)}
+        const k=action.data.key;
+        if(k){const rv=getRV(k)||{};rv.reviewed=false;rv.status='';setRV(k,rv)}
       }
       logActivity(`Undid edit: ${action.label}`);
       toast(`Undid: ${action.label}`,'success');
       buildIndex();render();
       break;
-    case 'bulk_accept':
+    }
+    case 'bulk_accept': {
       (action.data.items||[]).forEach(item=>{
         const rv=getRV(item.key)||{};
         rv.status='pending';rv.suggestion=item.suggestion;rv.reviewed=false;
@@ -685,6 +699,7 @@ function doUndo(){
       toast(`Undid: ${action.label}`,'success');
       buildIndex();render();
       break;
+    }
     default:
       toast('Cannot undo this action');
   }
