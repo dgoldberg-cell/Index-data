@@ -2956,36 +2956,67 @@ function bindAll(){
 
   // Description editing (double-click)
   $$('[data-editdesc]').forEach(el=>el.ondblclick=()=>{
-    const[entryName,segType,ri]=el.dataset.editdesc.split('|');
-    S.editingDesc={entryName,segType,ri:+ri};
+    const parts=el.dataset.editdesc.split('|');
+    const entryName=parts[0];
+    const segType=parts[1];
+    const ri=+parts[2];
+    S.editingDesc={entryName,segType,ri};
     const entry=findEntry(entryName);
     if(!entry)return;
     const byseg={};entry.results.forEach(r=>{if(!byseg[r.segType])byseg[r.segType]=[];byseg[r.segType].push(r)});
-    const result=byseg[segType]?.[+ri];
+    const result=byseg[segType]?.[ri];
     if(!result)return;
-    el.outerHTML=`<span class="idx-inline-edit"><input class="idx-inline-input" id="desc-edit" value="${esc(result.desc||'')}"><button class="btn btn-sm btn-green" id="desc-save">${IC.check}</button><button class="btn btn-sm" id="desc-cancel">${IC.x}</button></span>`;
-    const inp=$('#desc-edit');if(inp)inp.focus();
-    const saveBtn=$('#desc-save');
-    const cancelBtn=$('#desc-cancel');
-    if(saveBtn)saveBtn.onclick=async()=>{
-      const newVal=$('#desc-edit')?.value||'';
+    
+    // Create edit UI
+    const wrapper=document.createElement('span');
+    wrapper.className='idx-inline-edit';
+    const inp=document.createElement('input');
+    inp.className='idx-inline-input';
+    inp.id='desc-edit';
+    inp.value=result.desc||'';
+    const saveBtn=document.createElement('button');
+    saveBtn.className='btn btn-sm btn-green';
+    saveBtn.id='desc-save';
+    saveBtn.innerHTML=IC.check;
+    const cancelBtn=document.createElement('button');
+    cancelBtn.className='btn btn-sm';
+    cancelBtn.id='desc-cancel';
+    cancelBtn.innerHTML=IC.x;
+    wrapper.appendChild(inp);
+    wrapper.appendChild(saveBtn);
+    wrapper.appendChild(cancelBtn);
+    el.replaceWith(wrapper);
+    inp.focus();
+    
+    saveBtn.addEventListener('click',async()=>{
+      const newVal=inp.value||'';
       if(newVal===result.desc){toast('No changes made');return}
-      const clipType=(S.rows[result.rowIdx]?.[S.headers.findIndex(h=>h.toLowerCase()==='type')]||'').trim();
-      const st=RULES.typeMap[clipType]||result.segType||'Addresses';
-      const k=rvKey(entryName,st,result.rowIdx);
-      pushUndo('edit',{key:k,oldDesc:result.desc,rowIdx:result.rowIdx,entryName},`"${entryName}": "${result.desc}" → "${newVal}"`);
-      const ok=await updateTagDesc(result.rowIdx,entryName,newVal);
-      if(ok){
-        const rv=getRV(k)||{};
-        rv.reviewed=true;rv.status='manual';
-        setRV(k,rv);
-        syncDescToIndexTab(entryName,result,newVal).catch(()=>{});
-        logActivity(`Edited: "${entryName}" → "${newVal}"`);
-        buildIndex();render();
+      saveBtn.disabled=true;saveBtn.textContent='…';
+      try{
+        const clipType=(S.rows[result.rowIdx]?.[S.headers.findIndex(h=>h.toLowerCase()==='type')]||'').trim();
+        const st=RULES.typeMap[clipType]||result.segType||'Addresses';
+        const k=rvKey(entryName,st,result.rowIdx);
+        pushUndo('edit',{key:k,oldDesc:result.desc,rowIdx:result.rowIdx,entryName},`"${entryName}": "${result.desc}" → "${newVal}"`);
+        const ok=await updateTagDesc(result.rowIdx,entryName,newVal);
+        if(ok){
+          const rv=getRV(k)||{};
+          rv.reviewed=true;rv.status='manual';
+          setRV(k,rv);
+          syncDescToIndexTab(entryName,result,newVal).catch(()=>{});
+          logActivity(`Edited: "${entryName}" → "${newVal}"`);
+          S.editingDesc=null;
+          buildIndex();render();
+        }else{
+          toast('Save failed — check console','error');
+          saveBtn.disabled=false;saveBtn.innerHTML=IC.check;
+        }
+      }catch(e){
+        toast('Error: '+e.message,'error');
+        saveBtn.disabled=false;saveBtn.innerHTML=IC.check;
       }
-    };
-    if(cancelBtn)cancelBtn.onclick=()=>{S.editingDesc=null;render()};
-    if(inp)inp.onkeydown=e=>{if(e.key==='Enter'&&saveBtn)saveBtn.click();if(e.key==='Escape'&&cancelBtn)cancelBtn.click()};
+    });
+    cancelBtn.addEventListener('click',()=>{S.editingDesc=null;render()});
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter')saveBtn.click();if(e.key==='Escape')cancelBtn.click()});
   });
 
   // Transcript popup
