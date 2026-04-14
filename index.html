@@ -570,6 +570,7 @@ moveSelected:new Set(), // Set of entry names selected for moving
 sectionOverrides:{}, // {entryName: newSection} — persisted in shared data
 undoStack:[], // [{type, data, label, timestamp}] — last 50 actions
 activityLog:[], // [{timestamp, user, action}] — shared, last 200 entries
+showAllActivity:false, // Toggle: show everyone's activity (admins only)
 toolsOpen:false, // Toggle: show Tools section in sidebar
 testEntry:'',testDesc:'',testSection:'Topics',testResult:null, // Test audit
 consistencyResults:null,consistencyRunning:false,consistencyProgress:0,consistencyTotal:0, // Consistency check
@@ -604,6 +605,7 @@ function saveRV(){localStorage.setItem('jw_rv',JSON.stringify(S.reviewData));syn
 // SHARED DATA — stored in a hidden _ReviewData tab in the Google Sheet
 // ═══════════════════════════════════════════════════════════════
 const SHARED_TAB='_ReviewData';
+const ADMIN_EMAILS=['dgoldberg@jemedia.org','es@jemedia.org'];
 let _syncTimer=null;
 let _syncPending=false;
 let _syncDebounce=null;
@@ -1203,7 +1205,7 @@ async function doConnect(cid,sid,ck){
       callback:async resp=>{
         if(resp.error){j(new Error(resp.error_description||resp.error));return}
         S._tokenTime=Date.now();
-        try{const u=await(await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+resp.access_token}})).json();S.user={name:u.name||u.email||'User',pic:u.picture||''}}catch{S.user={name:'User',pic:''}}
+        try{const u=await(await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+resp.access_token}})).json();S.user={name:u.name||u.email||'User',email:u.email||'',pic:u.picture||''}}catch{S.user={name:'User',email:'',pic:''}}
         try{const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:sid});S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))}}catch(e){console.error(e)}
         S.connected=true;
         // Schedule token refresh every 50 minutes
@@ -2128,14 +2130,30 @@ function rDash(){
 
   // Activity Log
   h+='<div class="card" style="margin-top:18px"><h4 style="margin-bottom:10px">📋 Recent Activity</h4>';
-  if(S.activityLog.length){
+  const isAdmin=ADMIN_EMAILS.includes(S.user?.email?.toLowerCase());
+  const myName=S.user?.name||'Unknown';
+  
+  // Split into my activity and others
+  const myActivity=[...S.activityLog].filter(e=>e.user===myName).reverse().slice(0,50);
+  const allActivity=[...S.activityLog].reverse().slice(0,50);
+  
+  if(isAdmin){
+    h+=`<div style="display:flex;gap:8px;margin-bottom:8px">`;
+    h+=`<button class="btn btn-sm ${!S.showAllActivity?'btn-gold':''}" id="activity-mine" style="font-size:10px">My Activity</button>`;
+    h+=`<button class="btn btn-sm ${S.showAllActivity?'btn-gold':''}" id="activity-all" style="font-size:10px">Everyone</button>`;
+    h+=`</div>`;
+  }
+  
+  const displayLog=isAdmin&&S.showAllActivity?allActivity:myActivity;
+  
+  if(displayLog.length){
     h+='<div style="max-height:300px;overflow-y:auto;font-size:11px">';
-    [...S.activityLog].reverse().slice(0,50).forEach(entry=>{
+    displayLog.forEach(entry=>{
       const time=new Date(entry.timestamp);
       const timeStr=time.toLocaleDateString()+' '+time.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       h+=`<div style="padding:4px 0;border-bottom:1px solid var(--bg-1);display:flex;gap:8px">`;
       h+=`<span style="color:var(--tx-4);white-space:nowrap;min-width:110px">${timeStr}</span>`;
-      h+=`<span style="color:var(--blue);font-weight:500;min-width:60px">${esc(entry.user)}</span>`;
+      if(isAdmin&&S.showAllActivity)h+=`<span style="color:var(--blue);font-weight:500;min-width:60px">${esc(entry.user)}</span>`;
       h+=`<span style="color:var(--tx-2)">${esc(entry.action)}</span>`;
       h+=`</div>`;
     });
@@ -2312,8 +2330,8 @@ function rIndex(){
 
   h+=`<div class="idx-body ${isTwoCol?'two-col-mode':''} ${S.auditSelectMode?'select-mode':''} ${S.moveSelectMode?'move-mode':''}">`;
   
-  // Top bar: Select/Move buttons (left) + pagination (right)
-  h+='<div class="idx-top-bar">';
+  // Top bar: INSIDE idx-body but sticky at top
+  h+='<div class="idx-top-bar" style="position:sticky;top:0;z-index:10;background:var(--bg-0);padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:8px">';
   if(S.auditSelectMode){
     h+=`<button class="btn btn-sm" id="idx-audit-cancel" style="font-size:11px">☑ Done Selecting</button>`;
   }else if(S.moveSelectMode){
@@ -2604,6 +2622,16 @@ function rTranscript(){
 }
 
 function rSetup(app){
+  const hasCredentials=localStorage.getItem('jw_cid')&&localStorage.getItem('jw_sid');
+  if(S.loading&&hasCredentials){
+    // Auto-reconnecting — show minimal screen
+    app.innerHTML=`<div class="setup-screen"><div class="setup-card" style="text-align:center">
+    <img src="${JEM_LOGO}" alt="JEM" style="width:120px;margin:0 auto 14px;display:block;border-radius:8px">
+    <h1>JEM Index Workstation</h1>
+    <p style="color:var(--tx-3);margin-top:14px">Reconnecting…</p>
+    </div></div>`;
+    return;
+  }
   app.innerHTML=`<div class="setup-screen"><div class="setup-card" style="text-align:center">
   <img src="${JEM_LOGO}" alt="JEM" style="width:120px;margin:0 auto 14px;display:block;border-radius:8px">
   <h1>JEM Index Workstation</h1>
@@ -2635,6 +2663,8 @@ function bindAll(){
   on('#timer-stop','click',()=>stopTimer());
   
   // Time log on dashboard
+  on('#activity-mine','click',()=>{S.showAllActivity=false;render()});
+  on('#activity-all','click',()=>{S.showAllActivity=true;render()});
   on('#load-time-log','click',async()=>{
     const area=$('#time-log-area');
     if(area)area.innerHTML='Loading…';
@@ -2685,15 +2715,25 @@ function bindAll(){
   // Index
   let _searchTimer=null;
   on('#idx-search','input',()=>{
-    S.idxSearch=$('#idx-search').value;
+    const el=$('#idx-search');
+    S.idxSearch=el?.value||'';
     S.idxPage=0;
     if(_searchTimer)clearTimeout(_searchTimer);
     _searchTimer=setTimeout(()=>{
-      const val=S.idxSearch;
-      const pos=$('#idx-search')?.selectionStart||val.length;
+      const curEl=$('#idx-search');
+      const savedValue=curEl?.value||S.idxSearch;
+      const savedPos=curEl?.selectionStart??savedValue.length;
       render();
-      setTimeout(()=>{const e=$('#idx-search');if(e){e.focus();e.selectionStart=e.selectionEnd=pos}},0);
-    },300);
+      requestAnimationFrame(()=>{
+        const newEl=$('#idx-search');
+        if(newEl){
+          newEl.value=savedValue;
+          S.idxSearch=savedValue;
+          newEl.focus();
+          newEl.selectionStart=newEl.selectionEnd=savedPos;
+        }
+      });
+    },400);
   });
   $$('[data-tree]').forEach(el=>el.onclick=()=>{S.idxActiveEntry=el.dataset.tree;render()});
   on('#idx-undo','click',()=>doUndo());
@@ -2731,14 +2771,16 @@ function bindAll(){
     render();
   });
   // Execute move
-  on('#move-execute','click',()=>{
+  on('#move-execute','click',async()=>{
     const target=$('#move-target')?.value;
     if(!target||!S.moveSelected.size)return;
     const names=[...S.moveSelected];
     if(!confirm(`Move ${names.length} entry/entries to "${target}"?`))return;
-    // Save undo data — capture current section for each entry
+    // Capture original sections for undo and tab regeneration
     const originalSections={};
-    names.forEach(name=>{originalSections[name]=S.sectionOverrides[name]||null});
+    names.forEach(name=>{
+      originalSections[name]=S.sectionOverrides[name]||sectionForEntry(name)||null;
+    });
     pushUndo('move',{entries:names,originalSections,target},`${names.length} entries → ${target}`);
     // Apply overrides
     names.forEach(name=>{S.sectionOverrides[name]=target});
@@ -2748,6 +2790,18 @@ function bindAll(){
     buildIndex();
     toast(`Moved ${names.length} entries to ${target}`,'success');
     render();
+    // Regenerate affected Index tabs if they exist
+    const existingTabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
+    const affectedSections=new Set([target]);
+    Object.values(originalSections).forEach(s=>{if(s)affectedSections.add(s)});
+    for(const sec of affectedSections){
+      const tabName='Index - '+sec;
+      if(existingTabs.includes(tabName)){
+        toast(`Regenerating ${tabName}…`);
+        _tabMapCache={};
+        await generateIndexTab(sec);
+      }
+    }
   });
   // Individual audit selection checkboxes
   $$('[data-audit-sel]').forEach(el=>el.onchange=()=>{
