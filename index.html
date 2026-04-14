@@ -461,6 +461,41 @@ tightenExamples:[
 {before:'A discussion on the topic of',after:'Discussion on'}
 ],
 spelling:[{wrong:'prier',right:'prior'},{wrong:'preformed',right:'performed'},{wrong:'begining',right:'beginning'},{wrong:'Godliness',right:'G-dliness'},{wrong:'Godly',right:'G-dly'},{wrong:'God',right:'G-d'},{wrong:"Farbrengen's",right:'Farbrengens'}]},
+consistency:{
+checks:[
+{id:'phrase_match',name:'Flag when the same concept uses different phrasing across entries (e.g. "Establishment of local Chabad" vs "Inception of local Chabad")',on:true},
+{id:'word_order',name:'Flag inconsistent word order for the same phrase (e.g. "tefillin and mezuzos" vs "mezuzos and tefillin")',on:true},
+{id:'transliteration',name:'Flag inconsistent Hebrew/Yiddish transliteration spelling across entries',on:true},
+{id:'capitalization',name:'Flag inconsistent capitalization of the same term across entries',on:true},
+{id:'style_voice',name:'Flag inconsistent style or voice — all descriptions should read the same way, like one person wrote them all',on:true}
+],
+transliteration:[
+{correct:'Tefillin',wrong:['Tfilin','Tephillin','Phylacteries','tefilin']},
+{correct:'Mezuzos',wrong:['Mezuzot','Mezuzahs','Mezuza','mezuzos']},
+{correct:'Farbrengen',wrong:['Farbrangen','Farbrengin','farbrengen']},
+{correct:'Shlichus',wrong:['Shlichut','Shlichos','shlichus']},
+{correct:'Tzedakah',wrong:['Tzedaka','Tsedakah','Tsedaka']},
+{correct:'Simchas Torah',wrong:['Simchat Torah','Simhas Torah']},
+{correct:'Chassidus',wrong:['Chassidut','Chasidus','Hassidut']},
+{correct:'Mashiach',wrong:['Moshiach','Mashiakh','Messiah']},
+{correct:'Shabbos',wrong:['Shabbat','Shabbes']},
+{correct:'Beis HaMikdash',wrong:['Beit HaMikdash','Beis Hamikdosh']},
+{correct:'Teshuvah',wrong:['Teshuva','Tshuvah']},
+{correct:'Mitzvah',wrong:['Mitzva','Mitsvah']},
+{correct:'Mitzvos',wrong:['Mitzvot','Mitzvahs']},
+{correct:'Niggun',wrong:['Nigun','Niggun','niggun']},
+{correct:'Nigunim',wrong:['Niggunim','nigunim']},
+{correct:'Chassid',wrong:['Hasid','Chasid']},
+{correct:'Chassidim',wrong:['Hasidim','Chasidim']},
+{correct:'Halachah',wrong:['Halakha','Halacha']},
+{correct:'Tzivos Hashem',wrong:['Tzivos HaShem','Tzivos hashem']},
+{correct:'Chabad',wrong:['chabad','CHABAD']},
+{correct:'Lubavitch',wrong:['lubavitch','Lubavich']},
+{correct:'G-d',wrong:['God','G-D','god']},
+{correct:'G-dly',wrong:['Godly','godly']},
+{correct:'G-dliness',wrong:['Godliness','godliness']}
+]
+},
 segOrder:['Addresses','Timeless Moments','Conversations','My Encounter','Short Films','Films'],
 typeMap:{'LT Sicha':'Addresses','LT Timeless Moment':'Timeless Moments','LT Eye to Eye':'Conversations','LT My Encounter':'My Encounter','Short Film':'Short Films','Film':'Films','Film Chapter':'Films','Living Torah':'Addresses'},
 relDefaults:{People:{Addresses:'spoken_about','Timeless Moments':'seen_in',Conversations:'in_conversation_with','My Encounter':'interviewee','Short Films':'interviewee',Films:'interviewee'},Topics:{Addresses:'spoken_about','Timeless Moments':'seen_in',Conversations:'spoken_about','My Encounter':'spoken_about','Short Films':'spoken_about',Films:'spoken_about'}},
@@ -468,8 +503,8 @@ sectionOrder:['People','Topics','Dates','History','Locations','Nigunim','Orgs & 
 
 // Load persisted rules or use defaults
 function loadRules(){
-  // Start with a clean copy of defaults
   const rules={tagDesc:JSON.parse(JSON.stringify(DEFAULT_RULES.tagDesc)),
+    consistency:JSON.parse(JSON.stringify(DEFAULT_RULES.consistency)),
     segOrder:[...DEFAULT_RULES.segOrder],typeMap:{...DEFAULT_RULES.typeMap},
     sectionOrder:[...DEFAULT_RULES.sectionOrder],relDefaults:JSON.parse(JSON.stringify(DEFAULT_RULES.relDefaults)),
     sectionFromPath:sectionFromPath};
@@ -479,6 +514,7 @@ function loadRules(){
       const p=JSON.parse(saved);
       if(p.tagDesc)rules.tagDesc=p.tagDesc;
       if(!rules.tagDesc.spelling)rules.tagDesc.spelling=DEFAULT_RULES.tagDesc.spelling;
+      if(p.consistency)rules.consistency=p.consistency;
       if(p.segOrder)rules.segOrder=p.segOrder;
       if(p.typeMap)rules.typeMap=p.typeMap;
       if(p.sectionOrder)rules.sectionOrder=p.sectionOrder;
@@ -490,7 +526,7 @@ function loadRules(){
   return rules;
 }
 function saveRulesLocal(){
-  const toSave={tagDesc:RULES.tagDesc,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults};
+  const toSave={tagDesc:RULES.tagDesc,consistency:RULES.consistency,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults};
   localStorage.setItem('jw_rules',JSON.stringify(toSave));
 }
 function saveRules(){
@@ -520,6 +556,7 @@ reviewFilter:'all', // 'all','unreviewed','pending','reviewed'
 auditSelectMode:false, // Toggle: show audit checkboxes in index preview
 toolsOpen:false, // Toggle: show Tools section in sidebar
 testEntry:'',testDesc:'',testSection:'Topics',testResult:null, // Test audit
+consistencyResults:null,consistencyRunning:false,consistencyProgress:0,consistencyTotal:0, // Consistency check
 auditSelected:new Set(), // Set of "entryName|segType|rowIdx" keys selected for audit
 // Audit scope
 auditScope:'all', // 'all','sections','entries','visible','selected'
@@ -574,7 +611,7 @@ async function doSyncToSheet(){
       reviewData:S.reviewData,
       bookmarks:S.idxBookmarks,
       notes:S.idxNotes,
-      rules:{tagDesc:RULES.tagDesc,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults},
+      rules:{tagDesc:RULES.tagDesc,consistency:RULES.consistency,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults},
       lastUpdated:Date.now(),
       updatedBy:S.user?.name||'unknown'
     };
@@ -608,6 +645,7 @@ async function loadSharedDataFromSheet(){
       // Load shared rules
       if(data.rules&&data.rules.tagDesc){
         RULES.tagDesc=data.rules.tagDesc;
+        if(data.rules.consistency)RULES.consistency=data.rules.consistency;
         if(data.rules.segOrder)RULES.segOrder=data.rules.segOrder;
         if(data.rules.typeMap)RULES.typeMap=data.rules.typeMap;
         if(data.rules.sectionOrder)RULES.sectionOrder=data.rules.sectionOrder;
@@ -1020,7 +1058,7 @@ async function loadTab(idx){
   try{const r=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:S.sheetId,range:`'${S.sheetMeta.tabs[idx].title}'`});const v=r.result.values||[];S.headers=v.length?v[0]:[];S.rows=v.length>1?v.slice(1).map(r=>{while(r.length<S.headers.length)r.push('');return r}):[];S.visibleCols=new Set(S.headers.map((_,i)=>i));S.selected=new Set();S.sortCol=null;S.search='';S.editCell=null;S.activeTab=idx;buildIndex()}catch(e){toast('Load failed: '+e.message,'error')}
   S.loading=false;render();
 }
-async function saveCell(ri,ci,val){const nm=S.sheetMeta.tabs[S.activeTab].title;try{await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:S.sheetId,range:`'${nm}'!${cl(ci)}${ri+2}`,valueInputOption:'USER_ENTERED',resource:{values:[[val]]}});S.rows[ri][ci]=val;toast('Saved','success')}catch(e){toast('Save failed: '+e.message,'error')}}
+async function saveCell(ri,ci,val){const nm=S.sheetMeta.tabs[S.activeTab].title;try{await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:S.sheetId,range:`'${nm}'!${cl(ci)}${ri+2}`,valueInputOption:'USER_ENTERED',resource:{values:[[val]]}});S.rows[ri][ci]=val;toast('Saved','success')}catch(e){console.error('saveCell error:',e);toast('Save failed: '+(e?.result?.error?.message||e?.message||JSON.stringify(e)),'error')}}
 async function saveCells(changes){const nm=S.sheetMeta.tabs[S.activeTab].title;try{await gapi.client.sheets.spreadsheets.values.batchUpdate({spreadsheetId:S.sheetId,resource:{valueInputOption:'USER_ENTERED',data:changes.map(c=>({range:`'${nm}'!${cl(c.col)}${c.row+2}`,values:[[c.value]]}))}});changes.forEach(c=>{if(S.rows[c.row])S.rows[c.row][c.col]=c.value});toast(`Updated ${changes.length} cells`,'success')}catch(e){toast('Batch save failed','error')}}
 async function delRows(idxs){const nm=S.sheetMeta.tabs[S.activeTab].title;const sorted=[...idxs].sort((a,b)=>b-a);try{const sid=S.sheetMeta.tabs[S.activeTab].sid;await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:S.sheetId,resource:{requests:sorted.map(i=>({deleteDimension:{range:{sheetId:sid,dimension:'ROWS',startIndex:i+1,endIndex:i+2}}}))}});S.rows=S.rows.filter((_,i)=>!idxs.has(i));S.selected=new Set();toast(`Deleted ${sorted.length} rows`,'success');buildIndex()}catch(e){toast('Delete failed','error')}render()}
 function logout(){try{google.accounts.oauth2.revoke(gapi.client.getToken()?.access_token)}catch{}S.connected=false;S.sheetMeta=null;S.user=null;S.headers=[];S.rows=[];S.indexData=null;S.aiMsgs=[];localStorage.removeItem('jw_cid');localStorage.removeItem('jw_sid');render()}
@@ -1664,6 +1702,7 @@ function render(){
   else if(S.view==='auditor')h+=rAuditor();
   else if(S.view==='review')h+=rReview();
   else if(S.view==='settings')h+=rSettings();
+  else if(S.view==='consistency')h+=rConsistency();
   h+='</div>';
   if(S.aiOpen)h+=rAI();
   h+='</div></div>';
@@ -1818,7 +1857,7 @@ function rDash(){
     h+='</div>';
   }
   h+='</div>';
-  h+=`<div style="display:flex;gap:10px"><button class="btn btn-gold" data-nav="index">${IC.idx} Open Index Preview</button><button class="btn btn-purple" data-nav="auditor">${IC.audit} Run Audit</button></div>`;
+  h+=`<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-gold" data-nav="index">${IC.idx} Open Index Preview</button><button class="btn btn-purple" data-nav="auditor">${IC.audit} Run Audit</button><button class="btn" id="run-consistency" style="border-color:var(--blue);color:var(--blue)">🔍 Run Consistency Check</button></div>`;
   return h+'</div>';
 }
 
@@ -2001,11 +2040,22 @@ function rIndex(){
 
   // Content — single or two columns
   if(isTwoCol&&pageHtmls.length>1){
-    const mid=Math.ceil(pageHtmls.length/2);
+    // Balance columns by estimated weight (entry HTML length as proxy for height)
+    const weights=pageHtmls.map(h=>h.length);
+    const totalWeight=weights.reduce((a,b)=>a+b,0);
+    const halfWeight=totalWeight/2;
+    let leftWeight=0,splitAt=0;
+    for(let i=0;i<weights.length;i++){
+      if(leftWeight+weights[i]>halfWeight&&i>0)break;
+      leftWeight+=weights[i];
+      splitAt=i+1;
+    }
+    // Ensure left column is at least as long as right (never shorter)
+    if(splitAt<Math.ceil(pageHtmls.length/2))splitAt=Math.ceil(pageHtmls.length/2);
     h+='<div class="idx-cols">';
-    h+='<div class="idx-col">'+pageHtmls.slice(0,mid).join('')+'</div>';
+    h+='<div class="idx-col">'+pageHtmls.slice(0,splitAt).join('')+'</div>';
     h+='<div class="idx-col-divider"></div>';
-    h+='<div class="idx-col">'+pageHtmls.slice(mid).join('')+'</div>';
+    h+='<div class="idx-col">'+pageHtmls.slice(splitAt).join('')+'</div>';
     h+='</div>';
   }else{
     h+=pageHtmls.join('');
@@ -2222,6 +2272,26 @@ function rSettings(){
   h+=`<div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-sm btn-red" id="clear-review-data">Clear All Review Data</button><button class="btn btn-sm" id="clear-pending">Clear Pending Only</button></div>`;
   h+='</div>';
 
+  // Consistency Rules
+  h+='<div class="card" style="margin-bottom:24px;border-left:3px solid var(--blue)">';
+  h+='<h4 style="margin-bottom:10px;color:var(--blue)">Consistency Check Rules</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:10px">These rules are used when running the full Consistency Check from the Dashboard. They check for uniformity across the entire index.</p>';
+  (RULES.consistency?.checks||[]).forEach((c,i)=>{
+    h+=`<div class="rule-edit-row"><button class="rule-toggle ${c.on?'on':''}" data-constoggle="${i}"></button><textarea class="rule-edit-input" data-consedit="${i}" rows="2">${esc(c.name)}</textarea><button class="btn btn-sm btn-red btn-icon" data-consdelete="${i}" title="Delete">${IC.x}</button></div>`;
+  });
+  h+=`<button class="btn btn-sm btn-green" id="add-cons-rule" style="margin-top:8px">+ Add Rule</button>`;
+  h+='</div>';
+
+  // Transliteration Standards
+  h+='<div class="card" style="margin-bottom:24px">';
+  h+='<h4 style="margin-bottom:10px">Transliteration Standards</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:10px">Standard spellings for Hebrew/Yiddish terms. The AI will flag any deviations during consistency checks and audits.</p>';
+  (RULES.consistency?.transliteration||[]).forEach((t,i)=>{
+    h+=`<div class="spelling-row"><input class="rule-edit-input" style="max-width:120px;font-weight:600" data-transcorrect="${i}" value="${esc(t.correct)}" placeholder="Correct"><span style="color:var(--tx-4);font-size:10px">not:</span><input class="rule-edit-input" data-transwrong="${i}" value="${esc((t.wrong||[]).join(', '))}" placeholder="Wrong variants (comma separated)"><button class="btn btn-sm btn-red btn-icon" data-transdel="${i}">${IC.x}</button></div>`;
+  });
+  h+=`<button class="btn btn-sm btn-green" id="add-trans" style="margin-top:8px">+ Add Term</button>`;
+  h+='</div>';
+
   h+=`<div class="card"><h4 style="margin-bottom:8px">Connection</h4><div style="font-size:12px;color:var(--tx-2)">Sheet: <code>${esc(S.sheetId.slice(0,30))}\u2026</code></div><div style="font-size:12px;color:var(--tx-2)">Claude: <span style="color:${S.claudeKey?'var(--green)':'var(--red)'}">${S.claudeKey?'Connected':'Not set'}</span></div></div>`;
   h+=`<div class="card" style="margin-top:24px"><h4 style="margin-bottom:8px">Bulk Delete by Type</h4><p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Delete all rows matching a content type</p><div style="display:flex;gap:8px"><input class="s-input" id="bulk-type" placeholder="Type name\u2026" style="margin:0;flex:1"><button class="btn btn-red" id="bulk-del-btn">${IC.trash} Delete</button></div></div>`;
   return h+'</div>';
@@ -2260,6 +2330,14 @@ function bindAll(){
   $$('[data-nav]').forEach(el=>el.onclick=()=>{S.view=el.dataset.nav;render()});
   on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
   on('#tools-toggle','click',()=>{S.toolsOpen=!S.toolsOpen;render()});
+  on('#run-consistency','click',()=>runConsistencyCheck());
+  on('#rerun-consistency','click',()=>runConsistencyCheck());
+  if(!S.consistencyDismissed)S.consistencyDismissed={};
+  $$('[data-dismiss-issue]').forEach(el=>el.onclick=()=>{
+    const idx=+el.dataset.dismissIssue;
+    S.consistencyDismissed[idx]=!S.consistencyDismissed[idx];
+    render();
+  });
   on('#blo','click',logout);
   $$('[data-stab]').forEach(el=>el.onclick=()=>loadTab(+el.dataset.stab));
 
@@ -2454,10 +2532,12 @@ function bindAll(){
     const cancelBtn=$('#desc-cancel');
     if(saveBtn)saveBtn.onclick=async()=>{
       const newVal=$('#desc-edit')?.value||'';
+      console.log('Saving desc:',{entryName,segType,ri:+ri,rowIdx:result.rowIdx,oldDesc:result.desc,newVal});
+      if(newVal===result.desc){toast('No changes made');return}
       const ok=await updateTagDesc(result.rowIdx,entryName,newVal);
       if(ok){
-        const clipType=(S.rows[result.rowIdx][S.headers.findIndex(h=>h.toLowerCase()==='type')]||'').trim();
-        const st=RULES.typeMap[clipType]||'Addresses';
+        const clipType=(S.rows[result.rowIdx]?.[S.headers.findIndex(h=>h.toLowerCase()==='type')]||'').trim();
+        const st=RULES.typeMap[clipType]||result.segType||'Addresses';
         const k=rvKey(entryName,st,result.rowIdx);
         const rv=getRV(k)||{};
         rv.reviewed=true;rv.status='manual';
@@ -2567,9 +2647,21 @@ Description:"${S.testDesc||'[empty]'}"`;
   $$('[data-spelldel]').forEach(el=>el.onclick=()=>{const i=+el.dataset.spelldel;RULES.tagDesc.spelling.splice(i,1);saveRules();render()});
   on('#add-spelling','click',()=>{RULES.tagDesc.spelling.push({wrong:'',right:''});saveRules();render()});
 
+  // Consistency rules editing
+  $$('[data-constoggle]').forEach(el=>el.onclick=()=>{const i=+el.dataset.constoggle;RULES.consistency.checks[i].on=!RULES.consistency.checks[i].on;saveRules();render()});
+  $$('[data-consedit]').forEach(el=>el.onblur=()=>{const i=+el.dataset.consedit;RULES.consistency.checks[i].name=el.value;saveRules()});
+  $$('[data-consdelete]').forEach(el=>el.onclick=()=>{const i=+el.dataset.consdelete;RULES.consistency.checks.splice(i,1);saveRules();render()});
+  on('#add-cons-rule','click',()=>{const name=prompt('Consistency rule:');if(name){RULES.consistency.checks.push({id:'custom_'+Date.now(),name,on:true});saveRules();render()}});
+
+  // Transliteration editing
+  $$('[data-transcorrect]').forEach(el=>el.onblur=()=>{const i=+el.dataset.transcorrect;RULES.consistency.transliteration[i].correct=el.value;saveRules()});
+  $$('[data-transwrong]').forEach(el=>el.onblur=()=>{const i=+el.dataset.transwrong;RULES.consistency.transliteration[i].wrong=el.value.split(',').map(s=>s.trim()).filter(Boolean);saveRules()});
+  $$('[data-transdel]').forEach(el=>el.onclick=()=>{const i=+el.dataset.transdel;RULES.consistency.transliteration.splice(i,1);saveRules();render()});
+  on('#add-trans','click',()=>{RULES.consistency.transliteration.push({correct:'',wrong:[]});saveRules();render()});
+
   // Import/Export/Reset rules
   on('#export-rules','click',()=>{
-    const data=JSON.stringify({tagDesc:RULES.tagDesc},null,2);
+    const data=JSON.stringify({tagDesc:RULES.tagDesc,consistency:RULES.consistency},null,2);
     const blob=new Blob([data],{type:'application/json'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='jem-index-rules.json';a.click();
     toast('Rules exported','success');
@@ -2755,6 +2847,140 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
   const keptCount=items.length-totalFixed;
   toast(`Done! ${totalFixed} need changes, ${keptCount} look good`,'success');
   render();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONSISTENCY CHECK
+// ═══════════════════════════════════════════════════════════════
+async function runConsistencyCheck(){
+  if(!S.claudeKey){toast('No API key','error');return}
+  if(!S.indexData){toast('No index data','error');return}
+  
+  S.consistencyRunning=true;S.consistencyProgress=0;S.consistencyResults=[];
+  toast('Running consistency check…');render();
+  
+  // Collect all reviewed/finalized descriptions grouped by section
+  const allDescs=[];
+  const ix=S.indexData;
+  RULES.sectionOrder.forEach(sec=>{
+    (ix.sections[sec]||[]).forEach(entry=>{
+      entry.results.forEach(r=>{
+        if(r.desc&&r.desc.trim()){
+          allDescs.push({entry:entry.name,section:sec,desc:r.desc,segType:r.segType,rowIdx:r.rowIdx});
+        }
+      });
+    });
+  });
+  
+  S.consistencyTotal=allDescs.length;
+  
+  // Build transliteration rules text
+  const transRules=(RULES.consistency?.transliteration||[]).map(t=>`"${t.correct}" (never: ${t.wrong.join(', ')})`).join('\n  ');
+  const checkRules=(RULES.consistency?.checks||[]).filter(c=>c.on).map(c=>c.name).join('\n');
+  
+  // Process in batches of 100 descriptions
+  const bs=100;
+  const allIssues=[];
+  for(let i=0;i<allDescs.length;i+=bs){
+    const batch=allDescs.slice(i,i+bs);
+    S.consistencyProgress=Math.min(i+bs,allDescs.length);
+    toast(`Checking consistency… ${S.consistencyProgress}/${S.consistencyTotal}`);
+    
+    try{
+      const prompt=`You are reviewing ${batch.length} tag descriptions from the JEM Video Index for CONSISTENCY issues.
+
+CONSISTENCY RULES:
+${checkRules}
+
+STANDARD TRANSLITERATIONS (always use the first spelling):
+  ${transRules}
+
+Look at ALL descriptions below as a group. Find:
+1. Same concept described with different words across entries (e.g. "Establishment of" vs "Inception of")
+2. Same multi-word phrases in different word orders (e.g. "tefillin and mezuzos" vs "mezuzos and tefillin")
+3. Hebrew/Yiddish words spelled differently across entries
+4. Inconsistent capitalization of the same term
+5. Style/voice inconsistencies — all should read like one person wrote them
+
+For each issue found, return the pair of entries that conflict and suggest which version to standardize on.
+
+JSON array only. Each issue: {type:"phrase"|"word_order"|"transliteration"|"capitalization"|"style", entry1:{name:"...",desc:"..."}, entry2:{name:"...",desc:"..."}, issue:"what's inconsistent", suggestion:"standardize to this"}
+
+If no issues found, return empty array [].
+
+DESCRIPTIONS:
+${batch.map((d,j)=>`[${j}] ${d.section} > "${d.entry}": "${d.desc}"`).join('\n')}`;
+
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'You are a meticulous consistency checker for a book index. Find inconsistencies across descriptions. JSON array only.',messages:[{role:'user',content:prompt}]})});
+      if(!resp.ok)throw new Error('API '+resp.status);
+      const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
+      let parsed;
+      try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}
+      catch{const m2=txt.match(/\[[\s\S]*\]/);if(m2)parsed=JSON.parse(m2[0]);else parsed=[]}
+      if(Array.isArray(parsed))allIssues.push(...parsed);
+    }catch(e){console.warn('Consistency batch error:',e)}
+    
+    if(i+bs<allDescs.length)await new Promise(r=>setTimeout(r,1500));
+  }
+  
+  S.consistencyRunning=false;
+  S.consistencyResults=allIssues;
+  toast(`Done! ${allIssues.length} consistency issues found`,'success');
+  S.view='consistency';render();
+}
+
+function rConsistency(){
+  let h='<div class="page-hd"><h1>Consistency Check Results</h1>';
+  h+=`<p>${(S.consistencyResults||[]).length} issues found across the index</p>`;
+  h+='<div class="page-hd-actions">';
+  h+=`<button class="btn btn-gold" data-nav="index">← Back to Index</button>`;
+  h+=`<button class="btn btn-purple" id="rerun-consistency">⟳ Run Again</button>`;
+  h+='</div></div><div class="pad">';
+  
+  if(!S.consistencyResults||!S.consistencyResults.length){
+    h+='<div style="text-align:center;padding:40px;color:var(--tx-3)">No consistency issues found. Everything looks uniform!</div>';
+    return h+'</div>';
+  }
+  
+  // Group by type
+  const byType={};
+  S.consistencyResults.forEach((issue,i)=>{
+    const t=issue.type||'other';
+    if(!byType[t])byType[t]=[];
+    byType[t].push({...issue,idx:i});
+  });
+  
+  const typeLabels={phrase:'Phrasing Differences',word_order:'Word Order',transliteration:'Spelling/Transliteration',capitalization:'Capitalization',style:'Style/Voice',other:'Other'};
+  const typeColors={phrase:'var(--purple)',word_order:'var(--blue)',transliteration:'var(--amber)',capitalization:'var(--green)',style:'var(--red)',other:'var(--tx-3)'};
+  
+  // Summary badges
+  h+='<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">';
+  Object.keys(byType).forEach(t=>{
+    h+=`<span style="font-size:12px;padding:4px 12px;border-radius:12px;background:var(--bg-1);border:1px solid var(--border);color:${typeColors[t]||'var(--tx-2)'};font-weight:500">${typeLabels[t]||t}: ${byType[t].length}</span>`;
+  });
+  h+='</div>';
+  
+  // List issues
+  Object.keys(byType).forEach(t=>{
+    h+=`<div style="margin-bottom:24px">`;
+    h+=`<h3 style="font-family:var(--serif);font-size:16px;color:${typeColors[t]||'var(--tx-1)'};margin-bottom:10px">${typeLabels[t]||t}</h3>`;
+    byType[t].forEach(issue=>{
+      const dismissed=S.consistencyDismissed&&S.consistencyDismissed[issue.idx];
+      h+=`<div class="card" style="margin-bottom:8px;${dismissed?'opacity:0.4':''}">`;
+      h+=`<div style="display:flex;gap:12px;align-items:flex-start">`;
+      h+=`<div style="flex:1;font-size:12px">`;
+      if(issue.entry1)h+=`<div style="margin-bottom:4px"><strong>${esc(issue.entry1.name||'')}</strong>: <span style="color:var(--red)">${esc(issue.entry1.desc||'')}</span></div>`;
+      if(issue.entry2)h+=`<div style="margin-bottom:4px"><strong>${esc(issue.entry2.name||'')}</strong>: <span style="color:var(--red)">${esc(issue.entry2.desc||'')}</span></div>`;
+      if(issue.issue)h+=`<div style="color:var(--tx-3);font-size:11px;margin-bottom:4px">${esc(issue.issue)}</div>`;
+      if(issue.suggestion)h+=`<div style="color:var(--green);font-weight:500">→ ${esc(issue.suggestion)}</div>`;
+      h+=`</div>`;
+      h+=`<button class="btn btn-sm" data-dismiss-issue="${issue.idx}" style="flex-shrink:0">${dismissed?'Restore':'Dismiss'}</button>`;
+      h+=`</div></div>`;
+    });
+    h+=`</div>`;
+  });
+  
+  return h+'</div>';
 }
 
 // ═══════════════════════════════════════════════════════════════
