@@ -934,17 +934,19 @@ async function revertToOriginal(entryName,segType,rowIdx){
   const k=rvKey(entryName,segType,rowIdx);
   const rv=getRV(k);
   if(!rv||!rv.originalDesc){toast('No original to revert to','error');return}
-  await updateTagDesc(rowIdx,entryName,rv.originalDesc);
+  const origDesc=rv.originalDesc; // Save before clearing
+  await updateTagDesc(rowIdx,entryName,origDesc);
   // Clear the original since we're back to it
   rv.originalDesc='';rv.status='';rv.suggestion='';rv.reviewed=false;
   setRV(k,rv);
-  // Sync to Index tab
+  // Sync to Index tab — use saved origDesc, not the cleared rv.originalDesc
   const entry=findEntry(entryName);
   const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
   if(r){
-    syncDescToIndexTab(entryName,r,rv.originalDesc||'').catch(()=>{});
+    syncDescToIndexTab(entryName,r,origDesc).catch(()=>{});
     syncToIndexTab(entryName,r,'','').catch(()=>{});
   }
+  logActivity(`Reverted: "${entryName}" → "${origDesc}"`);
   buildIndex();render();
   toast('Reverted to original','success');
 }
@@ -1656,6 +1658,7 @@ async function syncToIndexTab(entryName,result,reviewStatus,suggestion){
 
 // Also update the Description column (C) in the Index tab when a description changes
 async function syncDescToIndexTab(entryName,result,newDesc){
+  if(!newDesc&&newDesc!=='')return; // Skip if undefined/null (but allow explicit empty string)
   const section=sectionForEntry(entryName);
   if(!section)return;
   const tabName=indexTabForSection(section);
@@ -1673,7 +1676,7 @@ async function syncDescToIndexTab(entryName,result,newDesc){
       spreadsheetId:S.sheetId,
       range:`'${tabName}'!D${info.sheetRow}`,
       valueInputOption:'RAW',
-      resource:{values:[[newDesc||'']]}
+      resource:{values:[[newDesc]]}
     });
   }catch(e){console.warn('syncDescToIndexTab write error:',e)}
 }
