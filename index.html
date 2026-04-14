@@ -1336,9 +1336,21 @@ async function generateIndexTab(sectionName){
   if(!S.indexData||!S.indexData.sections[sectionName]){toast('No data for '+sectionName,'error');return}
   const tabName='Index - '+sectionName;
   
-  // Check if tab already exists
+  // If tab already exists, delete it first
   const existingTabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
-  if(existingTabs.includes(tabName)){toast(`"${tabName}" already exists. Delete it in the sheet first.`,'error');return}
+  if(existingTabs.includes(tabName)){
+    try{
+      const tabInfo=S.sheetMeta.tabs.find(t=>t.title===tabName);
+      if(tabInfo){
+        await gapi.client.sheets.spreadsheets.batchUpdate({
+          spreadsheetId:S.sheetId,
+          resource:{requests:[{deleteSheet:{sheetId:tabInfo.sid}}]}
+        });
+        // Clear tab map cache for this tab
+        delete _tabMapCache[tabName];
+      }
+    }catch(e){toast(`Failed to delete old "${tabName}": `+(e?.result?.error?.message||e?.message||''),'error');return}
+  }
   
   S.loading=true;render();
   toast(`Generating "${tabName}"…`);
