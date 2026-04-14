@@ -662,7 +662,7 @@ function doUndo(){
       }
       logActivity(`Undid accept: ${action.label}`);
       toast(`Undid: ${action.label}`,'success');
-      buildIndex();render();
+      buildIndex();render(true);
       break;
     }
     case 'deny': {
@@ -683,7 +683,7 @@ function doUndo(){
       }
       logActivity(`Undid edit: ${action.label}`);
       toast(`Undid: ${action.label}`,'success');
-      buildIndex();render();
+      buildIndex();render(true);
       break;
     }
     case 'bulk_accept': {
@@ -697,7 +697,7 @@ function doUndo(){
       });
       logActivity(`Undid bulk accept: ${action.label}`);
       toast(`Undid: ${action.label}`,'success');
-      buildIndex();render();
+      buildIndex();render(true);
       break;
     }
     default:
@@ -853,7 +853,7 @@ async function manualRefresh(){
   toast('Refreshing…');
   try{
     await loadSharedDataFromSheet();
-    buildIndex();render();
+    buildIndex();render(true);
     toast('Synced','success');
   }catch(e){toast('Refresh failed','error')}
 }
@@ -969,7 +969,7 @@ async function revertToOriginal(entryName,segType,rowIdx){
     syncToIndexTab(entryName,r,'','').catch(()=>{});
   }
   logActivity(`Reverted: "${entryName}" → "${origDesc}"`);
-  buildIndex();render();
+  buildIndex();render(true);
   toast('Reverted to original','success');
 }
 
@@ -1059,7 +1059,7 @@ async function acceptSuggestion(entryName,segType,rowIdx){
     syncDescToIndexTab(entryName,r,rv.suggestion).catch(()=>{});
   }
   logActivity(`Accepted: "${entryName}" → "${rv.suggestion}"`);
-  buildIndex();render();
+  buildIndex();render(true);
 }
 
 function denySuggestion(entryName,segType,rowIdx){
@@ -1093,7 +1093,7 @@ async function applyCustomDesc(entryName,segType,rowIdx,customText){
     syncDescToIndexTab(entryName,r,customText).catch(()=>{});
   }
   logActivity(`Custom edit: "${entryName}" → "${customText}"`);
-  buildIndex();render();
+  buildIndex();render(true);
 }
 
 async function bulkAcceptEntry(entryName){
@@ -1123,7 +1123,7 @@ async function bulkAcceptEntry(entryName){
   if(count){
     logActivity(`Bulk accepted ${count} for "${entryName}"`);
     toast(`Accepted ${count} suggestions for "${entryName}"`,'success');
-    buildIndex();render();
+    buildIndex();render(true);
   }
 }
 
@@ -1925,9 +1925,9 @@ const IC={
 // ═══════════════════════════════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════════════════════════════
-function render(){
-  // Don't rebuild DOM while user is editing a description inline
-  if($('#desc-edit')){return}
+function render(force){
+  // Don't rebuild DOM while user is editing inline — UNLESS forced (save/cancel/user action)
+  if(!force&&$('#desc-edit')){return}
   const app=$('#app');
   if(!S.connected){rSetup(app);return}
   if(S.loading&&!S.headers.length){app.innerHTML='<div class="loading-state"><div class="spinner"></div>Loading…</div>';return}
@@ -3014,9 +3014,8 @@ function bindAll(){
           syncDescToIndexTab(entryName,result,newVal).catch(()=>{});
           logActivity(`Edited: "${entryName}" → "${newVal}"`);
           S.editingDesc=null;
-          // Remove the edit input BEFORE render so render() doesn't skip
           if(wrapper.parentNode)wrapper.parentNode.removeChild(wrapper);
-          buildIndex();render();
+          buildIndex();render(true);
         }else{
           toast('Save failed — check console','error');
           saveBtn.disabled=false;saveBtn.innerHTML=IC.check;
@@ -3031,7 +3030,7 @@ function bindAll(){
       ev.stopPropagation();
       S.editingDesc=null;
       if(wrapper.parentNode)wrapper.parentNode.removeChild(wrapper);
-      render();
+      render(true);
     });
     inp.addEventListener('keydown',e=>{if(e.key==='Enter')saveBtn.click();if(e.key==='Escape')cancelBtn.click()});
   });
@@ -3042,11 +3041,13 @@ function bindAll(){
     const txCol=S.headers.findIndex(h=>h.toLowerCase()==='transcript');
     const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
     if(txCol>=0&&S.rows[ri]){
-      S.transcriptPopup={clipName:(S.rows[ri][nameCol]||'Clip'),transcript:S.rows[ri][txCol]||'No transcript available'};render()
+      S.transcriptPopup={clipName:(S.rows[ri][nameCol]||'Clip'),transcript:S.rows[ri][txCol]||'No transcript available'};
+      S.editingDesc=null; // Cancel any active edit
+      render(true);
     }
   });
-  on('#tx-close','click',()=>{S.transcriptPopup=null;render()});
-  on('#tx-x','click',()=>{S.transcriptPopup=null;render()});
+  on('#tx-close','click',()=>{S.transcriptPopup=null;render(true)});
+  on('#tx-x','click',()=>{S.transcriptPopup=null;render(true)});
 
   // Sheet view
   on('#si','input',()=>{S.search=$('#si').value;render();setTimeout(()=>{const e=$('#si');if(e){e.focus();e.selectionStart=e.selectionEnd=e.value.length}},0)});
@@ -3054,7 +3055,7 @@ function bindAll(){
   $$('[data-chk]').forEach(el=>el.onchange=()=>{const i=+el.dataset.chk;S.selected.has(i)?S.selected.delete(i):S.selected.add(i);render()});
   $$('th[data-col]').forEach(el=>el.onclick=()=>{const c=+el.dataset.col;if(S.sortCol===c)S.sortDir=S.sortDir==='asc'?'desc':'asc';else{S.sortCol=c;S.sortDir='asc'}render()});
   $$('[data-dbl]').forEach(el=>el.ondblclick=()=>{const[r,c]=el.dataset.dbl.split('-').map(Number);S.editCell={r,c};S.editVal=(S.rows[r]||[])[c]||'';render();setTimeout(()=>{const e=$('#ei');if(e)e.focus()},0)});
-  const ei=$('#ei');if(ei){ei.oninput=()=>{S.editVal=ei.value};ei.onblur=()=>{if(S.editCell){saveCell(S.editCell.r,S.editCell.c,S.editVal).then(()=>{S.editCell=null;buildIndex();render()})}};ei.onkeydown=e=>{if(e.key==='Enter')ei.blur();if(e.key==='Escape'){S.editCell=null;render()}}}
+  const ei=$('#ei');if(ei){ei.oninput=()=>{S.editVal=ei.value};ei.onblur=()=>{if(S.editCell){saveCell(S.editCell.r,S.editCell.c,S.editVal).then(()=>{S.editCell=null;buildIndex();render(true)})}};ei.onkeydown=e=>{if(e.key==='Enter')ei.blur();if(e.key==='Escape'){S.editCell=null;render()}}}
   on('#btn-del','click',()=>delRows(S.selected));
   on('#btn-desel','click',()=>{S.selected=new Set();render()});
   on('#btn-ref','click',()=>loadTab(S.activeTab));
