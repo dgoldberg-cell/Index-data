@@ -1919,6 +1919,8 @@ const IC={
 // RENDER
 // ═══════════════════════════════════════════════════════════════
 function render(){
+  // Don't rebuild DOM while user is editing a description inline
+  if($('#desc-edit')){return}
   const app=$('#app');
   if(!S.connected){rSetup(app);return}
   if(S.loading&&!S.headers.length){app.innerHTML='<div class="loading-state"><div class="spinner"></div>Loading…</div>';return}
