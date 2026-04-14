@@ -568,9 +568,12 @@ auditSelectMode:false, // Toggle: show audit checkboxes in index preview
 moveSelectMode:false, // Toggle: show move checkboxes at entry level
 moveSelected:new Set(), // Set of entry names selected for moving
 sectionOverrides:{}, // {entryName: newSection} — persisted in shared data
+undoStack:[], // [{type, data, label, timestamp}] — last 50 actions
+activityLog:[], // [{timestamp, user, action}] — shared, last 200 entries
 toolsOpen:false, // Toggle: show Tools section in sidebar
 testEntry:'',testDesc:'',testSection:'Topics',testResult:null, // Test audit
 consistencyResults:null,consistencyRunning:false,consistencyProgress:0,consistencyTotal:0, // Consistency check
+timerRunning:false,timerStart:null,timerElapsed:0,timerInterval:null, // Work timer
 auditSelected:new Set(), // Set of "entryName|segType|rowIdx" keys selected for audit
 // Audit scope
 auditScope:'all', // 'all','sections','entries','visible','selected'
@@ -607,6 +610,91 @@ let _syncDebounce=null;
 let _lastSyncTime=0;
 
 // Debounced write — waits 2 seconds after last change before writing to sheet
+// ═══════════════════════════════════════════════════════════════
+// UNDO & ACTIVITY LOG
+// ═══════════════════════════════════════════════════════════════
+function pushUndo(type,data,label){
+  S.undoStack.push({type,data,label,timestamp:Date.now()});
+  if(S.undoStack.length>50)S.undoStack.shift();
+}
+
+function doUndo(){
+  if(!S.undoStack.length){toast('Nothing to undo');return}
+  const action=S.undoStack.pop();
+  switch(action.type){
+    case 'move':
+      // Restore entries to original sections
+      (action.data.entries||[]).forEach(e=>{
+        if(action.data.originalSections[e]){
+          S.sectionOverrides[e]=action.data.originalSections[e];
+        }else{
+          delete S.sectionOverrides[e];
+        }
+      });
+      syncSharedDataToSheet();
+      buildIndex();
+      logActivity(`Undid move: ${action.label}`);
+      toast(`Undid: ${action.label}`,'success');
+      render();
+      break;
+    case 'accept':
+      // Restore original description
+      const ak=action.data.key;
+      const arv=getRV(ak)||{};
+      arv.status='pending';arv.suggestion=action.data.suggestion;arv.reviewed=false;
+      setRV(ak,arv);
+      // Write original desc back to sheet
+      if(action.data.rowIdx!=null&&action.data.entryName&&action.data.oldDesc!=null){
+        updateTagDesc(action.data.rowIdx,action.data.entryName,action.data.oldDesc).catch(()=>{});
+      }
+      logActivity(`Undid accept: ${action.label}`);
+      toast(`Undid: ${action.label}`,'success');
+      buildIndex();render();
+      break;
+    case 'deny':
+      const dk=action.data.key;
+      const drv=getRV(dk)||{};
+      drv.status='pending';drv.suggestion=action.data.suggestion;
+      setRV(dk,drv);
+      logActivity(`Undid deny: ${action.label}`);
+      toast(`Undid: ${action.label}`,'success');
+      render();
+      break;
+    case 'edit':
+      if(action.data.rowIdx!=null&&action.data.entryName&&action.data.oldDesc!=null){
+        updateTagDesc(action.data.rowIdx,action.data.entryName,action.data.oldDesc).catch(()=>{});
+        const ek=action.data.key;
+        if(ek){const erv=getRV(ek)||{};erv.reviewed=false;erv.status='';setRV(ek,erv)}
+      }
+      logActivity(`Undid edit: ${action.label}`);
+      toast(`Undid: ${action.label}`,'success');
+      buildIndex();render();
+      break;
+    case 'bulk_accept':
+      (action.data.items||[]).forEach(item=>{
+        const rv=getRV(item.key)||{};
+        rv.status='pending';rv.suggestion=item.suggestion;rv.reviewed=false;
+        setRV(item.key,rv);
+        if(item.rowIdx!=null&&item.entryName&&item.oldDesc!=null){
+          updateTagDesc(item.rowIdx,item.entryName,item.oldDesc).catch(()=>{});
+        }
+      });
+      logActivity(`Undid bulk accept: ${action.label}`);
+      toast(`Undid: ${action.label}`,'success');
+      buildIndex();render();
+      break;
+    default:
+      toast('Cannot undo this action');
+  }
+}
+
+function logActivity(action){
+  const entry={timestamp:Date.now(),user:S.user?.name||'Unknown',action};
+  S.activityLog.push(entry);
+  if(S.activityLog.length>200)S.activityLog=S.activityLog.slice(-200);
+  syncSharedDataToSheet();
+}
+
 function syncSharedDataToSheet(){
   if(!S.connected)return;
   if(_syncDebounce)clearTimeout(_syncDebounce);
@@ -615,30 +703,40 @@ function syncSharedDataToSheet(){
 
 // Actually write shared data to the _ReviewData tab
 async function doSyncToSheet(){
-  if(!S.connected||_syncPending)return;
+  if(!S.connected||_syncPending||!checkToken())return;
   _syncPending=true;
   try{
-    // Ensure the tab exists
     await ensureSharedTab();
-    // Pack all shared data into a single JSON object
     const data={
       reviewData:S.reviewData,
       bookmarks:S.idxBookmarks,
       notes:S.idxNotes,
       sectionOverrides:S.sectionOverrides,
+      activityLog:S.activityLog,
       rules:{tagDesc:RULES.tagDesc,consistency:RULES.consistency,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults},
       lastUpdated:Date.now(),
       updatedBy:S.user?.name||'unknown'
     };
     const json=JSON.stringify(data);
-    // Write to cell A2 (A1 is header)
+    // Split into chunks of 40000 chars to stay under cell limit
+    const CHUNK=40000;
+    const chunks=[];
+    for(let i=0;i<json.length;i+=CHUNK)chunks.push(json.slice(i,i+CHUNK));
+    // Write chunks to A2, A3, A4... First cell has chunk count prefix
+    const rows=chunks.map((c,i)=>[i===0?'CHUNKS:'+chunks.length+'|'+c:c]);
+    // Clear old data first (up to 50 rows to be safe)
+    await gapi.client.sheets.spreadsheets.values.clear({
+      spreadsheetId:S.sheetId,
+      range:`'${SHARED_TAB}'!A2:A50`
+    });
     await gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId:S.sheetId,
-      range:`'${SHARED_TAB}'!A2`,
+      range:`'${SHARED_TAB}'!A2:A${2+rows.length-1}`,
       valueInputOption:'RAW',
-      resource:{values:[[json]]}
+      resource:{values:rows}
     });
     _lastSyncTime=Date.now();
+    console.log(`Synced shared data: ${json.length} chars in ${chunks.length} chunk(s)`);
   }catch(e){console.warn('Sync to sheet failed:',e)}
   _syncPending=false;
 }
@@ -649,35 +747,50 @@ async function loadSharedDataFromSheet(){
   try{
     const r=await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId:S.sheetId,
-      range:`'${SHARED_TAB}'!A2`
+      range:`'${SHARED_TAB}'!A2:A50`
     });
-    const val=(r.result.values&&r.result.values[0]&&r.result.values[0][0])||'';
-    if(val){
-      const data=JSON.parse(val);
-      if(data.reviewData)S.reviewData=data.reviewData;
-      if(data.bookmarks)S.idxBookmarks=data.bookmarks;
-      if(data.notes)S.idxNotes=data.notes;
-      if(data.sectionOverrides)S.sectionOverrides=data.sectionOverrides;
-      // Load shared rules
-      if(data.rules&&data.rules.tagDesc){
-        RULES.tagDesc=data.rules.tagDesc;
-        if(data.rules.consistency)RULES.consistency=data.rules.consistency;
-        if(data.rules.segOrder)RULES.segOrder=data.rules.segOrder;
-        if(data.rules.typeMap)RULES.typeMap=data.rules.typeMap;
-        if(data.rules.sectionOrder)RULES.sectionOrder=data.rules.sectionOrder;
-        if(data.rules.relDefaults)RULES.relDefaults=data.rules.relDefaults;
-        RULES.sectionFromPath=sectionFromPath;
-        saveRulesLocal();
+    const rows=r.result.values||[];
+    if(!rows.length)return;
+    
+    // Reassemble chunked JSON
+    let json='';
+    const first=(rows[0]&&rows[0][0])||'';
+    if(first.startsWith('CHUNKS:')){
+      // New chunked format
+      const pipeIdx=first.indexOf('|');
+      const numChunks=parseInt(first.slice(7,pipeIdx),10);
+      json=first.slice(pipeIdx+1); // First chunk after prefix
+      for(let i=1;i<numChunks&&i<rows.length;i++){
+        json+=(rows[i]&&rows[i][0])||'';
       }
-      // Update localStorage cache
-      localStorage.setItem('jw_rv',JSON.stringify(S.reviewData));
-      localStorage.setItem('jw_bm',JSON.stringify(S.idxBookmarks));
-      localStorage.setItem('jw_notes',JSON.stringify(S.idxNotes));
-      _lastSyncTime=Date.now();
-      console.log('Loaded shared data from sheet, updated by:',data.updatedBy,'at:',new Date(data.lastUpdated).toLocaleTimeString());
+    }else{
+      // Legacy single-cell format (backward compatible)
+      json=first;
     }
+    
+    if(!json)return;
+    const data=JSON.parse(json);
+    if(data.reviewData)S.reviewData=data.reviewData;
+    if(data.bookmarks)S.idxBookmarks=data.bookmarks;
+    if(data.notes)S.idxNotes=data.notes;
+    if(data.sectionOverrides)S.sectionOverrides=data.sectionOverrides;
+    if(data.activityLog)S.activityLog=data.activityLog;
+    if(data.rules&&data.rules.tagDesc){
+      RULES.tagDesc=data.rules.tagDesc;
+      if(data.rules.consistency)RULES.consistency=data.rules.consistency;
+      if(data.rules.segOrder)RULES.segOrder=data.rules.segOrder;
+      if(data.rules.typeMap)RULES.typeMap=data.rules.typeMap;
+      if(data.rules.sectionOrder)RULES.sectionOrder=data.rules.sectionOrder;
+      if(data.rules.relDefaults)RULES.relDefaults=data.rules.relDefaults;
+      RULES.sectionFromPath=sectionFromPath;
+      saveRulesLocal();
+    }
+    localStorage.setItem('jw_rv',JSON.stringify(S.reviewData));
+    localStorage.setItem('jw_bm',JSON.stringify(S.idxBookmarks));
+    localStorage.setItem('jw_notes',JSON.stringify(S.idxNotes));
+    _lastSyncTime=Date.now();
+    console.log(`Loaded shared data: ${json.length} chars, updated by:`,data.updatedBy);
   }catch(e){
-    // Tab might not exist yet — that's OK, use localStorage defaults
     console.log('No shared data tab yet, using localStorage');
   }
 }
@@ -907,67 +1020,85 @@ async function acceptSuggestion(entryName,segType,rowIdx){
   const k=rvKey(entryName,segType,rowIdx);
   const rv=getRV(k);
   if(!rv||!rv.suggestion)return;
+  // Get old desc for undo
+  const entry=findEntry(entryName);
+  const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
+  const oldDesc=r?.desc||'';
+  pushUndo('accept',{key:k,suggestion:rv.suggestion,oldDesc,rowIdx,entryName},`"${entryName}": "${oldDesc}" → "${rv.suggestion}"`);
   const ok=await updateTagDesc(rowIdx,entryName,rv.suggestion);
   if(!ok)return;
   rv.status='accepted';rv.reviewed=true;setRV(k,rv);
-  // Sync to Index tab (non-blocking)
-  const entry=findEntry(entryName);
-  const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
   if(r){
     syncToIndexTab(entryName,r,'accepted','').catch(()=>{});
     syncDescToIndexTab(entryName,r,rv.suggestion).catch(()=>{});
   }
+  logActivity(`Accepted: "${entryName}" → "${rv.suggestion}"`);
   buildIndex();render();
 }
 
-// Deny suggestion: save to history, sync to sheet
 function denySuggestion(entryName,segType,rowIdx){
   const k=rvKey(entryName,segType,rowIdx);
   const rv=getRV(k);
   if(!rv)return;
+  pushUndo('deny',{key:k,suggestion:rv.suggestion},`Denied suggestion for "${entryName}"`);
   if(!rv.deniedHistory)rv.deniedHistory=[];
   rv.deniedHistory.push({suggestion:rv.suggestion,reason:rv.reason,time:Date.now()});
   rv.suggestion='';rv.reason='';rv.status='denied';
   setRV(k,rv);
-  // Sync to Index tab (non-blocking)
   const entry=findEntry(entryName);
   const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
   if(r)syncToIndexTab(entryName,r,'denied','').catch(()=>{});
+  logActivity(`Denied suggestion for "${entryName}"`);
   render();
 }
 
-// Apply custom text — update main sheet + Index tab
 async function applyCustomDesc(entryName,segType,rowIdx,customText){
   const k=rvKey(entryName,segType,rowIdx);
+  const entry=findEntry(entryName);
+  const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
+  const oldDesc=r?.desc||'';
+  pushUndo('edit',{key:k,oldDesc,rowIdx,entryName},`"${entryName}": "${oldDesc}" → "${customText}"`);
   const ok=await updateTagDesc(rowIdx,entryName,customText);
   if(!ok)return;
   const rv=getRV(k)||{};
   rv.status='custom';rv.reviewed=true;rv.customApplied=customText;setRV(k,rv);
-  // Sync to Index tab (non-blocking)
-  const entry=findEntry(entryName);
-  const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
   if(r){
     syncToIndexTab(entryName,r,'custom','').catch(()=>{});
     syncDescToIndexTab(entryName,r,customText).catch(()=>{});
   }
+  logActivity(`Custom edit: "${entryName}" → "${customText}"`);
   buildIndex();render();
 }
 
-// Bulk accept all pending suggestions in an entry
 async function bulkAcceptEntry(entryName){
   if(!S.indexData)return;
   const entry=findEntry(entryName);
   if(!entry)return;
+  // Collect undo data for all pending items
+  const undoItems=[];
+  for(const r of entry.results){
+    const k=rvKey(entryName,r.segType,r.rowIdx);
+    const rv=getRV(k);
+    if(rv&&rv.suggestion&&rv.status==='pending'){
+      undoItems.push({key:k,suggestion:rv.suggestion,oldDesc:r.desc||'',rowIdx:r.rowIdx,entryName});
+    }
+  }
+  if(undoItems.length)pushUndo('bulk_accept',{items:undoItems},`Bulk accept ${undoItems.length} for "${entryName}"`);
   let count=0;
   for(const r of entry.results){
     const k=rvKey(entryName,r.segType,r.rowIdx);
     const rv=getRV(k);
     if(rv&&rv.suggestion&&rv.status==='pending'){
-      await acceptSuggestion(entryName,r.segType,r.rowIdx);
-      count++;
+      // Accept without pushing individual undos (bulk undo handles it)
+      const ok=await updateTagDesc(r.rowIdx,entryName,rv.suggestion);
+      if(ok){rv.status='accepted';rv.reviewed=true;setRV(k,rv);count++}
     }
   }
-  if(count)toast(`Accepted ${count} suggestions for "${entryName}"`,'success');
+  if(count){
+    logActivity(`Bulk accepted ${count} for "${entryName}"`);
+    toast(`Accepted ${count} suggestions for "${entryName}"`,'success');
+    buildIndex();render();
+  }
 }
 
 // Migrate old reviewQueue items to new inline system
@@ -1065,18 +1196,67 @@ async function doConnect(cid,sid,ck){
   S.clientId=cid;S.sheetId=sid;S.claudeKey=ck||'';
   localStorage.setItem('jw_cid',cid);localStorage.setItem('jw_sid',sid);if(ck)localStorage.setItem('jw_ckey',ck);
   await initG();
-  return new Promise((r,j)=>{const tc=google.accounts.oauth2.initTokenClient({client_id:cid,scope:SCOPES,callback:async resp=>{
-    if(resp.error){j(new Error(resp.error_description||resp.error));return}
-    try{const u=await(await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+resp.access_token}})).json();S.user={name:u.name||u.email||'User',pic:u.picture||''}}catch{S.user={name:'User',pic:''}}
-    try{const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:sid});S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))}}catch(e){console.error(e)}
-    S.connected=true;r();}});tc.requestAccessToken()});
+  return new Promise((r,j)=>{
+    S._tokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:cid,
+      scope:SCOPES,
+      callback:async resp=>{
+        if(resp.error){j(new Error(resp.error_description||resp.error));return}
+        S._tokenTime=Date.now();
+        try{const u=await(await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+resp.access_token}})).json();S.user={name:u.name||u.email||'User',pic:u.picture||''}}catch{S.user={name:'User',pic:''}}
+        try{const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:sid});S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))}}catch(e){console.error(e)}
+        S.connected=true;
+        // Schedule token refresh every 50 minutes
+        scheduleTokenRefresh();
+        r();
+      }
+    });
+    S._tokenClient.requestAccessToken();
+  });
+}
+
+// Auto-refresh token before it expires (tokens last ~60 min, refresh at 50)
+let _tokenRefreshTimer=null;
+function scheduleTokenRefresh(){
+  if(_tokenRefreshTimer)clearTimeout(_tokenRefreshTimer);
+  _tokenRefreshTimer=setTimeout(()=>{
+    console.log('Refreshing OAuth token…');
+    if(S._tokenClient){
+      try{
+        S._tokenClient.requestAccessToken({prompt:''});
+        // The callback in doConnect will fire again, updating _tokenTime and rescheduling
+      }catch(e){
+        console.error('Token refresh failed:',e);
+        S.connected=false;
+        toast('Session expired — click to reconnect','error');
+        render();
+      }
+    }
+  },50*60*1000); // 50 minutes
+}
+
+// Check if token might be expired before any API call
+function checkToken(){
+  if(!S._tokenTime)return true;
+  const age=(Date.now()-S._tokenTime)/1000/60; // minutes
+  if(age>58){
+    // Token likely expired
+    toast('Session expired — reconnecting…','error');
+    if(S._tokenClient){
+      try{S._tokenClient.requestAccessToken({prompt:''})}catch(e){
+        S.connected=false;render();
+      }
+    }
+    return false;
+  }
+  return true;
 }
 async function loadTab(idx){
   if(!S.sheetMeta?.tabs?.[idx])return;S.loading=true;render();
   try{const r=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:S.sheetId,range:`'${S.sheetMeta.tabs[idx].title}'`});const v=r.result.values||[];S.headers=v.length?v[0]:[];S.rows=v.length>1?v.slice(1).map(r=>{while(r.length<S.headers.length)r.push('');return r}):[];S.visibleCols=new Set(S.headers.map((_,i)=>i));S.selected=new Set();S.sortCol=null;S.search='';S.editCell=null;S.activeTab=idx;buildIndex()}catch(e){toast('Load failed: '+e.message,'error')}
   S.loading=false;render();
 }
-async function saveCell(ri,ci,val){const nm=S.sheetMeta.tabs[S.activeTab].title;try{await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:S.sheetId,range:`'${nm}'!${cl(ci)}${ri+2}`,valueInputOption:'USER_ENTERED',resource:{values:[[val]]}});S.rows[ri][ci]=val;toast('Saved','success')}catch(e){console.error('saveCell error:',e);toast('Save failed: '+(e?.result?.error?.message||e?.message||JSON.stringify(e)),'error')}}
+async function saveCell(ri,ci,val){if(!checkToken())return;const nm=S.sheetMeta.tabs[S.activeTab].title;try{await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:S.sheetId,range:`'${nm}'!${cl(ci)}${ri+2}`,valueInputOption:'USER_ENTERED',resource:{values:[[val]]}});S.rows[ri][ci]=val;toast('Saved','success')}catch(e){console.error('saveCell error:',e);toast('Save failed: '+(e?.result?.error?.message||e?.message||JSON.stringify(e)),'error')}}
 async function saveCells(changes){const nm=S.sheetMeta.tabs[S.activeTab].title;try{await gapi.client.sheets.spreadsheets.values.batchUpdate({spreadsheetId:S.sheetId,resource:{valueInputOption:'USER_ENTERED',data:changes.map(c=>({range:`'${nm}'!${cl(c.col)}${c.row+2}`,values:[[c.value]]}))}});changes.forEach(c=>{if(S.rows[c.row])S.rows[c.row][c.col]=c.value});toast(`Updated ${changes.length} cells`,'success')}catch(e){toast('Batch save failed','error')}}
 async function delRows(idxs){const nm=S.sheetMeta.tabs[S.activeTab].title;const sorted=[...idxs].sort((a,b)=>b-a);try{const sid=S.sheetMeta.tabs[S.activeTab].sid;await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:S.sheetId,resource:{requests:sorted.map(i=>({deleteDimension:{range:{sheetId:sid,dimension:'ROWS',startIndex:i+1,endIndex:i+2}}}))}});S.rows=S.rows.filter((_,i)=>!idxs.has(i));S.selected=new Set();toast(`Deleted ${sorted.length} rows`,'success');buildIndex()}catch(e){toast('Delete failed','error')}render()}
 function logout(){try{google.accounts.oauth2.revoke(gapi.client.getToken()?.access_token)}catch{}S.connected=false;S.sheetMeta=null;S.user=null;S.headers=[];S.rows=[];S.indexData=null;S.aiMsgs=[];localStorage.removeItem('jw_cid');localStorage.removeItem('jw_sid');render()}
@@ -1837,6 +2017,15 @@ function rSidebar(){
 
   h+='</div>';
   if(S.sheetMeta?.tabs?.length){h+='<div class="sidebar-tabs"><h4>Sheet Tabs</h4>';S.sheetMeta.tabs.forEach((t,i)=>{h+=`<div class="stab ${i===S.activeTab?'active':''}" data-stab="${i}">${esc(t.title)}</div>`});h+='</div>'}
+  // Timer widget
+  h+='<div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px">';
+  if(S.timerRunning){
+    h+=`<span id="timer-display" style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)">${formatTimer(S.timerElapsed)}</span>`;
+    h+=`<button class="btn btn-sm btn-red" id="timer-stop" style="font-size:10px;padding:2px 8px">Stop</button>`;
+  }else{
+    h+=`<button class="btn btn-sm btn-green" id="timer-start" style="font-size:10px;padding:2px 8px">⏱ Clock In</button>`;
+  }
+  h+='</div>';
   if(S.user)h+=`<div class="sidebar-user"><div class="sidebar-avatar">${S.user.pic?'<img src="'+S.user.pic+'">':esc(S.user.name.charAt(0))}</div><span class="sidebar-uname">${esc(S.user.name)}</span><button class="btn btn-sm btn-icon" id="blo" title="Sign out">${IC.logout}</button></div>`;
   return h+'</div>';
 }
@@ -1851,13 +2040,54 @@ function rDash(){
   h+=`<div class="card"><h4>Pending Review</h4><div class="val" style="color:${S.reviewQueue.length?'var(--purple)':'var(--green)'}">${S.reviewQueue.length}</div></div>`;
   h+=`<div class="card"><h4>Source Clips</h4><div class="val">${S.rows.length.toLocaleString()}</div></div>`;
   h+='</div>';
-  // Section breakdown
-  h+='<div class="card" style="margin-bottom:18px"><h4>Entries by Section</h4>';
+  // Progress Dashboard — detailed per-section stats
+  h+='<div class="card" style="margin-bottom:18px"><h4 style="margin-bottom:10px">Review Progress by Section</h4>';
+  let grandTotal=0,grandReviewed=0,grandPending=0;
   RULES.sectionOrder.forEach(sec=>{
-    const entries=ix.sections[sec]||[];
-    const pct=ix.totalEntries?(entries.length/ix.totalEntries*100):0;
-    h+=`<div class="progress-row"><div class="progress-label">${sec}</div><div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:var(--gold)"></div></div><div class="progress-count">${entries.length}</div></div>`;
+    const prog=sectionReviewProgress(sec);
+    const entries=(ix.sections[sec]||[]).length;
+    const pct=prog.total?Math.round(prog.reviewed/prog.total*100):0;
+    const pending=Object.values(S.reviewData).filter(rv=>rv.status==='pending'&&rv.suggestion).length;
+    const secPending=(ix.sections[sec]||[]).reduce((s,e)=>s+e.results.filter(r=>{const rv=getRV(rvKey(e.name,r.segType,r.rowIdx));return rv&&rv.status==='pending'&&rv.suggestion}).length,0);
+    grandTotal+=prog.total;grandReviewed+=prog.reviewed;grandPending+=secPending;
+    h+=`<div style="margin-bottom:8px">`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">`;
+    h+=`<span style="font-size:12px;font-weight:500">${sec}</span>`;
+    h+=`<span style="font-size:10px;color:var(--tx-3)">${prog.reviewed}/${prog.total} reviewed (${pct}%)${secPending?' \u00b7 <span style=\"color:var(--purple)\">' +secPending+' pending</span>':''}</span>`;
+    h+=`</div>`;
+    h+=`<div class="progress-track" style="height:6px"><div class="progress-fill" style="width:${pct}%;background:${pct===100?'var(--green)':'var(--gold)'}"></div></div>`;
+    h+=`<div style="display:flex;gap:6px;margin-top:4px">`;
+    h+=`<button class="btn btn-sm" data-bulkauditsec="${sec}" style="font-size:9px;padding:1px 6px">${IC.audit} Audit Section</button>`;
+    h+=`</div>`;
+    h+=`</div>`;
   });
+  const grandPct=grandTotal?Math.round(grandReviewed/grandTotal*100):0;
+  h+=`<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;display:flex;justify-content:space-between;font-size:12px;font-weight:600">`;
+  h+=`<span>Total</span><span>${grandReviewed}/${grandTotal} (${grandPct}%)${grandPending?' \u00b7 <span style=\"color:var(--purple)\">'+grandPending+' pending</span>':''}</span>`;
+  h+=`</div>`;
+  h+='</div>';
+
+  // Duplicate Detection
+  h+='<div class="card" style="margin-bottom:18px"><h4 style="margin-bottom:10px">🔍 Duplicate Entries</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Entries that appear in multiple sections:</p>';
+  const entrySections={};
+  RULES.sectionOrder.forEach(sec=>{
+    (ix.sections[sec]||[]).forEach(e=>{
+      if(!entrySections[e.name])entrySections[e.name]=[];
+      entrySections[e.name].push(sec);
+    });
+  });
+  const dupes=Object.entries(entrySections).filter(([n,secs])=>secs.length>1).sort((a,b)=>a[0].localeCompare(b[0]));
+  if(dupes.length){
+    h+=`<div style="font-size:11px;color:var(--amber);margin-bottom:6px">${dupes.length} entries found in multiple sections</div>`;
+    h+='<div style="max-height:200px;overflow-y:auto;font-size:11px">';
+    dupes.forEach(([name,secs])=>{
+      h+=`<div style="padding:3px 0;border-bottom:1px solid var(--bg-1)"><strong>${esc(name)}</strong> <span style="color:var(--tx-3)">\u2192 ${secs.join(', ')}</span></div>`;
+    });
+    h+='</div>';
+  }else{
+    h+='<div style="font-size:12px;color:var(--green)">No duplicates found.</div>';
+  }
   h+='</div>';
   // Generate Index Tabs section
   const existingTabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
@@ -1887,7 +2117,34 @@ function rDash(){
     h+='</div>';
   }
   h+='</div>';
-  h+=`<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-gold" data-nav="index">${IC.idx} Open Index Preview</button><button class="btn btn-purple" data-nav="auditor">${IC.audit} Run Audit</button><button class="btn" id="run-consistency" style="border-color:var(--blue);color:var(--blue)">🔍 Run Consistency Check</button></div>`;
+  h+=`<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-gold" data-nav="index">${IC.idx} Open Index Preview</button><button class="btn btn-purple" data-nav="auditor">${IC.audit} Run Audit</button><button class="btn" id="run-consistency" style="border-color:var(--blue);color:var(--blue)">🔍 Consistency Check</button><button class="btn" id="export-index" style="border-color:var(--green);color:var(--green)">📄 Export Index</button></div>`;
+
+  // Time Tracking section
+  h+='<div class="card" style="margin-top:18px"><h4 style="margin-bottom:10px">⏱ Time Tracking</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:10px">Clock in/out from the sidebar. Recent sessions:</p>';
+  h+='<div id="time-log-area" style="font-size:12px;color:var(--tx-3)">Loading…</div>';
+  h+=`<button class="btn btn-sm" id="load-time-log" style="margin-top:8px">Refresh Time Log</button>`;
+  h+='</div>';
+
+  // Activity Log
+  h+='<div class="card" style="margin-top:18px"><h4 style="margin-bottom:10px">📋 Recent Activity</h4>';
+  if(S.activityLog.length){
+    h+='<div style="max-height:300px;overflow-y:auto;font-size:11px">';
+    [...S.activityLog].reverse().slice(0,50).forEach(entry=>{
+      const time=new Date(entry.timestamp);
+      const timeStr=time.toLocaleDateString()+' '+time.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      h+=`<div style="padding:4px 0;border-bottom:1px solid var(--bg-1);display:flex;gap:8px">`;
+      h+=`<span style="color:var(--tx-4);white-space:nowrap;min-width:110px">${timeStr}</span>`;
+      h+=`<span style="color:var(--blue);font-weight:500;min-width:60px">${esc(entry.user)}</span>`;
+      h+=`<span style="color:var(--tx-2)">${esc(entry.action)}</span>`;
+      h+=`</div>`;
+    });
+    h+='</div>';
+  }else{
+    h+='<div style="font-size:12px;color:var(--tx-3)">No activity yet.</div>';
+  }
+  h+='</div>';
+
   return h+'</div>';
 }
 
@@ -1929,6 +2186,7 @@ function rIndex(){
   h+=`<div class="tb-layout-btn ${S.idxLayout==='two'?'active':''}" data-idxlayout="two" title="Two columns">❘❘</div>`;
   h+=`</div>`;
   // Sync button (combines sync + rebuild)
+  h+=`<button class="btn btn-sm btn-icon" id="idx-undo" title="Undo last action (Ctrl+Z)" ${S.undoStack.length?'':'disabled'} style="${S.undoStack.length?'':'opacity:0.3'}">↩</button>`;
   h+=`<button class="btn btn-sm btn-icon" id="idx-sync" title="Sync latest data">⟳</button>`;
   h+='</div>';
 
@@ -2365,6 +2623,55 @@ function bindAll(){
   on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
   on('#tools-toggle','click',()=>{S.toolsOpen=!S.toolsOpen;render()});
   on('#run-consistency','click',()=>runConsistencyCheck());
+  on('#export-index','click',()=>exportIndex());
+  // Bulk audit by section
+  $$('[data-bulkauditsec]').forEach(el=>el.onclick=()=>{
+    const sec=el.dataset.bulkauditsec;
+    bulkAuditSection(sec);
+  });
+
+  // Timer
+  on('#timer-start','click',()=>startTimer());
+  on('#timer-stop','click',()=>stopTimer());
+  
+  // Time log on dashboard
+  on('#load-time-log','click',async()=>{
+    const area=$('#time-log-area');
+    if(area)area.innerHTML='Loading…';
+    const log=await loadTimeLog();
+    const area2=$('#time-log-area');
+    if(!area2)return;
+    if(!log.length){area2.innerHTML='No time entries yet.';return}
+    // Group by user
+    const byUser={};
+    log.forEach(e=>{if(!byUser[e.user])byUser[e.user]=[];byUser[e.user].push(e)});
+    let html='';
+    Object.keys(byUser).sort().forEach(user=>{
+      const entries=byUser[user];
+      const totalMin=entries.reduce((s,e)=>s+e.duration,0);
+      const totalH=Math.floor(totalMin/60);
+      const remM=totalMin%60;
+      html+=`<div style="margin-bottom:12px">`;
+      html+=`<div style="font-weight:600;font-size:13px;margin-bottom:4px">${esc(user)} <span style="font-weight:400;color:var(--tx-3)">— ${totalH}h ${remM}m total</span></div>`;
+      html+=`<table style="width:100%;font-size:11px;border-collapse:collapse">`;
+      html+=`<tr style="color:var(--tx-4);border-bottom:1px solid var(--border)"><td style="padding:3px 6px">Date</td><td>In</td><td>Out</td><td>Min</td><td>Section</td></tr>`;
+      entries.slice(-20).reverse().forEach(e=>{
+        html+=`<tr style="border-bottom:1px solid var(--bg-1)"><td style="padding:3px 6px">${esc(e.date)}</td><td>${esc(e.clockIn)}</td><td>${esc(e.clockOut)}</td><td>${e.duration}</td><td>${esc(e.section)}</td></tr>`;
+      });
+      html+=`</table></div>`;
+    });
+    area2.innerHTML=html;
+  });
+  // Auto-load time log when on dashboard
+  if(S.view==='dashboard'){
+    setTimeout(async()=>{
+      const area=$('#time-log-area');
+      if(!area)return;
+      const log=await loadTimeLog();
+      if(!log.length){area.innerHTML='No time entries yet.';return}
+      $('#load-time-log')?.click();
+    },500);
+  }
   on('#rerun-consistency','click',()=>runConsistencyCheck());
   if(!S.consistencyDismissed)S.consistencyDismissed={};
   $$('[data-dismiss-issue]').forEach(el=>el.onclick=()=>{
@@ -2389,6 +2696,7 @@ function bindAll(){
     },300);
   });
   $$('[data-tree]').forEach(el=>el.onclick=()=>{S.idxActiveEntry=el.dataset.tree;render()});
+  on('#idx-undo','click',()=>doUndo());
   on('#idx-sync','click',()=>manualRefresh());
   on('#idx-page-prev','click',()=>{if(S.idxPage>0){S.idxPage--;render();$('.idx-body')?.scrollTo(0,0)}});
   on('#idx-page-next','click',()=>{S.idxPage++;render();$('.idx-body')?.scrollTo(0,0)});
@@ -2427,18 +2735,16 @@ function bindAll(){
     const target=$('#move-target')?.value;
     if(!target||!S.moveSelected.size)return;
     const names=[...S.moveSelected];
-    const currentSec=S.idxActiveSection;
-    // Confirm
     if(!confirm(`Move ${names.length} entry/entries to "${target}"?`))return;
+    // Save undo data — capture current section for each entry
+    const originalSections={};
+    names.forEach(name=>{originalSections[name]=S.sectionOverrides[name]||null});
+    pushUndo('move',{entries:names,originalSections,target},`${names.length} entries → ${target}`);
     // Apply overrides
-    names.forEach(name=>{
-      S.sectionOverrides[name]=target;
-    });
-    // Sync to shared data
+    names.forEach(name=>{S.sectionOverrides[name]=target});
+    logActivity(`Moved ${names.length} entries to ${target}: ${names.slice(0,5).join(', ')}${names.length>5?'…':''}`);
     syncSharedDataToSheet();
-    // Clear move mode
     S.moveSelectMode=false;S.moveSelected=new Set();
-    // Rebuild index with new overrides
     buildIndex();
     toast(`Moved ${names.length} entries to ${target}`,'success');
     render();
@@ -2598,17 +2904,18 @@ function bindAll(){
     const cancelBtn=$('#desc-cancel');
     if(saveBtn)saveBtn.onclick=async()=>{
       const newVal=$('#desc-edit')?.value||'';
-      console.log('Saving desc:',{entryName,segType,ri:+ri,rowIdx:result.rowIdx,oldDesc:result.desc,newVal});
       if(newVal===result.desc){toast('No changes made');return}
+      const clipType=(S.rows[result.rowIdx]?.[S.headers.findIndex(h=>h.toLowerCase()==='type')]||'').trim();
+      const st=RULES.typeMap[clipType]||result.segType||'Addresses';
+      const k=rvKey(entryName,st,result.rowIdx);
+      pushUndo('edit',{key:k,oldDesc:result.desc,rowIdx:result.rowIdx,entryName},`"${entryName}": "${result.desc}" → "${newVal}"`);
       const ok=await updateTagDesc(result.rowIdx,entryName,newVal);
       if(ok){
-        const clipType=(S.rows[result.rowIdx]?.[S.headers.findIndex(h=>h.toLowerCase()==='type')]||'').trim();
-        const st=RULES.typeMap[clipType]||result.segType||'Addresses';
-        const k=rvKey(entryName,st,result.rowIdx);
         const rv=getRV(k)||{};
         rv.reviewed=true;rv.status='manual';
         setRV(k,rv);
         syncDescToIndexTab(entryName,result,newVal).catch(()=>{});
+        logActivity(`Edited: "${entryName}" → "${newVal}"`);
         buildIndex();render();
       }
     };
@@ -2776,9 +3083,9 @@ Description:"${S.testDesc||'[empty]'}"`;
 
 // Keyboard shortcuts for review
 function handleKeyShortcut(e){
-  // Don't intercept when typing in inputs
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
-  // 'r' toggles review mode
+  // Ctrl+Z / Cmd+Z undo
+  if(e.key==='z'&&(e.ctrlKey||e.metaKey)){e.preventDefault();doUndo();return}
   if(e.key==='r'&&!e.ctrlKey&&!e.metaKey){S.reviewMode=!S.reviewMode;render();return}
 }
 
@@ -2918,6 +3225,246 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
 // ═══════════════════════════════════════════════════════════════
 // CONSISTENCY CHECK
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// WORK TIMER
+// ═══════════════════════════════════════════════════════════════
+const TIME_TAB='_TimeTracking';
+
+async function ensureTimeTab(){
+  const tabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
+  if(tabs.includes(TIME_TAB))return;
+  try{
+    await gapi.client.sheets.spreadsheets.batchUpdate({
+      spreadsheetId:S.sheetId,
+      resource:{requests:[{addSheet:{properties:{title:TIME_TAB}}}]}
+    });
+    // Write headers
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId:S.sheetId,
+      range:`'${TIME_TAB}'!A1:F1`,
+      valueInputOption:'RAW',
+      resource:{values:[['Date','User','Clock In','Clock Out','Duration (min)','Section']]}
+    });
+    const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+    S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+  }catch(e){console.warn('ensureTimeTab error:',e)}
+}
+
+function startTimer(){
+  if(S.timerRunning)return;
+  S.timerRunning=true;
+  S.timerStart=Date.now();
+  S.timerElapsed=0;
+  S.timerInterval=setInterval(()=>{
+    S.timerElapsed=Math.floor((Date.now()-S.timerStart)/1000);
+    const el=$('#timer-display');
+    if(el)el.textContent=formatTimer(S.timerElapsed);
+  },1000);
+  toast('Timer started','success');
+  render();
+}
+
+async function stopTimer(){
+  if(!S.timerRunning)return;
+  clearInterval(S.timerInterval);
+  S.timerRunning=false;
+  const durationMin=Math.round(S.timerElapsed/60);
+  const now=new Date();
+  const startTime=new Date(S.timerStart);
+  const section=S.idxActiveSection==='all'?'All Sections':S.idxActiveSection;
+  const user=S.user?.name||'Unknown';
+  
+  // Save to sheet
+  try{
+    await ensureTimeTab();
+    // Find next empty row
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TIME_TAB}'!A:A`
+    });
+    const nextRow=(r.result.values?.length||1)+1;
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId:S.sheetId,
+      range:`'${TIME_TAB}'!A${nextRow}:F${nextRow}`,
+      valueInputOption:'RAW',
+      resource:{values:[[
+        now.toLocaleDateString(),
+        user,
+        startTime.toLocaleTimeString(),
+        now.toLocaleTimeString(),
+        durationMin,
+        section
+      ]]}
+    });
+    toast(`Saved ${durationMin} min to timesheet`,'success');
+  }catch(e){
+    toast('Failed to save time: '+(e?.result?.error?.message||e?.message||''),'error');
+    console.error('Timer save error:',e);
+  }
+  
+  S.timerElapsed=0;S.timerStart=null;
+  render();
+}
+
+function formatTimer(secs){
+  const h=Math.floor(secs/3600);
+  const m=Math.floor((secs%3600)/60);
+  const s=secs%60;
+  return(h>0?h+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+
+async function loadTimeLog(){
+  if(!S.connected)return[];
+  try{
+    const tabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
+    if(!tabs.includes(TIME_TAB))return[];
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TIME_TAB}'!A2:F500`
+    });
+    return(r.result.values||[]).map(row=>({
+      date:row[0]||'',user:row[1]||'',clockIn:row[2]||'',clockOut:row[3]||'',
+      duration:+row[4]||0,section:row[5]||''
+    }));
+  }catch(e){return[]}
+}
+
+// Bulk audit an entire section
+async function bulkAuditSection(sectionName){
+  if(!S.claudeKey){toast('No API key','error');return}
+  if(!S.indexData){toast('No index data','error');return}
+  const entries=S.indexData.sections[sectionName]||[];
+  if(!entries.length){toast('No entries in '+sectionName,'error');return}
+  // Collect all items
+  const items=[];
+  entries.forEach(e=>{
+    e.results.forEach(r=>{
+      items.push({entryName:e.name,section:sectionName,desc:r.desc,rel:r.rel,transcript:r.transcript,rowIdx:r.rowIdx,clipName:r.clipName,segType:r.segType});
+    });
+  });
+  if(!confirm(`Audit entire "${sectionName}" section? (${items.length} descriptions)`))return;
+  
+  S.auditRunning=true;S.auditProgress=0;S.auditTotal=items.length;
+  toast(`Auditing ${sectionName}: ${items.length} items…`);render();
+  
+  const bs=S.auditBatch;let totalFixed=0;
+  for(let i=0;i<items.length;i+=bs){
+    const batch=items.slice(i,i+bs);
+    try{
+      const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
+      const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" \u2192 "${e.desc}"`).join('\n  ');
+      const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" \u2192 "${e.desc}"`).join('\n  ');
+      const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}\u2192${s.right}`).join(', ');
+      const tightenEx=(RULES.tagDesc.tightenExamples||[]).map(e=>`"${e.before}" \u2192 "${e.after}"`).join('\n  ');
+      const prompt=`Audit these tag descriptions for the JEM Video Index book.
+
+RULES \u2014 flag as "fix" if ANY rule is violated:
+${rulesText}
+
+SPELLING FIXES: ${spellingFixes}
+
+GOOD EXAMPLES:
+  ${goodEx}
+
+BAD EXAMPLES:
+  ${badEx}
+
+TIGHTENING EXAMPLES:
+  ${tightenEx}
+
+The description reads as "[Entry name]: [description]" like a subtitle.
+
+JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}
+
+${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,150)}"`).join('\n\n')}`;
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'Strict editor for JEM Video Index. JSON array only.',messages:[{role:'user',content:prompt}]})});
+      if(!resp.ok)throw new Error('API '+resp.status);
+      const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
+      let parsed;try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{const m2=txt.match(/\[[\s\S]*\]/);if(m2)parsed=JSON.parse(m2[0]);else throw new Error('Parse fail')}
+      let fx=0;
+      parsed.forEach(p=>{
+        const e=batch[p.idx!=null?p.idx:p.index];
+        if(!e)return;
+        const k=rvKey(e.entryName,e.segType,e.rowIdx);
+        if(p.status==='fix'||p.status==='generate'){
+          const existing=getRV(k);
+          setRV(k,{suggestion:p.suggestion||'',reason:p.reason||'',status:'pending',reviewed:false,deniedHistory:(existing?.deniedHistory||[]),originalDesc:existing?.originalDesc||''});
+          fx++;
+        }else{
+          setRV(k,{...(getRV(k)||{}),status:'ok'});
+        }
+      });
+      totalFixed+=fx;
+    }catch(e){toast('Audit error: '+e.message,'error')}
+    S.auditProgress=Math.min(i+bs,items.length);
+    if(i+bs<items.length){
+      toast(`Auditing ${sectionName}… ${S.auditProgress}/${S.auditTotal}`);
+      await new Promise(r=>setTimeout(r,1500));
+    }
+  }
+  S.auditRunning=false;
+  const keptCount=items.length-totalFixed;
+  logActivity(`Audited ${sectionName}: ${totalFixed} need changes, ${keptCount} look good`);
+  toast(`${sectionName}: ${totalFixed} need changes, ${keptCount} look good`,'success');
+  render();
+}
+
+// Export final index as downloadable HTML (print-ready book format)
+function exportIndex(){
+  if(!S.indexData){toast('No index data','error');return}
+  const ix=S.indexData;
+  let html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>JEM Video Index</title>
+<style>
+body{font-family:'Source Serif 4',Georgia,serif;max-width:800px;margin:0 auto;padding:40px;color:#1a1a1a;font-size:12px;line-height:1.5}
+h1{font-size:28px;text-align:center;margin-bottom:40px;border-bottom:2px solid #8c7a50;padding-bottom:10px}
+h2{font-size:20px;margin-top:30px;border-bottom:1px solid #8c7a50;padding-bottom:6px;color:#3a3226;page-break-after:avoid}
+.entry{margin-bottom:10px;page-break-inside:avoid}
+.entry-name{font-weight:700;font-size:14px}
+.seg-label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-top:4px}
+.result{margin-left:16px;font-size:11.5px}
+.desc{color:#333}
+.rel{color:#888;font-style:italic;font-size:10px}
+.ref{color:#4a6898;font-family:monospace;font-size:10px}
+@media print{h2{page-break-before:always}h2:first-of-type{page-break-before:avoid}}
+</style></head><body>
+<h1>JEM Video Index</h1>`;
+
+  RULES.sectionOrder.forEach(sec=>{
+    const entries=ix.sections[sec]||[];
+    if(!entries.length)return;
+    html+=`<h2>${sec}</h2>`;
+    entries.forEach(e=>{
+      html+=`<div class="entry"><div class="entry-name">${esc(e.name)}</div>`;
+      const byseg={};
+      e.results.forEach(r=>{if(!byseg[r.segType])byseg[r.segType]=[];byseg[r.segType].push(r)});
+      RULES.segOrder.forEach(seg=>{
+        if(!byseg[seg])return;
+        html+=`<div class="seg-label">${seg}</div>`;
+        byseg[seg].forEach(r=>{
+          html+=`<div class="result">`;
+          if(r.desc)html+=`<span class="desc">${esc(r.desc)}</span>`;
+          if(r.rel)html+=` <span class="rel">[${esc(r.rel)}]</span>`;
+          if(r.clipType==='Film Chapter'||r.clipType==='Film'){
+            html+=` <span class="ref">${esc(r.pvName||r.clipName)}</span>`;
+          }else if(r.progNum){
+            html+=` <span class="ref">#${esc(r.progNum)}</span>`;
+          }
+          html+=`</div>`;
+        });
+      });
+      html+=`</div>`;
+    });
+  });
+
+  html+=`</body></html>`;
+  const blob=new Blob([html],{type:'text/html'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='JEM-Video-Index.html';
+  a.click();
+  toast('Index exported as HTML','success');
+}
+
 async function runConsistencyCheck(){
   if(!S.claudeKey){toast('No API key','error');return}
   if(!S.indexData){toast('No index data','error');return}
