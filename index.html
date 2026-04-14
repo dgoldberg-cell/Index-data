@@ -180,7 +180,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,.15);z-index:299}
 
 /* Inline edit */
-.idx-inline-edit{display:flex;gap:4px;align-items:center}
+.idx-inline-edit{display:flex;gap:4px;align-items:center;position:relative;z-index:20}
 .idx-inline-input{border:1px solid var(--gold);border-radius:4px;padding:2px 8px;font-size:12px;font-family:var(--font);color:var(--tx-1);outline:none;background:var(--bg-white);flex:1;min-width:150px}
 
 /* Bulk bar */
@@ -2988,7 +2988,9 @@ function bindAll(){
     el.replaceWith(wrapper);
     inp.focus();
     
-    saveBtn.addEventListener('click',async()=>{
+    saveBtn.addEventListener('click',async(ev)=>{
+      ev.stopPropagation();ev.preventDefault();
+      console.log('Save clicked! Value:', inp.value);
       const newVal=inp.value||'';
       if(newVal===result.desc){toast('No changes made');return}
       saveBtn.disabled=true;saveBtn.textContent='…';
@@ -3005,17 +3007,25 @@ function bindAll(){
           syncDescToIndexTab(entryName,result,newVal).catch(()=>{});
           logActivity(`Edited: "${entryName}" → "${newVal}"`);
           S.editingDesc=null;
+          // Remove the edit input BEFORE render so render() doesn't skip
+          if(wrapper.parentNode)wrapper.parentNode.removeChild(wrapper);
           buildIndex();render();
         }else{
           toast('Save failed — check console','error');
           saveBtn.disabled=false;saveBtn.innerHTML=IC.check;
         }
       }catch(e){
-        toast('Error: '+e.message,'error');
+        console.error('Save error:',e);
+        toast('Error: '+(e.message||JSON.stringify(e)),'error');
         saveBtn.disabled=false;saveBtn.innerHTML=IC.check;
       }
     });
-    cancelBtn.addEventListener('click',()=>{S.editingDesc=null;render()});
+    cancelBtn.addEventListener('click',(ev)=>{
+      ev.stopPropagation();
+      S.editingDesc=null;
+      if(wrapper.parentNode)wrapper.parentNode.removeChild(wrapper);
+      render();
+    });
     inp.addEventListener('keydown',e=>{if(e.key==='Enter')saveBtn.click();if(e.key==='Escape')cancelBtn.click()});
   });
 
