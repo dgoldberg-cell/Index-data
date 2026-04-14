@@ -408,7 +408,7 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 // ═══════════════════════════════════════════════════════════════
 // JEM INDEX WORKSTATION v2
 // ═══════════════════════════════════════════════════════════════
-const DISC='https://sheets.googleapis.com/$discovery/rest?version=v4',SCOPES='https://www.googleapis.com/auth/spreadsheets';
+const DISC='https://sheets.googleapis.com/$discovery/rest?version=v4',SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
 // sectionFromPath is a function — must never be serialized
 function sectionFromPath(p){if(p.startsWith('People/'))return'People';if(p.includes('History'))return'History';if(p.startsWith('Time/')||p.includes('Calendar'))return'Dates';if(p.startsWith('Place/')||p.includes('Location')||p.includes('Country'))return'Locations';if(p.includes('Nigun'))return'Nigunim';if(p.includes('Organization')||p.includes('Book'))return'Orgs & Books';return'Topics'}
@@ -3602,6 +3602,25 @@ function rConsistency(){
 migrateOldQueue();
 render();
 window.addEventListener('resize',fixIdxScroll);
+
+// Auto-reconnect if we have saved credentials
+(async()=>{
+  const savedCid=localStorage.getItem('jw_cid');
+  const savedSid=localStorage.getItem('jw_sid');
+  const savedKey=localStorage.getItem('jw_ckey');
+  if(savedCid&&savedSid&&!S.connected){
+    try{
+      S.loading=true;render();
+      await doConnect(savedCid,savedSid,savedKey||'');
+      await loadSharedDataFromSheet();
+      await loadTab(0);
+      startAutoRefresh();
+    }catch(e){
+      console.log('Auto-reconnect failed, showing login:',e.message);
+    }
+    S.loading=false;render();
+  }
+})();
 </script>
 </body>
 </html>
