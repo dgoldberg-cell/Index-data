@@ -864,13 +864,16 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
   if(kwCol<0||!S.rows[rowIdx]){console.error('updateTagDesc: no kwCol or row',{kwCol,rowIdx});return false}
   try{
     let kw=JSON.parse(S.rows[rowIdx][kwCol]);
-    const tag=kw.find(t=>t.name===entryName);
+    // Try exact match first, then trimmed, then case-insensitive
+    let tag=kw.find(t=>t.name===entryName);
+    if(!tag)tag=kw.find(t=>(t.name||'').trim()===entryName.trim());
+    if(!tag)tag=kw.find(t=>(t.name||'').trim().toLowerCase()===entryName.trim().toLowerCase());
     if(!tag){
       console.error('updateTagDesc: tag not found!',{entryName,availableTags:kw.map(t=>t.name)});
-      toast('Tag "'+entryName+'" not found in row '+rowIdx,'error');
+      toast('Tag "'+entryName+'" not found in row '+rowIdx+'. Tags: '+kw.map(t=>t.name).join(', '),'error');
       return false;
     }
-    console.log('updateTagDesc: found tag',{entryName,oldDesc:tag.description,newDesc});
+    console.log('updateTagDesc: found tag',{entryName,matchedName:tag.name,oldDesc:tag.description,newDesc});
     const oldDesc=tag.description||'';
     
     // Save original in ALL review data entries for this tag on this row
