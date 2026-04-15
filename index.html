@@ -198,6 +198,25 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .confirm-ok{background:var(--gold);color:#fff;border-color:var(--gold)!important}
 .confirm-cancel{background:var(--bg-0);color:var(--tx-2)}
 
+/* Notification bell */
+.notif-bell{position:relative;cursor:pointer;font-size:16px;padding:4px}
+.notif-badge{position:absolute;top:-2px;right:-4px;background:var(--red);color:#fff;font-size:8px;font-weight:700;min-width:14px;height:14px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 3px}
+/* Notification panel */
+.notif-panel{position:fixed;top:0;right:0;width:340px;height:100vh;background:var(--bg-white);box-shadow:-4px 0 20px rgba(0,0,0,.1);z-index:250;display:flex;flex-direction:column}
+.notif-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.notif-list{flex:1;overflow-y:auto;padding:8px}
+.notif-item{padding:8px 10px;border-radius:6px;margin-bottom:4px;cursor:pointer;font-size:11px;line-height:1.4;transition:background .1s}
+.notif-item:hover{background:var(--bg-1)}
+.notif-item.unread{background:var(--amber-bg);border-left:3px solid var(--amber)}
+.notif-item .notif-from{font-weight:600;color:var(--blue)}
+.notif-item .notif-time{font-size:9px;color:var(--tx-4)}
+/* @ mention dropdown */
+.mention-dropdown{position:absolute;bottom:100%;left:10px;right:10px;background:var(--bg-white);border:1px solid var(--border);border-radius:6px;box-shadow:0 -4px 12px rgba(0,0,0,.1);max-height:150px;overflow-y:auto;z-index:10}
+.mention-item{padding:6px 10px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px}
+.mention-item:hover{background:var(--bg-1)}
+.mention-item .mention-name{font-weight:500;color:var(--tx-1)}
+.mention-item .mention-email{font-size:10px;color:var(--tx-4)}
+
 /* Jump highlight animation */
 @keyframes jumpHighlight{0%{background:rgba(140,122,80,.25)}100%{background:transparent}}
 .jump-highlight{animation:jumpHighlight 3s ease-out}
@@ -606,10 +625,14 @@ sectionOverrides:{}, // {entryName: newSection} — persisted in shared data
 undoStack:[], // [{type, data, label, timestamp}] — last 50 actions
 activityLog:[], // [{timestamp, user, action}] — shared, last 200 entries
 showAllActivity:false, // Toggle: show everyone's activity (admins only)
-descNotes:{}, // {key: {thread: [{user, text, timestamp}]}} — shared notes
+descNotes:{}, // {key: {thread: [{user, text, timestamp, mentions:[]}]}} — shared notes
 notePopup:null, // {key, title} — currently open note popup
+teamMembers:[], // [{name, email, lastSeen}] — auto-populated on login, shared
+notifications:[], // [{id, type, from, noteKey, noteTitle, text, timestamp, read}] — shared per-user
+notifOpen:false, // Toggle: show notifications panel
 notesPopup:null, // {key, label} — currently open notes popup
 toolsOpen:false, // Toggle: show Tools section in sidebar
+tabsOpen:false, // Toggle: show Sheet Tabs in sidebar
 testEntry:'',testDesc:'',testSection:'Topics',testResult:null, // Test audit
 consistencyResults:null,consistencyRunning:false,consistencyProgress:0,consistencyTotal:0, // Consistency check
 timerRunning:false,timerStart:null,timerElapsed:0,timerInterval:null, // Work timer
@@ -775,6 +798,8 @@ async function doSyncToSheet(){
       bookmarks_by_user:S._allBookmarks||{},
       notes:S.idxNotes,
       descNotes:S.descNotes,
+      teamMembers:S.teamMembers,
+      notifications:S.notifications,
       sectionOverrides:S.sectionOverrides,
       activityLog:S.activityLog,
       rules:{tagDesc:RULES.tagDesc,consistency:RULES.consistency,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults},
@@ -848,6 +873,8 @@ async function loadSharedDataFromSheet(){
     }
     if(data.notes)S.idxNotes=data.notes;
     if(data.descNotes)S.descNotes=data.descNotes;
+    if(data.teamMembers)S.teamMembers=data.teamMembers;
+    if(data.notifications)S.notifications=data.notifications;
     if(data.sectionOverrides)S.sectionOverrides=data.sectionOverrides;
     if(data.activityLog)S.activityLog=data.activityLog;
     if(data.rules&&data.rules.tagDesc){
@@ -894,6 +921,36 @@ async function ensureSharedTab(){
 }
 
 // Auto-refresh: pull shared data from sheet every 3 minutes
+function registerTeamMember(){
+  if(!S.user?.email)return;
+  const existing=S.teamMembers.find(m=>m.email===S.user.email);
+  if(existing){existing.name=S.user.name;existing.lastSeen=Date.now()}
+  else{S.teamMembers.push({name:S.user.name,email:S.user.email,lastSeen:Date.now()})}
+  syncSharedDataToSheet();
+}
+
+function getMyNotifications(){
+  const myEmail=S.user?.email||'';
+  return(S.notifications||[]).filter(n=>n.to===myEmail);
+}
+
+function getUnreadCount(){
+  return getMyNotifications().filter(n=>!n.read).length;
+}
+
+function sendMention(toEmail,fromName,noteKey,noteTitle,text){
+  if(!S.notifications)S.notifications=[];
+  S.notifications.push({
+    id:Date.now()+'_'+Math.random().toString(36).slice(2,6),
+    type:'mention',to:toEmail,from:fromName,
+    noteKey,noteTitle,text,
+    timestamp:Date.now(),read:false
+  });
+  // Keep last 500 notifications total
+  if(S.notifications.length>500)S.notifications=S.notifications.slice(-500);
+  syncSharedDataToSheet();
+}
+
 function startAutoRefresh(){
   if(_syncTimer)clearInterval(_syncTimer);
   _syncTimer=setInterval(async()=>{
@@ -2166,7 +2223,7 @@ function render(force=true){
       h+=`</div>`;
     });
     h+=`</div>`;
-    h+=`<div class="note-popup-input"><input id="note-input" placeholder="Type a comment…" autocomplete="off"><button id="note-send">Send</button></div>`;
+    h+=`<div class="note-popup-input" style="position:relative"><div class="mention-dropdown" id="mention-dd" style="display:none"></div><input id="note-input" placeholder="Type a comment… Use @ to mention" autocomplete="off"><button id="note-send">Send</button></div>`;
     h+=`</div></div>`;
   }
   if(S.notesPopup)h+=rNotesPopup();
@@ -2193,6 +2250,30 @@ function render(force=true){
     h+=`<button class="af-run" id="move-execute">Move</button>`;
     h+=`<span class="af-close" id="move-float-x" title="Dismiss">✕</span>`;
     h+='</div>';
+  }
+  // Notification panel
+  if(S.notifOpen){
+    const myNotifs=getMyNotifications().sort((a,b)=>b.timestamp-a.timestamp);
+    h+=`<div class="notif-panel">`;
+    h+=`<div class="notif-head"><h3 style="font-size:14px;margin:0">🔔 Notifications</h3><div style="display:flex;gap:6px"><button class="btn btn-sm" id="notif-readall" style="font-size:9px">Mark all read</button><button class="btn btn-sm btn-icon" id="notif-close">✕</button></div></div>`;
+    h+=`<div class="notif-list">`;
+    if(!myNotifs.length){
+      h+=`<div style="text-align:center;padding:30px;color:var(--tx-3);font-size:12px">No notifications yet</div>`;
+    }
+    myNotifs.forEach(n=>{
+      const time=new Date(n.timestamp);
+      const timeStr=time.toLocaleDateString()+' '+time.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      h+=`<div class="notif-item ${n.read?'':'unread'}" data-notif-click="${esc(n.id)}">`;
+      h+=`<div><span class="notif-from">${esc(n.from)}</span> mentioned you</div>`;
+      h+=`<div style="color:var(--tx-2);margin-top:2px">${esc(n.noteTitle||'')}: "${esc((n.text||'').slice(0,80))}"</div>`;
+      h+=`<div class="notif-time">${timeStr}</div>`;
+      h+=`</div>`;
+    });
+    h+=`</div></div>`;
+  }
+  // Floating AI chat button (bottom-right, always visible)
+  if(!S.aiOpen){
+    h+=`<button id="ai-fab" style="position:fixed;bottom:20px;right:20px;z-index:100;width:48px;height:48px;border-radius:50%;background:var(--gold);color:#fff;border:none;box-shadow:0 4px 12px rgba(0,0,0,.2);cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;transition:transform .1s" title="AI Assistant">🤖</button>`;
   }
   // Toasts
   h+='<div class="toasts">';S.toasts.forEach(t=>{h+=`<div class="toast ${t.t}">${esc(t.m)}</div>`});h+='</div>';
@@ -2239,25 +2320,23 @@ function updateAuditFloat(){
 }
 
 function rSidebar(){
-  let h='<div class="sidebar"><div class="sidebar-logo">JEM Index<span>Workstation</span></div>';
+  let h='<div class="sidebar">';
+  // Logo + title
+  h+=`<div class="sidebar-logo" style="display:flex;align-items:center;gap:8px"><img src="${JEM_LOGO}" alt="JEM" style="width:28px;height:28px;border-radius:4px">JEM Index<span>Workstation</span></div>`;
   h+=`<div class="sidebar-sheet">${esc(S.sheetMeta?.title||S.sheetId)}</div>`;
   h+='<div class="sidebar-nav">';
   // Main views
-  [{id:'index',ic:IC.idx,l:'Index Preview'},{id:'dashboard',ic:IC.dash,l:'Dashboard'},{id:'settings',ic:IC.settings,l:'Settings'}].forEach(n=>{
+  [{id:'index',ic:IC.idx,l:'Index Preview'},{id:'dashboard',ic:IC.dash,l:'Dashboard'}].forEach(n=>{
     h+=`<div class="nav-item ${S.view===n.id?'active':''}" data-nav="${n.id}">${n.ic}<span>${n.l}</span></div>`;
   });
 
-  // Review Progress — right after main nav
-  if(S.indexData){
-    h+='<div class="nav-sec" style="margin-top:14px">Review Progress</div>';
-    RULES.sectionOrder.forEach(sec=>{
-      const prog=sectionReviewProgress(sec);
-      if(!prog.total)return;
-      const pct=Math.round(prog.reviewed/prog.total*100);
-      const done=isSectionReviewed(sec);
-      h+=`<div class="sidebar-progress"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:${done?'var(--green)':'var(--tx-3)'};font-weight:${done?'600':'400'}">${sec}</span><span class="sidebar-progress-text">${prog.reviewed}/${prog.total}</span></div><div class="sidebar-progress-bar"><div class="sidebar-progress-fill" style="width:${pct}%"></div></div></div>`;
-    });
+  // Notes — nav item with count
+  const noteKeys=Object.keys(S.descNotes||{}).filter(k=>{const n=S.descNotes[k];return n&&n.thread&&n.thread.length>0&&!n.resolved});
+  if(noteKeys.length){
+    h+=`<div class="nav-item ${S.view==='notes'?'active':''}" data-nav="notes"><span style="color:var(--amber)">💬</span><span>Notes</span><span class="badge" style="background:var(--amber);color:#fff">${noteKeys.length}</span></div>`;
   }
+
+  h+=`<div class="nav-item ${S.view==='settings'?'active':''}" data-nav="settings">${IC.settings}<span>AI Audit Rules</span></div>`;
 
   // Bookmarks
   const bmNames=Object.keys(S.idxBookmarks).filter(k=>S.idxBookmarks[k]);
@@ -2269,24 +2348,17 @@ function rSidebar(){
     if(bmNames.length>20)h+=`<div style="padding:2px 11px;font-size:9px;color:var(--tx-4)">+${bmNames.length-20} more</div>`;
   }
 
-  // Notes — just a nav item with count, click opens notes view
-  const noteKeys=Object.keys(S.descNotes||{}).filter(k=>{const n=S.descNotes[k];return n&&n.thread&&n.thread.length>0});
-  if(noteKeys.length){
-    h+=`<div class="nav-item" data-nav="notes" style="margin-top:8px"><span style="color:var(--amber)">💬</span><span>Notes</span><span class="badge" style="background:var(--amber);color:#fff">${noteKeys.length}</span></div>`;
-  }
-
-  // Tools — collapsible
-  h+=`<div class="nav-sec" style="margin-top:14px;cursor:pointer" id="tools-toggle">Tools <span style="font-size:8px;color:var(--tx-4)">${S.toolsOpen?'▾':'▸'}</span></div>`;
-  if(S.toolsOpen){
-    const pendingCount=Object.values(S.reviewData).filter(rv=>rv.status==='pending'&&rv.suggestion).length;
-    [{id:'auditor',ic:IC.audit,l:'AI Auditor'},{id:'review',ic:IC.review,l:'Review Queue',b:pendingCount||null},{id:'sheet',ic:IC.sheet,l:'Sheet View'}].forEach(n=>{
-      h+=`<div class="nav-item ${S.view===n.id?'active':''}" data-nav="${n.id}">${n.ic}<span>${n.l}</span>${n.b?`<span class="badge">${n.b}</span>`:''}</div>`;
-    });
-    h+=`<div class="nav-item ${S.aiOpen?'active':''}" id="nav-ai">${IC.ai}<span>AI Chat</span></div>`;
+  // Sheet tabs — collapsible dropdown
+  if(S.sheetMeta?.tabs?.length){
+    h+=`<div class="nav-sec" style="margin-top:14px;cursor:pointer" id="tabs-toggle">Sheet Tabs <span style="font-size:8px;color:var(--tx-4)">${S.tabsOpen?'▾':'▸'}</span></div>`;
+    if(S.tabsOpen){
+      S.sheetMeta.tabs.forEach(t=>{
+        h+=`<div class="stab-display">${esc(t.title)}</div>`;
+      });
+    }
   }
 
   h+='</div>';
-  if(S.sheetMeta?.tabs?.length){h+='<div class="sidebar-tabs"><h4>Sheet Tabs</h4>';S.sheetMeta.tabs.forEach((t,i)=>{h+=`<div class="stab-display">${esc(t.title)}</div>`});h+='</div>'}
   // Timer widget
   h+='<div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px">';
   if(S.timerRunning){
@@ -2296,114 +2368,161 @@ function rSidebar(){
     h+=`<button class="btn btn-sm btn-green" id="timer-start" style="font-size:10px;padding:2px 8px">⏱ Clock In</button>`;
   }
   h+='</div>';
-  if(S.user)h+=`<div class="sidebar-user"><div class="sidebar-avatar">${S.user.pic?'<img src="'+S.user.pic+'">':esc(S.user.name.charAt(0))}</div><span class="sidebar-uname">${esc(S.user.name)}</span><button class="btn btn-sm btn-icon" id="blo" title="Sign out">${IC.logout}</button></div>`;
+  if(S.user){
+    const unread=getUnreadCount();
+    h+=`<div class="sidebar-user">`;
+    h+=`<div class="sidebar-avatar">${S.user.pic?'<img src="'+S.user.pic+'">':esc(S.user.name.charAt(0))}</div>`;
+    h+=`<span class="sidebar-uname">${esc(S.user.name)}</span>`;
+    h+=`<span class="notif-bell" id="notif-toggle" title="Notifications">🔔${unread?'<span class="notif-badge">'+unread+'</span>':''}</span>`;
+    h+=`<button class="btn btn-sm btn-icon" id="blo" title="Sign out">${IC.logout}</button>`;
+    h+=`</div>`;
+  }
   return h+'</div>';
 }
 
 function rDash(){
   if(!S.indexData)return'<div class="pad" style="color:var(--tx-3)">Loading index data…</div>';
   const ix=S.indexData;
-  let h='<div class="page-hd"><h1>Dashboard</h1><p>Overview of your JEM Video Index</p></div><div class="pad">';
-  h+='<div class="grid grid-4" style="margin-bottom:18px">';
-  h+=`<div class="card"><h4>Index Entries</h4><div class="val">${ix.totalEntries.toLocaleString()}</div></div>`;
-  h+=`<div class="card"><h4>Tag Instances</h4><div class="val">${ix.totalResults.toLocaleString()}</div></div>`;
-  h+=`<div class="card"><h4>Pending Review</h4><div class="val" style="color:${S.reviewQueue.length?'var(--purple)':'var(--green)'}">${S.reviewQueue.length}</div></div>`;
-  h+=`<div class="card"><h4>Source Clips</h4><div class="val">${S.rows.length.toLocaleString()}</div></div>`;
+  let h='<div class="page-hd"><h1>Dashboard</h1></div><div class="pad">';
+  
+  // Overview cards
+  const pendingCount=Object.values(S.reviewData).filter(rv=>rv.status==='pending'&&rv.suggestion).length;
+  const reviewedCount=Object.values(S.reviewData).filter(rv=>rv.reviewed).length;
+  h+='<div class="grid grid-4" style="margin-bottom:16px">';
+  h+=`<div class="card"><h4>Entries</h4><div class="val">${ix.totalEntries.toLocaleString()}</div></div>`;
+  h+=`<div class="card"><h4>Clips</h4><div class="val">${S.rows.length.toLocaleString()}</div></div>`;
+  h+=`<div class="card"><h4>Pending</h4><div class="val" style="color:${pendingCount?'var(--purple)':'var(--green)'}">${pendingCount}</div></div>`;
+  h+=`<div class="card"><h4>Reviewed</h4><div class="val" style="color:var(--green)">${reviewedCount}</div></div>`;
   h+='</div>';
-  // Progress Dashboard — detailed per-section stats
-  h+='<div class="card" style="margin-bottom:18px"><h4 style="margin-bottom:8px">Review Progress</h4>';
-  let grandTotal=0,grandReviewed=0,grandPending=0;
+  
+  // Review Progress
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">Review Progress</h4>';
+  let grandTotal=0,grandReviewed=0;
   RULES.sectionOrder.forEach(sec=>{
     const prog=sectionReviewProgress(sec);
     const pct=prog.total?Math.round(prog.reviewed/prog.total*100):0;
-    const secPending=(ix.sections[sec]||[]).reduce((s,e)=>s+e.results.filter(r=>{const rv=getRV(rvKey(e.name,r.segType,r.rowIdx));return rv&&rv.status==='pending'&&rv.suggestion}).length,0);
-    grandTotal+=prog.total;grandReviewed+=prog.reviewed;grandPending+=secPending;
-    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">`;
-    h+=`<span style="font-size:11px;font-weight:500;min-width:80px">${sec}</span>`;
+    grandTotal+=prog.total;grandReviewed+=prog.reviewed;
+    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">`;
+    h+=`<span style="font-size:11px;font-weight:500;min-width:85px">${sec}</span>`;
     h+=`<div class="progress-track" style="height:5px;flex:1"><div class="progress-fill" style="width:${pct}%;background:${pct===100?'var(--green)':'var(--gold)'}"></div></div>`;
-    h+=`<span style="font-size:9px;color:var(--tx-3);min-width:90px;text-align:right">${prog.reviewed}/${prog.total} (${pct}%)</span>`;
-    h+=`<button class="btn btn-sm" data-bulkauditsec="${sec}" style="font-size:8px;padding:1px 5px;height:18px">${IC.audit}</button>`;
+    h+=`<span style="font-size:9px;color:var(--tx-3);min-width:80px;text-align:right">${prog.reviewed}/${prog.total} (${pct}%)</span>`;
     h+=`</div>`;
   });
   const grandPct=grandTotal?Math.round(grandReviewed/grandTotal*100):0;
-  h+=`<div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;display:flex;justify-content:space-between;font-size:11px;font-weight:600">`;
-  h+=`<span>Total</span><span>${grandReviewed}/${grandTotal} (${grandPct}%)${grandPending?' · <span style="color:var(--purple)">'+grandPending+' pending</span>':''}</span>`;
-  h+=`</div>`;
+  h+=`<div style="border-top:1px solid var(--border);padding-top:5px;margin-top:5px;display:flex;justify-content:space-between;font-size:11px;font-weight:600"><span>Total</span><span>${grandReviewed}/${grandTotal} (${grandPct}%)</span></div>`;
   h+='</div>';
-
-  // Duplicate Detection
-  // Generate Index Tabs section
+  
+  // AI Tools
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">AI Tools</h4>';
+  h+='<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">';
+  h+='<span style="font-size:11px;color:var(--tx-3)">Audit section:</span>';
+  h+=`<select id="audit-sec-select" style="border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px;font-family:var(--font);background:var(--bg-white)">`;
+  RULES.sectionOrder.forEach(sec=>{h+=`<option value="${sec}">${sec}</option>`});
+  h+=`</select>`;
+  h+=`<button class="btn btn-sm btn-purple" id="audit-sec-run" style="font-size:10px">${IC.audit} Run Audit</button>`;
+  h+='</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  h+=`<button class="btn btn-sm" id="run-consistency" style="font-size:10px;border-color:var(--blue);color:var(--blue)">🔍 Consistency Check</button>`;
+  h+=`<button class="btn btn-sm" data-nav="settings" style="font-size:10px">Test a Description →</button>`;
+  h+='</div></div>';
+  
+  // Index Tabs
   const existingTabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
-  h+='<div class="card" style="margin-bottom:18px"><h4>Generate Index Tabs in Google Sheet</h4>';
-  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:10px">Create structured index tabs (one per section) in your spreadsheet. Each tab has the indented book format with entry names, segment types, descriptions, references, and full transcripts.</p>';
-  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">Index Tabs</h4>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">';
   RULES.sectionOrder.forEach(sec=>{
     const tabName='Index - '+sec;
     const exists=existingTabs.includes(tabName);
     const cnt=(ix.sections[sec]||[]).length;
     if(exists){
-      h+=`<div style="display:flex;align-items:center;gap:4px"><button class="btn btn-sm" disabled style="opacity:.5">${sec} (${cnt})</button><span style="font-size:10px;color:var(--green)">✓ exists</span></div>`;
+      h+=`<button class="btn btn-sm" data-gentab="${sec}" style="font-size:9px;opacity:.7">${sec} ✓</button>`;
     }else{
-      h+=`<button class="btn btn-sm btn-gold" data-gentab="${sec}">${sec} (${cnt} entries)</button>`;
+      h+=`<button class="btn btn-sm btn-gold" data-gentab="${sec}" style="font-size:9px">${sec} (${cnt})</button>`;
     }
   });
   h+='</div>';
-  // Toggle review columns
   const indexTabs=existingTabs.filter(t=>t.startsWith('Index - '));
-  if(indexTabs.length>0){
-    h+='<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">';
-    h+=`<button class="btn btn-sm" data-togglerev="show">Show Review Columns</button>`;
-    h+=`<button class="btn btn-sm" data-togglerev="hide">Hide Review Columns</button>`;
-    h+=`<button class="btn btn-sm" data-toggleorig="show">Show Original Desc</button>`;
-    h+=`<button class="btn btn-sm" data-toggleorig="hide">Hide Original Desc</button>`;
-    h+=`<button class="btn btn-sm btn-blue" id="btn-fullsync">⟳ Sync All Review Data to Sheets</button>`;
+  if(indexTabs.length){
+    h+='<div style="display:flex;gap:5px;flex-wrap:wrap">';
+    h+=`<button class="btn btn-sm" data-togglerev="show" style="font-size:9px">Show Review Cols</button>`;
+    h+=`<button class="btn btn-sm" data-togglerev="hide" style="font-size:9px">Hide Review Cols</button>`;
+    h+=`<button class="btn btn-sm" data-toggleorig="show" style="font-size:9px">Show Original</button>`;
+    h+=`<button class="btn btn-sm" data-toggleorig="hide" style="font-size:9px">Hide Original</button>`;
+    h+=`<button class="btn btn-sm" id="btn-fullsync" style="font-size:9px">⟳ Sync Review Data</button>`;
     h+='</div>';
   }
   h+='</div>';
-  h+=`<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-gold" data-nav="index">${IC.idx} Open Index Preview</button><button class="btn btn-purple" data-nav="auditor">${IC.audit} Run Audit</button><button class="btn" id="run-consistency" style="border-color:var(--blue);color:var(--blue)">🔍 Consistency Check</button><button class="btn" id="export-index" style="border-color:var(--green);color:var(--green)">📄 Export Index</button></div>`;
-
-  // Time Tracking section
-  h+='<div class="card" style="margin-top:18px"><h4 style="margin-bottom:10px">⏱ Time Tracking</h4>';
-  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:10px">Clock in/out from the sidebar. Recent sessions:</p>';
-  h+='<div id="time-log-area" style="font-size:12px;color:var(--tx-3)">Loading…</div>';
-  h+=`<button class="btn btn-sm" id="load-time-log" style="margin-top:8px">Refresh Time Log</button>`;
+  
+  // Export
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">Export</h4>';
+  h+=`<button class="btn btn-sm" id="export-index" style="border-color:var(--green);color:var(--green)">📄 Export Index as HTML</button>`;
   h+='</div>';
-
+  
+  // Time Tracking
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">⏱ Time Tracking</h4>';
+  h+='<div id="time-log-area" style="font-size:11px;color:var(--tx-3)">Loading…</div>';
+  h+=`<button class="btn btn-sm" id="load-time-log" style="margin-top:6px;font-size:9px">Refresh</button>`;
+  h+='</div>';
+  
   // Activity Log
-  h+='<div class="card" style="margin-top:18px"><h4 style="margin-bottom:10px">📋 Recent Activity</h4>';
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">📋 Activity Log</h4>';
   const isAdmin=ADMIN_EMAILS.includes(S.user?.email?.toLowerCase());
   const myName=S.user?.name||'Unknown';
-  
-  // Split into my activity and others
   const myActivity=[...S.activityLog].filter(e=>e.user===myName).reverse().slice(0,50);
   const allActivity=[...S.activityLog].reverse().slice(0,50);
-  
   if(isAdmin){
-    h+=`<div style="display:flex;gap:8px;margin-bottom:8px">`;
-    h+=`<button class="btn btn-sm ${!S.showAllActivity?'btn-gold':''}" id="activity-mine" style="font-size:10px">My Activity</button>`;
-    h+=`<button class="btn btn-sm ${S.showAllActivity?'btn-gold':''}" id="activity-all" style="font-size:10px">Everyone</button>`;
+    h+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
+    h+=`<button class="btn btn-sm ${!S.showAllActivity?'btn-gold':''}" id="activity-mine" style="font-size:9px">My Activity</button>`;
+    h+=`<button class="btn btn-sm ${S.showAllActivity?'btn-gold':''}" id="activity-all" style="font-size:9px">Everyone</button>`;
     h+=`</div>`;
   }
-  
   const displayLog=isAdmin&&S.showAllActivity?allActivity:myActivity;
-  
   if(displayLog.length){
-    h+='<div style="max-height:300px;overflow-y:auto;font-size:11px">';
+    h+='<div style="max-height:250px;overflow-y:auto;font-size:10px">';
     displayLog.forEach(entry=>{
       const time=new Date(entry.timestamp);
       const timeStr=time.toLocaleDateString()+' '+time.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-      h+=`<div style="padding:4px 0;border-bottom:1px solid var(--bg-1);display:flex;gap:8px">`;
-      h+=`<span style="color:var(--tx-4);white-space:nowrap;min-width:110px">${timeStr}</span>`;
-      if(isAdmin&&S.showAllActivity)h+=`<span style="color:var(--blue);font-weight:500;min-width:60px">${esc(entry.user)}</span>`;
+      h+=`<div style="padding:3px 0;border-bottom:1px solid var(--bg-1);display:flex;gap:6px">`;
+      h+=`<span style="color:var(--tx-4);white-space:nowrap;min-width:100px">${timeStr}</span>`;
+      if(isAdmin&&S.showAllActivity)h+=`<span style="color:var(--blue);font-weight:500;min-width:55px">${esc(entry.user)}</span>`;
       h+=`<span style="color:var(--tx-2)">${esc(entry.action)}</span>`;
       h+=`</div>`;
     });
     h+='</div>';
   }else{
-    h+='<div style="font-size:12px;color:var(--tx-3)">No activity yet.</div>';
+    h+='<div style="font-size:11px;color:var(--tx-3)">No activity yet.</div>';
   }
   h+='</div>';
-
+  
+  // Admin panel — only for admins
+  if(ADMIN_EMAILS.includes(S.user?.email?.toLowerCase())){
+    h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">👥 Team Management</h4>';
+    // Current team members
+    h+='<div style="margin-bottom:10px">';
+    if(S.teamMembers.length){
+      h+='<div style="font-size:10px;color:var(--tx-4);margin-bottom:4px">Team members (auto-registered on login):</div>';
+      S.teamMembers.forEach(tm=>{
+        const lastSeen=tm.lastSeen?new Date(tm.lastSeen).toLocaleDateString():'Never';
+        h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:11px;border-bottom:1px solid var(--bg-1)">`;
+        h+=`<span><strong>${esc(tm.name)}</strong> <span style="color:var(--tx-4)">${esc(tm.email)}</span></span>`;
+        h+=`<span style="font-size:9px;color:var(--tx-4)">Last: ${lastSeen}</span>`;
+        h+=`</div>`;
+      });
+    }else{
+      h+='<div style="font-size:11px;color:var(--tx-3)">No team members yet. They appear here after signing in.</div>';
+    }
+    h+='</div>';
+    // Invite new member
+    h+='<div style="border-top:1px solid var(--border);padding-top:8px">';
+    h+='<div style="font-size:11px;font-weight:500;margin-bottom:4px">Invite new team member</div>';
+    h+='<div style="display:flex;gap:6px;margin-bottom:6px">';
+    h+=`<input class="s-input" id="invite-email" placeholder="Email address…" style="margin:0;flex:1;font-size:11px">`;
+    h+=`<button class="btn btn-sm btn-gold" id="invite-copy" style="font-size:10px">Copy Invite</button>`;
+    h+='</div>';
+    h+='<div style="font-size:9px;color:var(--tx-4)">This copies a message with the workspace link. Send it to them via email, WhatsApp, or Slack. Then add their email to <a href="https://console.cloud.google.com/auth/audience?project=index-data-491316" target="_blank" style="color:var(--blue)">Google Cloud Console</a> test users.</div>';
+    h+='</div></div>';
+  }
+  
   return h+'</div>';
 }
 
@@ -2757,7 +2876,7 @@ function rReview(){
 }
 
 function rSettings(){
-  let h='<div class="page-hd"><h1>Audit Rules</h1><p>Configure how the AI audits tag descriptions. Changes are shared with all team members.</p></div><div class="pad">';
+  let h='<div class="page-hd"><h1>AI Audit Rules</h1><p>Configure how the AI audits tag descriptions. Changes are shared with all team members.</p></div><div class="pad">';
 
   // Test Audit
   h+='<div class="card" style="margin-bottom:24px;border:2px solid var(--gold-bd)">';
@@ -2854,7 +2973,6 @@ function rSettings(){
   h+='</div>';
 
   h+=`<div class="card"><h4 style="margin-bottom:8px">Connection</h4><div style="font-size:12px;color:var(--tx-2)">Sheet: <code>${esc(S.sheetId.slice(0,30))}\u2026</code></div><div style="font-size:12px;color:var(--tx-2)">Claude: <span style="color:${S.claudeKey?'var(--green)':'var(--red)'}">${S.claudeKey?'Connected':'Not set'}</span></div></div>`;
-  h+=`<div class="card" style="margin-top:24px"><h4 style="margin-bottom:8px">Bulk Delete by Type</h4><p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Delete all rows matching a content type</p><div style="display:flex;gap:8px"><input class="s-input" id="bulk-type" placeholder="Type name\u2026" style="margin:0;flex:1"><button class="btn btn-red" id="bulk-del-btn">${IC.trash} Delete</button></div></div>`;
   return h+'</div>';
 }
 
@@ -2920,7 +3038,7 @@ function rSetup(app){
   <div class="setup-ai" style="text-align:left;margin-top:14px"><h3>🤖 Claude AI <span style="font-weight:400;font-size:10px;color:var(--tx-3)">(optional — needed for auditing)</span></h3><label style="color:var(--purple)">Anthropic API Key</label><input class="s-input" id="ik" type="password" placeholder="sk-ant-…" value="${esc(S.claudeKey)}"></div>
   <div class="setup-err" id="se"></div>
   <button class="btn btn-gold" id="btn-con" style="width:100%;height:42px;font-size:14px;font-weight:600">Sign in & Connect</button></div></div>`;
-  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadTab(0);startAutoRefresh();render()}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign in & Connect';$('#btn-con').disabled=false}};
+  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadTab(0);registerTeamMember();startAutoRefresh();render()}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign in & Connect';$('#btn-con').disabled=false}};
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2931,8 +3049,21 @@ function bindAll(){
   // Nav
   $$('[data-nav]').forEach(el=>el.onclick=()=>{S.view=el.dataset.nav;render()});
   on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
-  on('#tools-toggle','click',()=>{S.toolsOpen=!S.toolsOpen;render()});
+  on('#ai-fab','click',()=>{S.aiOpen=true;render()});
+  on('#tabs-toggle','click',()=>{S.tabsOpen=!S.tabsOpen;render()});
   on('#run-consistency','click',()=>runConsistencyCheck());
+  on('#audit-sec-run','click',()=>{
+    const sec=$('#audit-sec-select')?.value;
+    if(sec)bulkAuditSection(sec);
+  });
+  // Admin — copy invite
+  on('#invite-copy','click',()=>{
+    const email=$('#invite-email')?.value?.trim();
+    if(!email){toast('Enter an email first','error');return}
+    const url='https://dgoldberg-cell.github.io/Index-data/';
+    const msg=`You've been invited to the JEM Index Workstation!\n\nUse this link to sign in:\n${url}\n\nSign in with your Google account (${email}). Contact Dovid if you have trouble accessing.`;
+    navigator.clipboard.writeText(msg).then(()=>{toast('Invite copied! Send it to '+email,'success')}).catch(()=>{toast('Copy failed — try manually','error')});
+  });
   on('#export-index','click',()=>exportIndex());
   // Bulk audit by section
   $$('[data-bulkauditsec]').forEach(el=>el.onclick=()=>{
@@ -3236,7 +3367,8 @@ function bindAll(){
   // Note popup — close
   on('#note-close','click',()=>{S.notePopup=null;render()});
   on('#note-overlay','click',(e)=>{if(e.target.id==='note-overlay'){S.notePopup=null;render()}});
-  // Note popup — send
+  
+  // Note popup — send with @mention detection
   on('#note-send','click',()=>{
     if(!S.notePopup)return;
     const inp=$('#note-input');
@@ -3245,13 +3377,84 @@ function bindAll(){
     const key=S.notePopup.key;
     if(!S.descNotes[key])S.descNotes[key]={thread:[]};
     if(!S.descNotes[key].thread)S.descNotes[key].thread=[];
-    S.descNotes[key].thread.push({user:S.user?.name||'Unknown',text,timestamp:Date.now()});
+    // Detect @mentions
+    const mentions=[];
+    const mentionRegex=/@(\w[\w\s]*?)(?=\s@|\s*$|[.,!?])/g;
+    let m;
+    while((m=mentionRegex.exec(text))!==null){
+      const name=m[1].trim();
+      const member=S.teamMembers.find(tm=>tm.name.toLowerCase()===name.toLowerCase());
+      if(member)mentions.push(member);
+    }
+    S.descNotes[key].thread.push({user:S.user?.name||'Unknown',text,timestamp:Date.now(),mentions:mentions.map(m=>m.email)});
+    // Send notifications for each mention
+    mentions.forEach(member=>{
+      if(member.email!==S.user?.email){
+        sendMention(member.email,S.user?.name||'Unknown',key,S.notePopup.title,text);
+      }
+    });
     syncSharedDataToSheet();
     render();
     setTimeout(()=>{const i=$('#note-input');if(i)i.focus();const b=$('#note-body');if(b)b.scrollTop=b.scrollHeight},50);
   });
-  // Note popup — Enter to send
-  on('#note-input','keydown',(e)=>{if(e.key==='Enter'){e.preventDefault();$('#note-send')?.click()}});
+  
+  // Note popup — @ mention dropdown
+  on('#note-input','input',(e)=>{
+    const inp=$('#note-input');
+    if(!inp)return;
+    const val=inp.value;
+    const curPos=inp.selectionStart||0;
+    // Find @ before cursor
+    const before=val.slice(0,curPos);
+    const atIdx=before.lastIndexOf('@');
+    const dd=$('#mention-dd');
+    if(atIdx>=0&&(atIdx===0||before[atIdx-1]===' ')){
+      const query=before.slice(atIdx+1).toLowerCase();
+      const matches=S.teamMembers.filter(tm=>tm.name.toLowerCase().includes(query)&&tm.email!==S.user?.email);
+      if(matches.length&&dd){
+        dd.innerHTML=matches.slice(0,5).map(tm=>`<div class="mention-item" data-mention-name="${esc(tm.name)}"><span class="mention-name">${esc(tm.name)}</span><span class="mention-email">${esc(tm.email)}</span></div>`).join('');
+        dd.style.display='block';
+      }else if(dd){dd.style.display='none'}
+    }else if(dd){dd.style.display='none'}
+  });
+  
+  // Select from @ dropdown
+  on('#mention-dd','click',(e)=>{
+    const item=e.target.closest('.mention-item');
+    if(!item)return;
+    const name=item.dataset.mentionName;
+    const inp=$('#note-input');
+    if(!inp)return;
+    const val=inp.value;
+    const curPos=inp.selectionStart||0;
+    const before=val.slice(0,curPos);
+    const atIdx=before.lastIndexOf('@');
+    if(atIdx>=0){
+      inp.value=val.slice(0,atIdx)+'@'+name+' '+val.slice(curPos);
+      inp.focus();
+      const newPos=atIdx+name.length+2;
+      inp.selectionStart=inp.selectionEnd=newPos;
+    }
+    const dd=$('#mention-dd');
+    if(dd)dd.style.display='none';
+  });
+  
+  // Note popup — Enter to send, Escape to close dropdown
+  on('#note-input','keydown',(e)=>{
+    const dd=$('#mention-dd');
+    if(e.key==='Enter'){
+      if(dd&&dd.style.display==='block'){
+        // Select first mention
+        const first=dd.querySelector('.mention-item');
+        if(first)first.click();
+        e.preventDefault();
+      }else{
+        e.preventDefault();$('#note-send')?.click();
+      }
+    }
+    if(e.key==='Escape'&&dd)dd.style.display='none';
+  });
+  
   // Note popup — delete single comment
   $$('[data-notedel-idx]').forEach(el=>el.onclick=(ev)=>{
     ev.stopPropagation();
@@ -3263,6 +3466,30 @@ function bindAll(){
     if(S.descNotes[key].thread.length===0)delete S.descNotes[key];
     syncSharedDataToSheet();
     render();
+  });
+
+  // Notification panel
+  on('#notif-toggle','click',()=>{S.notifOpen=!S.notifOpen;render()});
+  on('#notif-close','click',()=>{S.notifOpen=false;render()});
+  on('#notif-readall','click',()=>{
+    getMyNotifications().forEach(n=>{n.read=true});
+    syncSharedDataToSheet();render();
+  });
+  $$('[data-notif-click]').forEach(el=>el.onclick=()=>{
+    const id=el.dataset.notifClick;
+    const notif=S.notifications.find(n=>n.id===id);
+    if(!notif)return;
+    notif.read=true;
+    syncSharedDataToSheet();
+    // Jump to the note
+    if(notif.noteKey){
+      let entryName;
+      const key=notif.noteKey;
+      if(key.startsWith('entry|'))entryName=key.slice(6);
+      else{const lp=key.lastIndexOf('|');const slp=key.lastIndexOf('|',lp-1);entryName=slp>=0?key.slice(0,slp):key.split('|')[0]}
+      S.notifOpen=false;S.view='index';S.idxSearch=entryName;S.idxActiveSection='all';S.reviewFilter='all';render();
+      setTimeout(()=>{const entries=document.querySelectorAll('.idx-entry');entries.forEach(e=>{e.classList.add('jump-highlight')})},100);
+    }
   });
 
     // Bookmarks
@@ -4275,6 +4502,7 @@ window.addEventListener('resize',fixIdxScroll);
       await doConnect(savedCid,savedSid,savedKey||'');
       await loadSharedDataFromSheet();
       await loadTab(0);
+      registerTeamMember();
       startAutoRefresh();
     }catch(e){
       console.log('Auto-reconnect failed, showing login:',e.message);
