@@ -873,7 +873,24 @@ async function loadSharedDataFromSheet(){
     }
     if(data.notes)S.idxNotes=data.notes;
     if(data.descNotes)S.descNotes=data.descNotes;
-    if(data.teamMembers)S.teamMembers=data.teamMembers;
+    if(data.teamMembers&&Array.isArray(data.teamMembers)){
+      // Merge — never lose existing members, only add/update
+      const merged=new Map();
+      // Start with what we already have in memory
+      S.teamMembers.forEach(m=>{if(m.email)merged.set(m.email,m)});
+      // Merge in what came from the sheet (sheet data wins for lastSeen)
+      data.teamMembers.forEach(m=>{
+        if(!m.email)return;
+        const existing=merged.get(m.email);
+        if(existing){
+          // Keep the more recent lastSeen
+          if(m.lastSeen>existing.lastSeen)Object.assign(existing,m);
+        }else{
+          merged.set(m.email,m);
+        }
+      });
+      S.teamMembers=[...merged.values()];
+    }
     if(data.notifications)S.notifications=data.notifications;
     if(data.sectionOverrides)S.sectionOverrides=data.sectionOverrides;
     if(data.activityLog)S.activityLog=data.activityLog;
@@ -923,10 +940,13 @@ async function ensureSharedTab(){
 // Auto-refresh: pull shared data from sheet every 3 minutes
 function registerTeamMember(){
   if(!S.user?.email)return;
+  if(!Array.isArray(S.teamMembers))S.teamMembers=[];
   const existing=S.teamMembers.find(m=>m.email===S.user.email);
   if(existing){existing.name=S.user.name;existing.lastSeen=Date.now()}
   else{S.teamMembers.push({name:S.user.name,email:S.user.email,lastSeen:Date.now()})}
-  syncSharedDataToSheet();
+  console.log('Team members registered:',S.teamMembers.map(m=>m.name));
+  // Force immediate sync (bypass debounce) so team members are persisted
+  doSyncToSheet();
 }
 
 function getMyNotifications(){
@@ -2321,7 +2341,7 @@ function updateAuditFloat(){
 function rSidebar(){
   let h='<div class="sidebar">';
   // Logo + title
-  h+=`<div class="sidebar-logo" style="flex-direction:column;align-items:center;gap:2px;padding:14px 14px 6px"><img src="${JEM_LOGO}" alt="JEM" style="height:36px;width:auto;border-radius:4px"><div style="text-align:center">JEM Index<span>Workstation</span></div></div>`;
+  h+=`<div class="sidebar-logo" style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 14px 6px"><img src="${JEM_LOGO}" alt="JEM" style="height:36px;width:auto;border-radius:4px"><div style="text-align:center">JEM Index<span>Workstation</span></div></div>`;
   h+=`<div class="sidebar-sheet">${esc(S.sheetMeta?.title||S.sheetId)}</div>`;
   h+='<div class="sidebar-nav">';
   // Main views
@@ -3480,14 +3500,13 @@ function bindAll(){
     if(!notif)return;
     notif.read=true;
     syncSharedDataToSheet();
-    // Jump to the note
     if(notif.noteKey){
       let entryName;
       const key=notif.noteKey;
       if(key.startsWith('entry|'))entryName=key.slice(6);
       else{const lp=key.lastIndexOf('|');const slp=key.lastIndexOf('|',lp-1);entryName=slp>=0?key.slice(0,slp):key.split('|')[0]}
-      S.notifOpen=false;S.view='index';S.idxSearch=entryName;S.idxActiveSection='all';S.reviewFilter='all';render();
-      setTimeout(()=>{const entries=document.querySelectorAll('.idx-entry');entries.forEach(e=>{e.classList.add('jump-highlight')})},100);
+      S.notifOpen=false;
+      jumpToEntry(entryName);
     }
   });
 
@@ -3500,12 +3519,7 @@ function bindAll(){
     let entryName;
     if(key.startsWith('entry|'))entryName=key.slice(6);
     else{const lp=key.lastIndexOf('|');const slp=key.lastIndexOf('|',lp-1);entryName=slp>=0?key.slice(0,slp):key.split('|')[0]}
-    S.view='index';S.idxSearch=entryName;S.idxActiveSection='all';S.reviewFilter='all';render();
-    // Highlight the entry after render
-    setTimeout(()=>{
-      const entries=document.querySelectorAll('.idx-entry');
-      entries.forEach(e=>{e.classList.add('jump-highlight')});
-    },100);
+    jumpToEntry(entryName);
   });
   // Notes view — open reply popup
   $$('[data-noteopen]').forEach(el=>el.onclick=()=>{
@@ -3557,8 +3571,24 @@ function bindAll(){
   // Bookmark sidebar jump — switch to index view, search for the entry
   $$('[data-bmjump]').forEach(el=>el.onclick=()=>{
     const name=el.dataset.bmjump;
-    S.view='index';S.idxSearch=name;S.idxNavMode='tabs';S.idxActiveSection='all';S.reviewFilter='all';render();
-    setTimeout(()=>{const inp=$('#idx-search');if(inp){inp.focus();inp.selectionStart=inp.selectionEnd=inp.value.length}},50);
+    // Switch to bookmarked view and scroll to the exact entry
+    S.view='index';
+    S.idxSearch='';
+    S.idxActiveSection='all';
+    S.reviewFilter='bookmarked';
+    S.idxPage=0;
+    render();
+    setTimeout(()=>{
+      const entries=document.querySelectorAll('.idx-entry');
+      for(const e of entries){
+        const hd=e.querySelector('.idx-entry-name');
+        if(hd&&hd.textContent.trim().startsWith(name)){
+          e.scrollIntoView({behavior:'smooth',block:'center'});
+          e.classList.add('jump-highlight');
+          break;
+        }
+      }
+    },150);
   });
   // Note jump — click sidebar note to navigate to that entry
 
@@ -3870,6 +3900,32 @@ Respond with JSON only: {status:"ok"|"fix"|"generate", suggestion:"...", reason:
 
 function doSendAI(){const v=(S.aiInput||'').trim();if(!v||S.aiTyping)return;aiChat(v)}
 function findEntry(name){if(!S.indexData)return null;for(const sec of Object.values(S.indexData.sections)){const e=sec.find(x=>x.name===name);if(e)return e}return null}
+
+// Navigate directly to a specific entry — sets section, page, scrolls, highlights only that entry
+function jumpToEntry(entryName){
+  const entry=findEntry(entryName);
+  if(!entry){toast('Entry "'+entryName+'" not found','error');return}
+  S.view='index';
+  S.idxSearch='';
+  S.idxActiveSection=entry.section||'all';
+  S.reviewFilter='all';
+  // Calculate correct page
+  const sectionEntries=(S.indexData?.sections[entry.section]||[]).sort((a,b)=>a.name.localeCompare(b.name));
+  const idx=sectionEntries.findIndex(e=>e.name===entryName);
+  S.idxPage=idx>=0?Math.floor(idx/200):0;
+  render();
+  setTimeout(()=>{
+    const entries=document.querySelectorAll('.idx-entry');
+    for(const el of entries){
+      const hd=el.querySelector('.idx-entry-name');
+      if(hd&&hd.textContent.trim().startsWith(entryName)){
+        el.scrollIntoView({behavior:'smooth',block:'center'});
+        el.classList.add('jump-highlight');
+        break; // Only highlight this one entry
+      }
+    }
+  },150);
+}
 
 // Audit selected items from index preview
 async function auditSelectedItems(){
