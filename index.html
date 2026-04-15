@@ -842,7 +842,7 @@ function startAutoRefresh(){
     if(!S.connected)return;
     try{
       await loadSharedDataFromSheet();
-      render();
+      render(false); // Don't force — don't interrupt editing
     }catch(e){console.warn('Auto-refresh failed:',e)}
   },180000); // 3 minutes
 }
@@ -894,11 +894,17 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
     
     // 1. Update in main keywords column
     tag.description=newDesc;
-    await saveCell(rowIdx,kwCol,JSON.stringify(kw));
+    const saved=await saveCell(rowIdx,kwCol,JSON.stringify(kw));
+    if(!saved){
+      // Revert the in-memory change
+      tag.description=oldDesc;
+      return false;
+    }
     
     // 2. Find and update in the matching relevancy column
     const rel=tag.relevancy;
     const relNum=parseInt(rel,10);
+    console.log('updateTagDesc: relevancy info',{rel,relNum,tagName:tag.name});
     if(relNum>=1&&relNum<=4){
       const relColName='search.keywords_relevancy_'+relNum;
       let relCol=S.headers.findIndex(h=>h===relColName);
@@ -908,7 +914,10 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
         if(cellVal){
           try{
             let relKw=JSON.parse(cellVal);
-            const relTag=relKw.find(t=>t.name===entryName);
+            // Try exact, trimmed, case-insensitive match (same as main keywords)
+            let relTag=relKw.find(t=>t.name===tag.name);
+            if(!relTag)relTag=relKw.find(t=>(t.name||'').trim()===tag.name.trim());
+            if(!relTag)relTag=relKw.find(t=>(t.name||'').trim().toLowerCase()===tag.name.trim().toLowerCase());
             if(relTag){
               relTag.description=newDesc;
               const newJson=JSON.stringify(relKw);
@@ -920,9 +929,47 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
                 resource:{values:[[newJson]]}
               });
               S.rows[rowIdx][relCol]=newJson;
+              console.log('updateTagDesc: relevancy col updated',{relCol,relColName});
+            }else{
+              console.warn('updateTagDesc: tag not found in relevancy col',{tagName:tag.name,availableInRelCol:relKw.map(t=>t.name)});
             }
           }catch(e2){console.warn('Relevancy col update failed:',e2)}
+        }else{
+          console.log('updateTagDesc: relevancy cell empty, skipping',{relCol,relColName});
         }
+      }else{
+        console.warn('updateTagDesc: relevancy column not found',{relColName});
+      }
+    }else{
+      // Try ALL relevancy columns as fallback
+      console.log('updateTagDesc: no valid relevancy number, trying all columns');
+      for(let rn=1;rn<=4;rn++){
+        const colName='search.keywords_relevancy_'+rn;
+        let col=S.headers.findIndex(h=>h===colName);
+        if(col<0)col=S.headers.findIndex(h=>h.toLowerCase()===colName.toLowerCase());
+        if(col<0)continue;
+        const cv=S.rows[rowIdx][col]||'';
+        if(!cv)continue;
+        try{
+          let rk=JSON.parse(cv);
+          let rt=rk.find(t=>t.name===tag.name);
+          if(!rt)rt=rk.find(t=>(t.name||'').trim()===tag.name.trim());
+          if(!rt)rt=rk.find(t=>(t.name||'').trim().toLowerCase()===tag.name.trim().toLowerCase());
+          if(rt){
+            rt.description=newDesc;
+            const nj=JSON.stringify(rk);
+            const nm=S.sheetMeta.tabs[S.activeTab].title;
+            await gapi.client.sheets.spreadsheets.values.update({
+              spreadsheetId:S.sheetId,
+              range:`'${nm}'!${cl(col)}${rowIdx+2}`,
+              valueInputOption:'RAW',
+              resource:{values:[[nj]]}
+            });
+            S.rows[rowIdx][col]=nj;
+            console.log('updateTagDesc: found tag in relevancy_'+rn+' (fallback)');
+            break;
+          }
+        }catch{}
       }
     }
     return true;
@@ -1282,7 +1329,7 @@ async function loadTab(idx){
   try{const r=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:S.sheetId,range:`'${S.sheetMeta.tabs[idx].title}'`});const v=r.result.values||[];S.headers=v.length?v[0]:[];S.rows=v.length>1?v.slice(1).map(r=>{while(r.length<S.headers.length)r.push('');return r}):[];S.visibleCols=new Set(S.headers.map((_,i)=>i));S.selected=new Set();S.sortCol=null;S.search='';S.editCell=null;S.activeTab=idx;buildIndex()}catch(e){toast('Load failed: '+e.message,'error')}
   S.loading=false;render();
 }
-async function saveCell(ri,ci,val){if(!checkToken())return;const nm=S.sheetMeta.tabs[S.activeTab].title;try{await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:S.sheetId,range:`'${nm}'!${cl(ci)}${ri+2}`,valueInputOption:'USER_ENTERED',resource:{values:[[val]]}});S.rows[ri][ci]=val;toast('Saved','success')}catch(e){console.error('saveCell error:',e);toast('Save failed: '+(e?.result?.error?.message||e?.message||JSON.stringify(e)),'error')}}
+async function saveCell(ri,ci,val){if(!checkToken()){toast('Session expired — please refresh','error');return false}const nm=S.sheetMeta.tabs[S.activeTab].title;try{await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:S.sheetId,range:`'${nm}'!${cl(ci)}${ri+2}`,valueInputOption:'USER_ENTERED',resource:{values:[[val]]}});S.rows[ri][ci]=val;return true}catch(e){console.error('saveCell error:',e);toast('Save failed: '+(e?.result?.error?.message||e?.message||JSON.stringify(e)),'error');return false}}
 async function saveCells(changes){const nm=S.sheetMeta.tabs[S.activeTab].title;try{await gapi.client.sheets.spreadsheets.values.batchUpdate({spreadsheetId:S.sheetId,resource:{valueInputOption:'USER_ENTERED',data:changes.map(c=>({range:`'${nm}'!${cl(c.col)}${c.row+2}`,values:[[c.value]]}))}});changes.forEach(c=>{if(S.rows[c.row])S.rows[c.row][c.col]=c.value});toast(`Updated ${changes.length} cells`,'success')}catch(e){toast('Batch save failed','error')}}
 async function delRows(idxs){const nm=S.sheetMeta.tabs[S.activeTab].title;const sorted=[...idxs].sort((a,b)=>b-a);try{const sid=S.sheetMeta.tabs[S.activeTab].sid;await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:S.sheetId,resource:{requests:sorted.map(i=>({deleteDimension:{range:{sheetId:sid,dimension:'ROWS',startIndex:i+1,endIndex:i+2}}}))}});S.rows=S.rows.filter((_,i)=>!idxs.has(i));S.selected=new Set();toast(`Deleted ${sorted.length} rows`,'success');buildIndex()}catch(e){toast('Delete failed','error')}render()}
 function logout(){try{google.accounts.oauth2.revoke(gapi.client.getToken()?.access_token)}catch{}S.connected=false;S.sheetMeta=null;S.user=null;S.headers=[];S.rows=[];S.indexData=null;S.aiMsgs=[];localStorage.removeItem('jw_cid');localStorage.removeItem('jw_sid');render()}
@@ -1925,8 +1972,8 @@ const IC={
 // ═══════════════════════════════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════════════════════════════
-function render(force){
-  // Don't rebuild DOM while user is editing inline — UNLESS forced (save/cancel/user action)
+function render(force=true){
+  // Don't rebuild DOM while user is editing inline — UNLESS forced
   if(!force&&$('#desc-edit')){return}
   const app=$('#app');
   if(!S.connected){rSetup(app);return}
