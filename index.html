@@ -2360,7 +2360,7 @@ function rSidebar(){
   // Bookmarks
   const bmNames=Object.keys(S.idxBookmarks).filter(k=>S.idxBookmarks[k]);
   if(bmNames.length){
-    h+=`<div class="nav-sec" style="margin-top:14px">Bookmarks <span style="font-size:8px;font-weight:400;letter-spacing:0">(${bmNames.length})</span></div>`;
+    h+=`<div class="nav-sec" style="margin-top:14px;cursor:pointer" id="bm-showall">Bookmarks <span style="font-size:8px;font-weight:400;letter-spacing:0">(${bmNames.length})</span></div>`;
     bmNames.sort().slice(0,20).forEach(name=>{
       h+=`<div class="stab" data-bmjump="${esc(name)}" style="font-size:10.5px;padding:3px 11px;display:flex;align-items:center;gap:4px;cursor:pointer"><span style="color:var(--gold);font-size:9px">🔖</span>${esc(name.length>22?name.slice(0,22)+'…':name)}</div>`;
     });
@@ -2571,7 +2571,7 @@ function rIndex(){
   // Filter dropdown
   const filterLabels={all:'Everything',unreviewed:'Needs Review',pending:'Has Suggestions',reviewed:'Reviewed',bookmarked:'Bookmarked'};
   h+=`<div class="tb-dd" data-tbdd="filter"><div class="tb-dd-btn">Show: <span class="tb-dd-val">${filterLabels[S.reviewFilter]||'Everything'}</span></div><div class="tb-dd-panel">`;
-  [{id:'all',l:'Everything'},{id:'unreviewed',l:'Needs Review'},{id:'pending',l:'Has Suggestions'},{id:'reviewed',l:'Reviewed ✓'},{id:'bookmarked',l:'🔖 Bookmarked'}].forEach(f=>{
+  [{id:'all',l:'Everything'},{id:'unreviewed',l:'Needs Review'},{id:'pending',l:'Has Suggestions'},{id:'reviewed',l:'Reviewed ✓'}].forEach(f=>{
     h+=`<div class="tb-dd-item ${S.reviewFilter===f.id?'active':''}" data-rvfilter="${f.id}">${f.l}</div>`;
   });
   h+=`</div></div>`;
@@ -2602,8 +2602,10 @@ function rIndex(){
     entries=applyReviewFilter(entries);
     if(!entries.length)return;
 
-    // Section header
-    entryHtmls.push(`<div class="idx-section-hd">${sec}${isSectionReviewed(sec)?' <span style="color:var(--green);font-size:14px">✓ reviewed</span>':''}</div>`);
+    // Section header — skip when showing bookmarks
+    if(S.reviewFilter!=='bookmarked'){
+      entryHtmls.push(`<div class="idx-section-hd">${sec}${isSectionReviewed(sec)?' <span style="color:var(--green);font-size:14px">✓ reviewed</span>':''}</div>`);
+    }
 
     entries.forEach(e=>{
       const isBM=S.idxBookmarks[e.name];
@@ -3506,7 +3508,7 @@ function bindAll(){
       if(key.startsWith('entry|'))entryName=key.slice(6);
       else{const lp=key.lastIndexOf('|');const slp=key.lastIndexOf('|',lp-1);entryName=slp>=0?key.slice(0,slp):key.split('|')[0]}
       S.notifOpen=false;
-      jumpToEntry(entryName);
+      jumpToEntry(entryName,key);
     }
   });
 
@@ -3519,7 +3521,7 @@ function bindAll(){
     let entryName;
     if(key.startsWith('entry|'))entryName=key.slice(6);
     else{const lp=key.lastIndexOf('|');const slp=key.lastIndexOf('|',lp-1);entryName=slp>=0?key.slice(0,slp):key.split('|')[0]}
-    jumpToEntry(entryName);
+    jumpToEntry(entryName,key);
   });
   // Notes view — open reply popup
   $$('[data-noteopen]').forEach(el=>el.onclick=()=>{
@@ -3572,11 +3574,13 @@ function bindAll(){
   $$('[data-bmjump]').forEach(el=>el.onclick=()=>{
     const name=el.dataset.bmjump;
     // Switch to bookmarked view and scroll to the exact entry
+    // Show only this one bookmarked entry
     S.view='index';
     S.idxSearch='';
     S.idxActiveSection='all';
     S.reviewFilter='bookmarked';
     S.idxPage=0;
+    S._bmFocus=name; // Focus on one specific bookmark
     render();
     setTimeout(()=>{
       const entries=document.querySelectorAll('.idx-entry');
@@ -3588,7 +3592,12 @@ function bindAll(){
           break;
         }
       }
+      S._bmFocus=null;
     },150);
+  });
+  // Bookmarks header — show all bookmarked
+  on('#bm-showall','click',()=>{
+    S.view='index';S.idxSearch='';S.idxActiveSection='all';S.reviewFilter='bookmarked';S.idxPage=0;render();
   });
   // Note jump — click sidebar note to navigate to that entry
 
@@ -3902,7 +3911,8 @@ function doSendAI(){const v=(S.aiInput||'').trim();if(!v||S.aiTyping)return;aiCh
 function findEntry(name){if(!S.indexData)return null;for(const sec of Object.values(S.indexData.sections)){const e=sec.find(x=>x.name===name);if(e)return e}return null}
 
 // Navigate directly to a specific entry — sets section, page, scrolls, highlights only that entry
-function jumpToEntry(entryName){
+// If noteKey is provided, highlights just the description line (for description notes) or entry (for entry notes)
+function jumpToEntry(entryName,noteKey){
   const entry=findEntry(entryName);
   if(!entry){toast('Entry "'+entryName+'" not found','error');return}
   S.view='index';
@@ -3915,13 +3925,38 @@ function jumpToEntry(entryName){
   S.idxPage=idx>=0?Math.floor(idx/200):0;
   render();
   setTimeout(()=>{
+    // Find the entry in DOM
     const entries=document.querySelectorAll('.idx-entry');
     for(const el of entries){
       const hd=el.querySelector('.idx-entry-name');
       if(hd&&hd.textContent.trim().startsWith(entryName)){
-        el.scrollIntoView({behavior:'smooth',block:'center'});
-        el.classList.add('jump-highlight');
-        break; // Only highlight this one entry
+        if(noteKey&&!noteKey.startsWith('entry|')){
+          // Description-level note — highlight just that description line
+          // noteKey format: EntryName|SegType|RowIdx
+          const lp=noteKey.lastIndexOf('|');
+          const rowIdx=noteKey.slice(lp+1);
+          const descLines=el.querySelectorAll('.idx-result');
+          let found=false;
+          for(const dl of descLines){
+            // Check if this line has a matching descnote data attribute or rowIdx
+            const noteBtn=dl.querySelector('[data-descnote]');
+            if(noteBtn&&noteBtn.dataset.descnote===noteKey){
+              dl.scrollIntoView({behavior:'smooth',block:'center'});
+              dl.classList.add('jump-highlight');
+              found=true;
+              break;
+            }
+          }
+          if(!found){
+            el.scrollIntoView({behavior:'smooth',block:'center'});
+            el.classList.add('jump-highlight');
+          }
+        }else{
+          // Entry-level note or no noteKey — highlight whole entry
+          el.scrollIntoView({behavior:'smooth',block:'center'});
+          el.classList.add('jump-highlight');
+        }
+        break;
       }
     }
   },150);
