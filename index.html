@@ -1388,8 +1388,8 @@ function buildIndex(){
 // ── Google Sheets API ─────────────────────────────────────
 let gapiOk=false;
 function initG(){return new Promise((r,j)=>{if(gapiOk)return r();gapi.load('client',async()=>{try{await gapi.client.init({discoveryDocs:[DISC]});gapiOk=true;r()}catch(e){j(e)}})})}
-async function doConnect(cid,sid,ck){
-  S.clientId=cid;S.sheetId=sid;S.claudeKey=ck||'';
+async function doConnect(cid,sid,ck,silent=false){
+  S.clientId=cid;S.sheetId=sid;if(ck)S.claudeKey=ck;
   localStorage.setItem('jw_cid',cid);localStorage.setItem('jw_sid',sid);if(ck)localStorage.setItem('jw_ckey',ck);
   await initG();
   return new Promise((r,j)=>{
@@ -1402,12 +1402,11 @@ async function doConnect(cid,sid,ck){
         try{const u=await(await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+resp.access_token}})).json();S.user={name:u.name||u.email||'User',email:u.email||'',pic:u.picture||''}}catch{S.user={name:'User',email:'',pic:''}}
         try{const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:sid});S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))}}catch(e){console.error(e)}
         S.connected=true;
-        // Schedule token refresh every 50 minutes
         scheduleTokenRefresh();
         r();
       }
     });
-    S._tokenClient.requestAccessToken();
+    S._tokenClient.requestAccessToken(silent?{prompt:''}:{});
   });
 }
 
@@ -2322,7 +2321,7 @@ function updateAuditFloat(){
 function rSidebar(){
   let h='<div class="sidebar">';
   // Logo + title
-  h+=`<div class="sidebar-logo" style="display:flex;align-items:center;gap:8px"><img src="${JEM_LOGO}" alt="JEM" style="width:28px;height:28px;border-radius:4px">JEM Index<span>Workstation</span></div>`;
+  h+=`<div class="sidebar-logo" style="flex-direction:column;align-items:center;gap:4px;padding:16px 14px 8px"><img src="${JEM_LOGO}" alt="JEM" style="width:48px;height:48px;border-radius:6px"><div style="text-align:center">JEM Index<span>Workstation</span></div></div>`;
   h+=`<div class="sidebar-sheet">${esc(S.sheetMeta?.title||S.sheetId)}</div>`;
   h+='<div class="sidebar-nav">';
   // Main views
@@ -4499,7 +4498,7 @@ window.addEventListener('resize',fixIdxScroll);
   if(savedCid&&savedSid&&!S.connected){
     try{
       S.loading=true;render();
-      await doConnect(savedCid,savedSid,savedKey||'');
+      await doConnect(savedCid,savedSid,savedKey||'',true);
       await loadSharedDataFromSheet();
       await loadTab(0);
       registerTeamMember();
