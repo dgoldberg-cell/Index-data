@@ -2569,8 +2569,8 @@ function rIndex(){
   });
   h+=`</div></div>`;
   // Filter dropdown
-  const filterLabels={all:'Everything',unreviewed:'Needs Review',pending:'Has Suggestions',reviewed:'Reviewed',bookmarked:'Bookmarked'};
-  h+=`<div class="tb-dd" data-tbdd="filter"><div class="tb-dd-btn">Show: <span class="tb-dd-val">${filterLabels[S.reviewFilter]||'Everything'}</span></div><div class="tb-dd-panel">`;
+  const filterLabels={all:'Everything',unreviewed:'Needs Review',pending:'Has Suggestions',reviewed:'Reviewed'};
+  h+=`<div class="tb-dd" data-tbdd="filter"><div class="tb-dd-btn">Show: <span class="tb-dd-val">${S.reviewFilter==='bookmarked'?'🔖 Bookmarked':(filterLabels[S.reviewFilter]||'Everything')}</span></div><div class="tb-dd-panel">`;
   [{id:'all',l:'Everything'},{id:'unreviewed',l:'Needs Review'},{id:'pending',l:'Has Suggestions'},{id:'reviewed',l:'Reviewed ✓'}].forEach(f=>{
     h+=`<div class="tb-dd-item ${S.reviewFilter===f.id?'active':''}" data-rvfilter="${f.id}">${f.l}</div>`;
   });
@@ -3068,7 +3068,12 @@ function rSetup(app){
 function bindAll(){
   const on=(sel,ev,fn)=>{const el=$(sel);if(el)el.addEventListener(ev,fn)};
   // Nav
-  $$('[data-nav]').forEach(el=>el.onclick=()=>{S.view=el.dataset.nav;render()});
+  $$('[data-nav]').forEach(el=>el.onclick=()=>{
+    S.view=el.dataset.nav;
+    // Reset bookmarked filter when going back to index
+    if(el.dataset.nav==='index'&&S.reviewFilter==='bookmarked'){S.reviewFilter='all'}
+    render();
+  });
   on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
   on('#ai-fab','click',()=>{S.aiOpen=true;render()});
   on('#tabs-toggle','click',()=>{S.tabsOpen=!S.tabsOpen;render()});
@@ -3585,8 +3590,8 @@ function bindAll(){
     setTimeout(()=>{
       const entries=document.querySelectorAll('.idx-entry');
       for(const e of entries){
-        const hd=e.querySelector('.idx-entry-name');
-        if(hd&&hd.textContent.trim().startsWith(name)){
+        const hd=e.querySelector('[data-entry]');
+        if(hd&&hd.dataset.entry===name){
           e.scrollIntoView({behavior:'smooth',block:'center'});
           e.classList.add('jump-highlight');
           break;
@@ -3925,20 +3930,16 @@ function jumpToEntry(entryName,noteKey){
   S.idxPage=idx>=0?Math.floor(idx/200):0;
   render();
   setTimeout(()=>{
-    // Find the entry in DOM
+    // Find the entry in DOM using data-entry attribute
     const entries=document.querySelectorAll('.idx-entry');
     for(const el of entries){
-      const hd=el.querySelector('.idx-entry-name');
-      if(hd&&hd.textContent.trim().startsWith(entryName)){
+      const hd=el.querySelector('[data-entry]');
+      if(hd&&hd.dataset.entry===entryName){
         if(noteKey&&!noteKey.startsWith('entry|')){
           // Description-level note — highlight just that description line
-          // noteKey format: EntryName|SegType|RowIdx
-          const lp=noteKey.lastIndexOf('|');
-          const rowIdx=noteKey.slice(lp+1);
           const descLines=el.querySelectorAll('.idx-result');
           let found=false;
           for(const dl of descLines){
-            // Check if this line has a matching descnote data attribute or rowIdx
             const noteBtn=dl.querySelector('[data-descnote]');
             if(noteBtn&&noteBtn.dataset.descnote===noteKey){
               dl.scrollIntoView({behavior:'smooth',block:'center'});
