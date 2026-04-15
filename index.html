@@ -655,7 +655,16 @@ toasts:[],tid:0};
 const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML.replace(/"/g,'&quot;')}
 function cl(n){let s='',c=n;while(c>=0){s=String.fromCharCode(c%26+65)+s;c=Math.floor(c/26)-1}return s}
-function toast(m,t=''){const tid=++S.tid;S.toasts.push({id:tid,m,t});render();setTimeout(()=>{S.toasts=S.toasts.filter(x=>x.id!==tid);render()},3500)}
+function toast(m,t=''){
+  const tid=++S.tid;S.toasts.push({id:tid,m,t});
+  updateToasts();
+  setTimeout(()=>{S.toasts=S.toasts.filter(x=>x.id!==tid);updateToasts()},3500);
+}
+function updateToasts(){
+  const el=$('.toasts');
+  if(el){el.innerHTML=S.toasts.map(t=>`<div class="toast ${t.t}">${esc(t.m)}</div>`).join('')}
+  else{render()} // Fallback if toast container doesn't exist yet
+}
 function customConfirm(msg){return new Promise(resolve=>{const ov=document.createElement('div');ov.className='confirm-overlay';ov.innerHTML=`<div class="confirm-box"><p>${msg}</p><div class="confirm-btns"><button class="confirm-cancel">Cancel</button><button class="confirm-ok">OK</button></div></div>`;document.body.appendChild(ov);ov.querySelector('.confirm-ok').onclick=()=>{ov.remove();resolve(true)};ov.querySelector('.confirm-cancel').onclick=()=>{ov.remove();resolve(false)};ov.onclick=(e)=>{if(e.target===ov){ov.remove();resolve(false)}}})}
 function rmd(t){return t.replace(/```action[\s\S]*?```/g,'').replace(/```([\s\S]*?)```/g,'<pre>$1</pre>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>')}
 function saveBM(){
@@ -3131,16 +3140,20 @@ function bindAll(){
     });
     area2.innerHTML=html;
   });
-  // Auto-load time log when on dashboard
-  if(S.view==='dashboard'){
+  // Auto-load time log when on dashboard (only once)
+  if(S.view==='dashboard'&&!S._timeLogLoaded){
+    S._timeLogLoaded=true;
     setTimeout(async()=>{
       const area=$('#time-log-area');
       if(!area)return;
       const log=await loadTimeLog();
-      if(!log.length){area.innerHTML='No time entries yet.';return}
+      const area2=$('#time-log-area');
+      if(!area2)return;
+      if(!log.length){area2.innerHTML='No time entries yet.';return}
       $('#load-time-log')?.click();
     },500);
   }
+  if(S.view!=='dashboard')S._timeLogLoaded=false;
   on('#rerun-consistency','click',()=>runConsistencyCheck());
   if(!S.consistencyDismissed)S.consistencyDismissed={};
   $$('[data-dismiss-issue]').forEach(el=>el.onclick=()=>{
