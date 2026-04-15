@@ -3027,11 +3027,11 @@ function bindAll(){
 
   // Description editing (double-click)
   $$('[data-editdesc]').forEach(el=>el.ondblclick=()=>{
-    // Cancel any existing edit first
-    const existingEdit=$('#desc-edit');
-    if(existingEdit){
-      const existingWrapper=existingEdit.closest('.idx-inline-edit');
-      if(existingWrapper)existingWrapper.remove();
+    // If another edit is open, close it first by restoring the DOM
+    if($('#desc-edit')){
+      S.editingDesc=null;
+      buildIndex();render(true);
+      return; // DOM was rebuilt — the dblclick target no longer exists. User clicks again.
     }
     
     const raw=el.dataset.editdesc;
