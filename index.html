@@ -596,7 +596,14 @@ function esc(s){const d=document.createElement('div');d.textContent=s;return d.i
 function cl(n){let s='',c=n;while(c>=0){s=String.fromCharCode(c%26+65)+s;c=Math.floor(c/26)-1}return s}
 function toast(m,t=''){const tid=++S.tid;S.toasts.push({id:tid,m,t});render();setTimeout(()=>{S.toasts=S.toasts.filter(x=>x.id!==tid);render()},3500)}
 function rmd(t){return t.replace(/```action[\s\S]*?```/g,'').replace(/```([\s\S]*?)```/g,'<pre>$1</pre>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>')}
-function saveBM(){localStorage.setItem('jw_bm',JSON.stringify(S.idxBookmarks));syncSharedDataToSheet()}
+function saveBM(){
+  localStorage.setItem('jw_bm',JSON.stringify(S.idxBookmarks));
+  // Store per-user in shared data
+  if(!S._allBookmarks)S._allBookmarks={};
+  const userKey=S.user?.email||S.user?.name||'default';
+  S._allBookmarks[userKey]=S.idxBookmarks;
+  syncSharedDataToSheet();
+}
 function saveNotes(){localStorage.setItem('jw_notes',JSON.stringify(S.idxNotes));syncSharedDataToSheet()}
 function saveRQ(){localStorage.setItem('jw_rq',JSON.stringify(S.reviewQueue))}
 function saveRV(){localStorage.setItem('jw_rv',JSON.stringify(S.reviewData));syncSharedDataToSheet()}
@@ -726,7 +733,7 @@ async function doSyncToSheet(){
     await ensureSharedTab();
     const data={
       reviewData:S.reviewData,
-      bookmarks:S.idxBookmarks,
+      bookmarks_by_user:S._allBookmarks||{},
       notes:S.idxNotes,
       sectionOverrides:S.sectionOverrides,
       activityLog:S.activityLog,
@@ -788,7 +795,17 @@ async function loadSharedDataFromSheet(){
     if(!json)return;
     const data=JSON.parse(json);
     if(data.reviewData)S.reviewData=data.reviewData;
-    if(data.bookmarks)S.idxBookmarks=data.bookmarks;
+    if(data.bookmarks_by_user){
+      S._allBookmarks=data.bookmarks_by_user;
+      const userKey=S.user?.email||S.user?.name||'default';
+      if(S._allBookmarks[userKey])S.idxBookmarks=S._allBookmarks[userKey];
+    }else if(data.bookmarks){
+      // Legacy: migrate old shared bookmarks to current user
+      S.idxBookmarks=data.bookmarks;
+      S._allBookmarks={};
+      const userKey=S.user?.email||S.user?.name||'default';
+      S._allBookmarks[userKey]=data.bookmarks;
+    }
     if(data.notes)S.idxNotes=data.notes;
     if(data.sectionOverrides)S.sectionOverrides=data.sectionOverrides;
     if(data.activityLog)S.activityLog=data.activityLog;
@@ -3010,16 +3027,28 @@ function bindAll(){
 
   // Description editing (double-click)
   $$('[data-editdesc]').forEach(el=>el.ondblclick=()=>{
-    const parts=el.dataset.editdesc.split('|');
-    const entryName=parts[0];
-    const segType=parts[1];
-    const ri=+parts[2];
+    // Cancel any existing edit first
+    const existingEdit=$('#desc-edit');
+    if(existingEdit){
+      const existingWrapper=existingEdit.closest('.idx-inline-edit');
+      if(existingWrapper)existingWrapper.remove();
+    }
+    
+    const raw=el.dataset.editdesc;
+    // Split carefully — entry name may contain |, so split from the RIGHT
+    const lastPipe=raw.lastIndexOf('|');
+    const secondLastPipe=raw.lastIndexOf('|',lastPipe-1);
+    if(secondLastPipe<0){console.error('Invalid editdesc:',raw);return}
+    const entryName=raw.slice(0,secondLastPipe);
+    const segType=raw.slice(secondLastPipe+1,lastPipe);
+    const ri=+raw.slice(lastPipe+1);
+    
     S.editingDesc={entryName,segType,ri};
     const entry=findEntry(entryName);
-    if(!entry)return;
+    if(!entry){console.error('Entry not found:',entryName);return}
     const byseg={};entry.results.forEach(r=>{if(!byseg[r.segType])byseg[r.segType]=[];byseg[r.segType].push(r)});
     const result=byseg[segType]?.[ri];
-    if(!result)return;
+    if(!result){console.error('Result not found:',{segType,ri,available:Object.keys(byseg)});return}
     
     // Create edit UI
     const wrapper=document.createElement('span');
@@ -3031,21 +3060,22 @@ function bindAll(){
     const saveBtn=document.createElement('button');
     saveBtn.className='btn btn-sm btn-green';
     saveBtn.id='desc-save';
-    saveBtn.innerHTML=IC.check;
+    saveBtn.textContent='✓';
+    saveBtn.type='button';
     const cancelBtn=document.createElement('button');
     cancelBtn.className='btn btn-sm';
     cancelBtn.id='desc-cancel';
-    cancelBtn.innerHTML=IC.x;
+    cancelBtn.textContent='✕';
+    cancelBtn.type='button';
     wrapper.appendChild(inp);
     wrapper.appendChild(saveBtn);
     wrapper.appendChild(cancelBtn);
     el.replaceWith(wrapper);
     inp.focus();
     
-    saveBtn.addEventListener('click',async(ev)=>{
-      ev.stopPropagation();ev.preventDefault();
-      console.log('Save clicked! Value:', inp.value);
+    const doSave=async()=>{
       const newVal=inp.value||'';
+      console.log('Save triggered:',{entryName,newVal,oldDesc:result.desc,rowIdx:result.rowIdx});
       if(newVal===result.desc){toast('No changes made');return}
       saveBtn.disabled=true;saveBtn.textContent='…';
       try{
@@ -3063,23 +3093,25 @@ function bindAll(){
           S.editingDesc=null;
           if(wrapper.parentNode)wrapper.parentNode.removeChild(wrapper);
           buildIndex();render(true);
+          toast('Saved','success');
         }else{
           toast('Save failed — check console','error');
-          saveBtn.disabled=false;saveBtn.innerHTML=IC.check;
+          saveBtn.disabled=false;saveBtn.textContent='✓';
         }
       }catch(e){
         console.error('Save error:',e);
         toast('Error: '+(e.message||JSON.stringify(e)),'error');
-        saveBtn.disabled=false;saveBtn.innerHTML=IC.check;
+        saveBtn.disabled=false;saveBtn.textContent='✓';
       }
-    });
-    cancelBtn.addEventListener('click',(ev)=>{
-      ev.stopPropagation();
+    };
+    const doCancel=()=>{
       S.editingDesc=null;
       if(wrapper.parentNode)wrapper.parentNode.removeChild(wrapper);
       render(true);
-    });
-    inp.addEventListener('keydown',e=>{if(e.key==='Enter')saveBtn.click();if(e.key==='Escape')cancelBtn.click()});
+    };
+    saveBtn.addEventListener('mousedown',(ev)=>{ev.preventDefault();ev.stopPropagation();doSave()});
+    cancelBtn.addEventListener('mousedown',(ev)=>{ev.preventDefault();ev.stopPropagation();doCancel()});
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();doSave()}if(e.key==='Escape'){e.preventDefault();doCancel()}});
   });
 
   // Transcript popup
