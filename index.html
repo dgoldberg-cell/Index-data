@@ -178,6 +178,10 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-note-time{color:var(--tx-4);font-size:9px;margin-left:6px}
 .idx-note-reply{color:var(--amber);cursor:pointer;font-size:10px;font-weight:500;display:inline-block;margin-top:2px}
 .idx-note-reply:hover{text-decoration:underline}
+.idx-note-del{color:var(--tx-4);cursor:pointer;font-size:9px;margin-left:6px;opacity:0.4;transition:opacity .1s}
+.idx-note-del:hover{opacity:1;color:var(--red)}
+.idx-note-delall{color:var(--tx-4);cursor:pointer;font-size:9px;margin-left:8px;opacity:0.5}
+.idx-note-delall:hover{color:var(--red);opacity:1}
 .idx-mini-btn:hover{background:var(--bg-1);color:var(--tx-2);border-color:var(--border-hi)}
 .idx-mini-btn.active{color:var(--gold);border-color:var(--gold)}
 
@@ -580,7 +584,8 @@ sectionOverrides:{}, // {entryName: newSection} — persisted in shared data
 undoStack:[], // [{type, data, label, timestamp}] — last 50 actions
 activityLog:[], // [{timestamp, user, action}] — shared, last 200 entries
 showAllActivity:false, // Toggle: show everyone's activity (admins only)
-descNotes:{}, // {entryName|segType|rowIdx: {note, user, timestamp}} — shared notes on descriptions
+descNotes:{}, // {key: {thread: [{user, text, timestamp}]}} — shared notes
+notesPopup:null, // {key, label} — currently open notes popup
 toolsOpen:false, // Toggle: show Tools section in sidebar
 testEntry:'',testDesc:'',testSection:'Topics',testResult:null, // Test audit
 consistencyResults:null,consistencyRunning:false,consistencyProgress:0,consistencyTotal:0, // Consistency check
@@ -757,12 +762,12 @@ async function doSyncToSheet(){
     const CHUNK=40000;
     const chunks=[];
     for(let i=0;i<json.length;i+=CHUNK)chunks.push(json.slice(i,i+CHUNK));
-    // Write chunks to A2, A3, A4... First cell has chunk count prefix
+    if(chunks.length>495){console.error('Shared data too large!',json.length,'chars');toast('Data too large to sync — contact admin','error');_syncPending=false;return}
     const rows=chunks.map((c,i)=>[i===0?'CHUNKS:'+chunks.length+'|'+c:c]);
-    // Clear old data first (up to 50 rows to be safe)
+    // Clear old data first
     await gapi.client.sheets.spreadsheets.values.clear({
       spreadsheetId:S.sheetId,
-      range:`'${SHARED_TAB}'!A2:A50`
+      range:`'${SHARED_TAB}'!A2:A500`
     });
     await gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId:S.sheetId,
@@ -782,7 +787,7 @@ async function loadSharedDataFromSheet(){
   try{
     const r=await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId:S.sheetId,
-      range:`'${SHARED_TAB}'!A2:A50`
+      range:`'${SHARED_TAB}'!A2:A500`
     });
     const rows=r.result.values||[];
     if(!rows.length)return;
@@ -917,11 +922,15 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
     const rv=getRV(k)||{};
     if(!rv.originalDesc&&oldDesc){
       rv.originalDesc=oldDesc;
-      setRV(k,rv);
-      // Also sync original to Index tab column C
+    }
+    // Always track who edited and when
+    rv.editedBy=S.user?.name||S.user?.email||'Unknown';
+    rv.editedAt=Date.now();
+    setRV(k,rv);
+    if(rv.originalDesc){
       const entry=findEntry(entryName);
       const r=entry?.results.find(x=>x.rowIdx===rowIdx);
-      if(r)syncOriginalToIndexTab(entryName,r,oldDesc).catch(()=>{});
+      if(r)syncOriginalToIndexTab(entryName,r,rv.originalDesc).catch(()=>{});
     }
     
     // 1. Update in main keywords column
@@ -1148,6 +1157,7 @@ function denySuggestion(entryName,segType,rowIdx){
   pushUndo('deny',{key:k,suggestion:rv.suggestion},`Denied suggestion for "${entryName}"`);
   if(!rv.deniedHistory)rv.deniedHistory=[];
   rv.deniedHistory.push({suggestion:rv.suggestion,reason:rv.reason,time:Date.now()});
+  if(rv.deniedHistory.length>5)rv.deniedHistory=rv.deniedHistory.slice(-5);
   rv.suggestion='';rv.reason='';rv.status='denied';
   setRV(k,rv);
   const entry=findEntry(entryName);
@@ -2026,6 +2036,7 @@ function render(force=true){
   h+='</div></div>';
   // Transcript popup
   if(S.transcriptPopup)h+=rTranscript();
+  if(S.notesPopup)h+=rNotesPopup();
   // Floating audit bar
   if(S.auditSelectMode&&(S.auditSelected.size>0||S.auditRunning)){
     h+='<div class="audit-float" id="audit-float">';
@@ -2136,14 +2147,21 @@ function rSidebar(){
       return bt-at;
     });
     noteKeys.slice(0,15).forEach(key=>{
-      const parts=key.split('|');
-      const entryName=parts.slice(0,-2).join('|'); // Handle entry names with |
       const note=S.descNotes[key];
       const lastComment=note.thread[note.thread.length-1];
       const preview=lastComment.text.length>30?lastComment.text.slice(0,30)+'…':lastComment.text;
+      // Extract entry name — handle both "entry|Name" and "Name|SegType|RowIdx" formats
+      let displayName;
+      if(key.startsWith('entry|')){
+        displayName=key.slice(6); // entry-level note
+      }else{
+        const lastPipe=key.lastIndexOf('|');
+        const secondLastPipe=key.lastIndexOf('|',lastPipe-1);
+        displayName=secondLastPipe>=0?key.slice(0,secondLastPipe):key.split('|')[0];
+      }
       h+=`<div class="stab" data-notejump="${esc(key)}" style="font-size:10px;padding:3px 11px;cursor:pointer;line-height:1.3">`;
       h+=`<span style="color:var(--amber);font-size:9px">💬</span> `;
-      h+=`<strong style="font-size:10px">${esc(entryName.length>18?entryName.slice(0,18)+'…':entryName)}</strong>`;
+      h+=`<strong style="font-size:10px">${esc(displayName.length>18?displayName.slice(0,18)+'…':displayName)}</strong>`;
       h+=`<div style="color:var(--tx-3);font-size:9px;margin-top:1px">${esc(lastComment.user)}: ${esc(preview)}</div>`;
       h+=`</div>`;
     });
@@ -2371,8 +2389,11 @@ function rIndex(){
       // Status toggle — Pending/Reviewed
       eh+=`<button class="idx-entry-status ${entryDone?'reviewed':''}" data-entry-rv="${esc(e.name)}">${entryDone?'✓ Reviewed':'Pending'}</button>`;
       eh+=`</div>`;
+      const entryNoteKey='entry|'+e.name;
+      const entryNote=S.descNotes?.[entryNoteKey];
+      const entryHasThread=entryNote&&entryNote.thread&&entryNote.thread.length>0;
       eh+=`<div class="idx-entry-meta">${e.results.length} result${e.results.length!==1?'s':''} · <span data-bm="${esc(e.name)}" style="cursor:pointer;color:${isBM?'var(--gold)':'var(--tx-4)'}">${IC.bookmark}</span>`;
-      if(note)eh+=` · 📝`;
+      eh+=` · <span data-descnote="${esc(entryNoteKey)}" style="cursor:pointer;color:${entryHasThread?'var(--amber)':'var(--tx-4)'};font-size:11px" title="${entryHasThread?entryNote.thread.length+' comment(s) — click to view':'Add note to entry'}">💬${entryHasThread?entryNote.thread.length:''}</span>`;
       if(entryHasPending)eh+=` · <button class="btn btn-sm btn-green bulk-accept-btn" data-bulkaccept="${esc(e.name)}">Accept All</button>`;
       eh+=`</div>`;
 
@@ -2427,16 +2448,7 @@ function rIndex(){
           const descNoteKey=e.name+'|'+seg+'|'+r.rowIdx;
           const descNote=S.descNotes?.[descNoteKey];
           const hasThread=descNote&&descNote.thread&&descNote.thread.length>0;
-          eh+=`<span class="idx-mini-btn ${hasThread?'has-note':''}" data-descnote="${esc(descNoteKey)}" title="${hasThread?descNote.thread.length+' comment(s)':'Add comment'}" style="${hasThread?'color:var(--amber)':''}">💬</span>`;
-          // Show inline note thread below description
-          if(hasThread){
-            eh+=`<div class="idx-note-thread">`;
-            descNote.thread.forEach((c,ci)=>{
-              eh+=`<div class="idx-note-comment"><strong class="idx-note-user">${esc(c.user)}</strong><span class="idx-note-text">${esc(c.text)}</span><span class="idx-note-time">${new Date(c.timestamp).toLocaleDateString()} ${new Date(c.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span></div>`;
-            });
-            eh+=`<span class="idx-note-reply" data-notereply="${esc(descNoteKey)}">Reply…</span>`;
-            eh+=`</div>`;
-          }
+          eh+=`<span class="idx-mini-btn ${hasThread?'has-note':''}" data-descnote="${esc(descNoteKey)}" title="${hasThread?descNote.thread.length+' comment(s) — click to view':'Add comment'}" style="${hasThread?'color:var(--amber)':''}">💬${hasThread?'<span style="font-size:8px;margin-left:1px">'+descNote.thread.length+'</span>':''}</span>`;
           // Audit shield icon (always visible)
           eh+=`<span class="idx-mini-btn" data-auditone="${esc(e.name)}|${r.rowIdx}|${seg}" title="Audit this">${IC.audit}</span>`;
           // Clip dropdown (video + transcript)
@@ -2759,6 +2771,37 @@ function rTranscript(){
   return `<div class="popup-overlay" id="tx-close"></div><div class="transcript-popup"><div class="transcript-popup-hd"><h3>${esc(t.clipName)}</h3><button class="btn btn-sm btn-icon" id="tx-x">${IC.x}</button></div><div class="transcript-popup-body">${esc(t.transcript)}</div></div>`;
 }
 
+function rNotesPopup(){
+  const np=S.notesPopup;
+  if(!np)return'';
+  const note=S.descNotes?.[np.key];
+  const thread=(note&&note.thread)?note.thread:[];
+  let h=`<div class="popup-overlay" id="notes-popup-close"></div>`;
+  h+=`<div class="transcript-popup" style="max-width:440px">`;
+  h+=`<div class="transcript-popup-hd"><h3 style="font-size:14px">💬 ${esc(np.label)}</h3><button class="btn btn-sm btn-icon" id="notes-popup-x">${IC.x}</button></div>`;
+  h+=`<div class="transcript-popup-body" style="padding:12px 16px;max-height:400px;overflow-y:auto">`;
+  if(thread.length){
+    thread.forEach((c,ci)=>{
+      h+=`<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--bg-2)">`;
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">`;
+      h+=`<strong style="color:var(--blue);font-size:12px">${esc(c.user)}</strong>`;
+      h+=`<span style="color:var(--tx-4);font-size:9px">${new Date(c.timestamp).toLocaleDateString()} ${new Date(c.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`;
+      h+=`</div>`;
+      h+=`<div style="font-size:12px;color:var(--tx-1);line-height:1.4">${esc(c.text)}</div>`;
+      h+=`</div>`;
+    });
+  }else{
+    h+=`<div style="color:var(--tx-3);font-size:12px;padding:12px 0;text-align:center">No comments yet. Add one below.</div>`;
+  }
+  h+=`</div>`;
+  h+=`<div style="padding:8px 16px 12px;border-top:1px solid var(--border);display:flex;gap:6px">`;
+  h+=`<input id="note-input" class="idx-inline-input" style="flex:1;min-width:0" placeholder="Write a comment…">`;
+  h+=`<button class="btn btn-sm btn-gold" id="note-send">Send</button>`;
+  h+=`</div>`;
+  h+=`</div>`;
+  return h;
+}
+
 function rSetup(app){
   const hasCredentials=localStorage.getItem('jw_cid')&&localStorage.getItem('jw_sid');
   if(S.loading&&hasCredentials){
@@ -3074,32 +3117,41 @@ function bindAll(){
 
   // Description-level notes/bookmarks
   // Description notes — add new comment
+  // Notes — click 💬 to open popup
   $$('[data-descnote]').forEach(el=>el.onclick=(ev)=>{
     ev.stopPropagation();
     const key=el.dataset.descnote;
-    const input=prompt('Add a comment on this description:');
-    if(!input||!input.trim())return;
-    if(!S.descNotes[key])S.descNotes[key]={thread:[]};
-    if(!S.descNotes[key].thread){
+    // Build a label from the key
+    const parts=key.split('|');
+    const entryName=parts.length>2?parts.slice(0,-2).join('|'):parts[0];
+    S.notesPopup={key,label:entryName};
+    // Migrate old format if needed
+    if(S.descNotes[key]&&!S.descNotes[key].thread){
       const old=S.descNotes[key];
       S.descNotes[key]={thread:old.note?[{user:old.user||'Unknown',text:old.note,timestamp:old.timestamp||Date.now()}]:[]};
     }
-    S.descNotes[key].thread.push({user:S.user?.name||'Unknown',text:input.trim(),timestamp:Date.now()});
-    syncSharedDataToSheet();
     render();
   });
-  // Reply to existing thread
-  $$('[data-notereply]').forEach(el=>el.onclick=(ev)=>{
-    ev.stopPropagation();
-    const key=el.dataset.notereply;
-    const input=prompt('Reply:');
-    if(!input||!input.trim())return;
+  // Notes popup — close
+  on('#notes-popup-close','click',()=>{S.notesPopup=null;render()});
+  on('#notes-popup-x','click',()=>{S.notesPopup=null;render()});
+  // Notes popup — send comment
+  on('#note-send','click',()=>{
+    if(!S.notesPopup)return;
+    const inp=$('#note-input');
+    const text=inp?.value?.trim();
+    if(!text)return;
+    const key=S.notesPopup.key;
     if(!S.descNotes[key])S.descNotes[key]={thread:[]};
     if(!S.descNotes[key].thread)S.descNotes[key].thread=[];
-    S.descNotes[key].thread.push({user:S.user?.name||'Unknown',text:input.trim(),timestamp:Date.now()});
+    S.descNotes[key].thread.push({user:S.user?.name||'Unknown',text,timestamp:Date.now()});
     syncSharedDataToSheet();
     render();
+    // Re-focus input after render
+    setTimeout(()=>{const i=$('#note-input');if(i)i.focus()},50);
   });
+  // Notes popup — Enter to send
+  on('#note-input','keydown',(e)=>{if(e.key==='Enter'){e.preventDefault();$('#note-send')?.click()}});
 
   // Bookmarks
   $$('[data-bm]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();const n=el.dataset.bm;S.idxBookmarks[n]=!S.idxBookmarks[n];if(!S.idxBookmarks[n])delete S.idxBookmarks[n];saveBM();render()});
@@ -3112,8 +3164,14 @@ function bindAll(){
   // Note jump — click sidebar note to navigate to that entry
   $$('[data-notejump]').forEach(el=>el.onclick=()=>{
     const key=el.dataset.notejump;
-    const parts=key.split('|');
-    const entryName=parts.slice(0,-2).join('|');
+    let entryName;
+    if(key.startsWith('entry|')){
+      entryName=key.slice(6);
+    }else{
+      const lastPipe=key.lastIndexOf('|');
+      const secondLastPipe=key.lastIndexOf('|',lastPipe-1);
+      entryName=secondLastPipe>=0?key.slice(0,secondLastPipe):key.split('|')[0];
+    }
     S.view='index';S.idxSearch=entryName;S.idxNavMode='tabs';S.idxActiveSection='all';S.reviewFilter='all';render();
   });
 
