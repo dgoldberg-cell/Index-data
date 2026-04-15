@@ -169,6 +169,15 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-orig-revert:hover{background:var(--amber-bg);border-color:var(--amber)}
 .idx-orig-sep{color:var(--tx-4);font-size:10px}
 .idx-mini-btn{width:20px;height:20px;border:1px solid var(--border);border-radius:4px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx-4);font-size:10px;transition:all .1s}
+
+/* Note thread — inline below description */
+.idx-note-thread{width:100%;margin:4px 0 2px 16px;padding:4px 8px;background:var(--bg-1);border-left:2px solid var(--amber);border-radius:0 4px 4px 0;font-size:11px}
+.idx-note-comment{margin-bottom:3px;line-height:1.4}
+.idx-note-user{color:var(--blue);font-size:10px;margin-right:4px}
+.idx-note-text{color:var(--tx-1)}
+.idx-note-time{color:var(--tx-4);font-size:9px;margin-left:6px}
+.idx-note-reply{color:var(--amber);cursor:pointer;font-size:10px;font-weight:500;display:inline-block;margin-top:2px}
+.idx-note-reply:hover{text-decoration:underline}
 .idx-mini-btn:hover{background:var(--bg-1);color:var(--tx-2);border-color:var(--border-hi)}
 .idx-mini-btn.active{color:var(--gold);border-color:var(--gold)}
 
@@ -571,6 +580,7 @@ sectionOverrides:{}, // {entryName: newSection} — persisted in shared data
 undoStack:[], // [{type, data, label, timestamp}] — last 50 actions
 activityLog:[], // [{timestamp, user, action}] — shared, last 200 entries
 showAllActivity:false, // Toggle: show everyone's activity (admins only)
+descNotes:{}, // {entryName|segType|rowIdx: {note, user, timestamp}} — shared notes on descriptions
 toolsOpen:false, // Toggle: show Tools section in sidebar
 testEntry:'',testDesc:'',testSection:'Topics',testResult:null, // Test audit
 consistencyResults:null,consistencyRunning:false,consistencyProgress:0,consistencyTotal:0, // Consistency check
@@ -735,6 +745,7 @@ async function doSyncToSheet(){
       reviewData:S.reviewData,
       bookmarks_by_user:S._allBookmarks||{},
       notes:S.idxNotes,
+      descNotes:S.descNotes,
       sectionOverrides:S.sectionOverrides,
       activityLog:S.activityLog,
       rules:{tagDesc:RULES.tagDesc,consistency:RULES.consistency,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults},
@@ -807,6 +818,7 @@ async function loadSharedDataFromSheet(){
       S._allBookmarks[userKey]=data.bookmarks;
     }
     if(data.notes)S.idxNotes=data.notes;
+    if(data.descNotes)S.descNotes=data.descNotes;
     if(data.sectionOverrides)S.sectionOverrides=data.sectionOverrides;
     if(data.activityLog)S.activityLog=data.activityLog;
     if(data.rules&&data.rules.tagDesc){
@@ -867,11 +879,14 @@ function startAutoRefresh(){
 // Manual refresh
 async function manualRefresh(){
   if(!S.connected)return;
-  toast('Refreshing…');
+  toast('Refreshing all data…');
   try{
+    // Reload main sheet data (descriptions, keywords, etc.)
+    await loadTab(S.activeTab||0);
+    // Reload shared data (review status, notes, bookmarks, etc.)
     await loadSharedDataFromSheet();
     buildIndex();render(true);
-    toast('Synced','success');
+    toast('All data refreshed','success');
   }catch(e){toast('Refresh failed','error')}
 }
 
@@ -1117,12 +1132,12 @@ async function acceptSuggestion(entryName,segType,rowIdx){
   pushUndo('accept',{key:k,suggestion:rv.suggestion,oldDesc,rowIdx,entryName},`"${entryName}": "${oldDesc}" → "${rv.suggestion}"`);
   const ok=await updateTagDesc(rowIdx,entryName,rv.suggestion);
   if(!ok)return;
-  rv.status='accepted';rv.reviewed=true;setRV(k,rv);
+  rv.status='accepted';rv.reviewed=true;rv.editedBy=S.user?.name||S.user?.email||'Unknown';rv.editedAt=Date.now();setRV(k,rv);
   if(r){
     syncToIndexTab(entryName,r,'accepted','').catch(()=>{});
     syncDescToIndexTab(entryName,r,rv.suggestion).catch(()=>{});
   }
-  logActivity(`Accepted: "${entryName}" → "${rv.suggestion}"`);
+  logActivity(`Accepted "${entryName}": "${oldDesc}" → "${rv.suggestion}"`);
   buildIndex();render(true);
 }
 
@@ -1151,7 +1166,7 @@ async function applyCustomDesc(entryName,segType,rowIdx,customText){
   const ok=await updateTagDesc(rowIdx,entryName,customText);
   if(!ok)return;
   const rv=getRV(k)||{};
-  rv.status='custom';rv.reviewed=true;rv.customApplied=customText;setRV(k,rv);
+  rv.status='custom';rv.reviewed=true;rv.customApplied=customText;rv.editedBy=S.user?.name||S.user?.email||'Unknown';rv.editedAt=Date.now();setRV(k,rv);
   if(r){
     syncToIndexTab(entryName,r,'custom','').catch(()=>{});
     syncDescToIndexTab(entryName,r,customText).catch(()=>{});
@@ -1181,7 +1196,7 @@ async function bulkAcceptEntry(entryName){
     if(rv&&rv.suggestion&&rv.status==='pending'){
       // Accept without pushing individual undos (bulk undo handles it)
       const ok=await updateTagDesc(r.rowIdx,entryName,rv.suggestion);
-      if(ok){rv.status='accepted';rv.reviewed=true;setRV(k,rv);count++}
+      if(ok){rv.status='accepted';rv.reviewed=true;rv.editedBy=S.user?.name||S.user?.email||'Unknown';rv.editedAt=Date.now();setRV(k,rv);count++}
     }
   }
   if(count){
@@ -2110,6 +2125,31 @@ function rSidebar(){
     if(bmNames.length>20)h+=`<div style="padding:2px 11px;font-size:9px;color:var(--tx-4)">+${bmNames.length-20} more</div>`;
   }
 
+  // Notes section — all description notes across the index
+  const noteKeys=Object.keys(S.descNotes||{}).filter(k=>{const n=S.descNotes[k];return n&&n.thread&&n.thread.length>0});
+  if(noteKeys.length){
+    h+=`<div class="nav-sec" style="margin-top:14px">Notes <span style="font-size:8px;font-weight:400;letter-spacing:0">(${noteKeys.length})</span></div>`;
+    // Sort by most recent comment
+    noteKeys.sort((a,b)=>{
+      const at=S.descNotes[a].thread.slice(-1)[0]?.timestamp||0;
+      const bt=S.descNotes[b].thread.slice(-1)[0]?.timestamp||0;
+      return bt-at;
+    });
+    noteKeys.slice(0,15).forEach(key=>{
+      const parts=key.split('|');
+      const entryName=parts.slice(0,-2).join('|'); // Handle entry names with |
+      const note=S.descNotes[key];
+      const lastComment=note.thread[note.thread.length-1];
+      const preview=lastComment.text.length>30?lastComment.text.slice(0,30)+'…':lastComment.text;
+      h+=`<div class="stab" data-notejump="${esc(key)}" style="font-size:10px;padding:3px 11px;cursor:pointer;line-height:1.3">`;
+      h+=`<span style="color:var(--amber);font-size:9px">💬</span> `;
+      h+=`<strong style="font-size:10px">${esc(entryName.length>18?entryName.slice(0,18)+'…':entryName)}</strong>`;
+      h+=`<div style="color:var(--tx-3);font-size:9px;margin-top:1px">${esc(lastComment.user)}: ${esc(preview)}</div>`;
+      h+=`</div>`;
+    });
+    if(noteKeys.length>15)h+=`<div style="padding:2px 11px;font-size:9px;color:var(--tx-4)">+${noteKeys.length-15} more</div>`;
+  }
+
   // Tools — collapsible
   h+=`<div class="nav-sec" style="margin-top:14px;cursor:pointer" id="tools-toggle">Tools <span style="font-size:8px;color:var(--tx-4)">${S.toolsOpen?'▾':'▸'}</span></div>`;
   if(S.toolsOpen){
@@ -2370,10 +2410,12 @@ function rIndex(){
             eh+=`<span class="idx-sug-btn custom" data-sugcustom="${esc(e.name)}|${seg}|${r.rowIdx}" title="Custom edit">✎</span>`;
             eh+=`</span>`;
           }else if(hasOriginal){
+            const editInfo=rv.editedBy?`Edited by ${rv.editedBy}${rv.editedAt?' at '+new Date(rv.editedAt).toLocaleString():''}. `:'';
             eh+=`<span class="idx-orig-inline"><span class="idx-orig-text" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert to original">${esc(rv.originalDesc)}</span><span class="idx-orig-revert" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}">↩</span><span class="idx-orig-sep">→</span></span>`;
-            eh+=`<span class="idx-result-desc editable" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="Double-click to edit">${esc(r.desc)}</span>`;
+            eh+=`<span class="idx-result-desc editable" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="${esc(editInfo)}Double-click to edit">${esc(r.desc)}</span>`;
           }else{
-            eh+=`<span class="idx-result-desc ${descEmpty?'empty-desc':'editable'}" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="Double-click to edit">${descEmpty?'[no description]':esc(r.desc)}</span>`;
+            const editInfo2=(rv&&rv.editedBy)?`Edited by ${rv.editedBy}${rv.editedAt?' at '+new Date(rv.editedAt).toLocaleString():''}. `:'';
+            eh+=`<span class="idx-result-desc ${descEmpty?'empty-desc':'editable'}" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="${esc(editInfo2)}Double-click to edit">${descEmpty?'[no description]':esc(r.desc)}</span>`;
           }
           // Reference info — compact
           if(r.rel)eh+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
@@ -2381,6 +2423,20 @@ function rIndex(){
           if(r.clipType==='Film Chapter'||r.clipType==='Film')eh+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">${esc(r.pvName||r.clipName)}</a>`;
           else eh+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">#${esc(r.progNum)}</a>`;
           eh+=`</span>`;
+          // Description-level notes/comments (threaded)
+          const descNoteKey=e.name+'|'+seg+'|'+r.rowIdx;
+          const descNote=S.descNotes?.[descNoteKey];
+          const hasThread=descNote&&descNote.thread&&descNote.thread.length>0;
+          eh+=`<span class="idx-mini-btn ${hasThread?'has-note':''}" data-descnote="${esc(descNoteKey)}" title="${hasThread?descNote.thread.length+' comment(s)':'Add comment'}" style="${hasThread?'color:var(--amber)':''}">💬</span>`;
+          // Show inline note thread below description
+          if(hasThread){
+            eh+=`<div class="idx-note-thread">`;
+            descNote.thread.forEach((c,ci)=>{
+              eh+=`<div class="idx-note-comment"><strong class="idx-note-user">${esc(c.user)}</strong><span class="idx-note-text">${esc(c.text)}</span><span class="idx-note-time">${new Date(c.timestamp).toLocaleDateString()} ${new Date(c.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span></div>`;
+            });
+            eh+=`<span class="idx-note-reply" data-notereply="${esc(descNoteKey)}">Reply…</span>`;
+            eh+=`</div>`;
+          }
           // Audit shield icon (always visible)
           eh+=`<span class="idx-mini-btn" data-auditone="${esc(e.name)}|${r.rowIdx}|${seg}" title="Audit this">${IC.audit}</span>`;
           // Clip dropdown (video + transcript)
@@ -3016,6 +3072,35 @@ function bindAll(){
   });
   on('#btn-fullsync','click',()=>fullSyncToSheets());
 
+  // Description-level notes/bookmarks
+  // Description notes — add new comment
+  $$('[data-descnote]').forEach(el=>el.onclick=(ev)=>{
+    ev.stopPropagation();
+    const key=el.dataset.descnote;
+    const input=prompt('Add a comment on this description:');
+    if(!input||!input.trim())return;
+    if(!S.descNotes[key])S.descNotes[key]={thread:[]};
+    if(!S.descNotes[key].thread){
+      const old=S.descNotes[key];
+      S.descNotes[key]={thread:old.note?[{user:old.user||'Unknown',text:old.note,timestamp:old.timestamp||Date.now()}]:[]};
+    }
+    S.descNotes[key].thread.push({user:S.user?.name||'Unknown',text:input.trim(),timestamp:Date.now()});
+    syncSharedDataToSheet();
+    render();
+  });
+  // Reply to existing thread
+  $$('[data-notereply]').forEach(el=>el.onclick=(ev)=>{
+    ev.stopPropagation();
+    const key=el.dataset.notereply;
+    const input=prompt('Reply:');
+    if(!input||!input.trim())return;
+    if(!S.descNotes[key])S.descNotes[key]={thread:[]};
+    if(!S.descNotes[key].thread)S.descNotes[key].thread=[];
+    S.descNotes[key].thread.push({user:S.user?.name||'Unknown',text:input.trim(),timestamp:Date.now()});
+    syncSharedDataToSheet();
+    render();
+  });
+
   // Bookmarks
   $$('[data-bm]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();const n=el.dataset.bm;S.idxBookmarks[n]=!S.idxBookmarks[n];if(!S.idxBookmarks[n])delete S.idxBookmarks[n];saveBM();render()});
   // Bookmark sidebar jump — switch to index view, search for the entry
@@ -3023,6 +3108,13 @@ function bindAll(){
     const name=el.dataset.bmjump;
     S.view='index';S.idxSearch=name;S.idxNavMode='tabs';S.idxActiveSection='all';S.reviewFilter='all';render();
     setTimeout(()=>{const inp=$('#idx-search');if(inp){inp.focus();inp.selectionStart=inp.selectionEnd=inp.value.length}},50);
+  });
+  // Note jump — click sidebar note to navigate to that entry
+  $$('[data-notejump]').forEach(el=>el.onclick=()=>{
+    const key=el.dataset.notejump;
+    const parts=key.split('|');
+    const entryName=parts.slice(0,-2).join('|');
+    S.view='index';S.idxSearch=entryName;S.idxNavMode='tabs';S.idxActiveSection='all';S.reviewFilter='all';render();
   });
 
   // Description editing (double-click)
@@ -3087,9 +3179,11 @@ function bindAll(){
         if(ok){
           const rv=getRV(k)||{};
           rv.reviewed=true;rv.status='manual';
+          rv.editedBy=S.user?.name||S.user?.email||'Unknown';
+          rv.editedAt=Date.now();
           setRV(k,rv);
           syncDescToIndexTab(entryName,result,newVal).catch(()=>{});
-          logActivity(`Edited: "${entryName}" → "${newVal}"`);
+          logActivity(`Edited "${entryName}": "${result.desc}" → "${newVal}"`);
           S.editingDesc=null;
           if(wrapper.parentNode)wrapper.parentNode.removeChild(wrapper);
           buildIndex();render(true);
