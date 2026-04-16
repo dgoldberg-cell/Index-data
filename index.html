@@ -480,7 +480,8 @@ checks:[
 {id:'spelling',name:'Rule 9 — Fix spelling: G-d not God, G-dly not Godly, G-dliness not Godliness. Fix common typos.',on:true},
 {id:'generate_empty',name:'Rule 10 — If description is blank, generate one based on transcript and entry context.',on:true},
 {id:'leave_good',name:'Rule 11 — If description already follows all rules, leave it alone. Do not change for the sake of changing.',on:true},
-{id:'transcript_check',name:'Rule 12 — Verify against transcript. If a transcript is provided, check that the description accurately reflects the clip content. Flag if the description seems inaccurate, misleading, or unrelated to what the transcript describes.',on:true}
+{id:'transcript_check',name:'Rule 12 — Verify against transcript. If a transcript is provided, check that the description accurately reflects the clip content. Flag if the description seems inaccurate, misleading, or unrelated to what the transcript describes.',on:true},
+{id:'english_pref',name:'Rule 13 — Default to English. Use common English words over Hebrew/Yiddish when a clear English equivalent exists. "Charity" not "Tzedakah", "Repentance" not "Teshuvah", "Sabbath" or "Shabbos" not "Shabbat". Exception: terms that have no precise English equivalent or are proper names (Farbrengen, Chassidus, Chabad) stay as-is.',on:true}
 ],
 pairedExamples:[
 {tag:'Tefillin',rule:'Rule 1 — length',good:'donning prior to Bar Mitzvah',goodNote:'5 words, concise',bad:'donning prior to Bar Mitzvah celebration event in the synagogue',badNote:'10 words, way too long'},
@@ -2152,7 +2153,9 @@ COMMON MISTAKES YOU MUST NOT MAKE:
     const batchNum=Math.floor(i/bs)+1;
     const totalBatches=Math.ceil(allEntries.length/bs);
     S.auditLog.push(`Batch ${batchNum}/${totalBatches} — Pass 1: analyzing ${batch.length} descriptions…`);
+    S.auditProgress=i; // Update progress before the batch
     render();
+    await new Promise(r=>setTimeout(r,50)); // Yield to browser to paint
     try{
       // ── PASS 1: Initial audit ──
       const prompt1=`Audit these tag descriptions for a printed book index.
@@ -2186,6 +2189,7 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
 
       S.auditLog.push(`  Pass 1 complete. Running Pass 2: verifying suggestions…`);
       render();
+      await new Promise(r=>setTimeout(r,50));
 
       // ── PASS 2: Verify the AI's own suggestions ──
       const needsVerify=pass1.filter(p=>p.status==='fix'||p.status==='generate');
@@ -2288,7 +2292,11 @@ ${needsVerify.map((p,j)=>`[${p.idx}] Entry:"${batch[p.idx]?.entryName}" Original
     if(i+bs<allEntries.length)await new Promise(r=>setTimeout(r,500));
   }
   S.auditRunning=false;
-  S.auditLog.push(`\nDone! ${totalFixed} need changes, ${S.auditTotal-totalFixed} look good.`);toast(`${totalFixed} need changes, ${S.auditTotal-totalFixed} look good`,'success');render();
+  // Auto-dismiss the selection bar
+  S.auditSelectMode=false;S.auditSelected=new Set();
+  S.auditLog.push(`\nDone! ${totalFixed} need changes, ${S.auditTotal-totalFixed} look good.`);
+  toast(`Audit complete: ${totalFixed} need changes, ${S.auditTotal-totalFixed} look good`,'success');
+  buildIndex();render();
 }
 async function reviewAction(item,action,custom){
   if(action==='accept'||action==='custom'){
