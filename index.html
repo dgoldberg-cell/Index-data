@@ -183,9 +183,9 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .note-msg-del{position:absolute;top:4px;right:6px;font-size:9px;color:var(--tx-4);cursor:pointer;opacity:0;transition:opacity .1s}
 .note-msg-bubble:hover .note-msg-del{opacity:1}
 .note-msg-del:hover{color:var(--red)}
-.note-popup-input{display:flex;gap:6px;padding:10px 16px;border-top:1px solid var(--border);background:var(--bg-0)}
-.note-popup-input input{flex:1;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;font-family:var(--font);outline:none;background:var(--bg-white)}
-.note-popup-input input:focus{border-color:var(--gold)}
+.note-popup-input{display:flex;gap:6px;padding:10px 16px;border-top:1px solid var(--border);background:var(--bg-0);flex-direction:column}
+.note-popup-input textarea{width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;font-family:var(--font);outline:none;background:var(--bg-white);line-height:1.5;box-sizing:border-box}
+.note-popup-input textarea:focus{border-color:var(--gold)}
 .note-popup-input button{background:var(--amber);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer}
 .note-badge{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--amber);margin-left:2px;vertical-align:middle}
 
@@ -2209,8 +2209,8 @@ const IC={
 // RENDER
 // ═══════════════════════════════════════════════════════════════
 function render(force=true){
-  // Don't rebuild DOM while user is editing inline — UNLESS forced
-  if(!force&&$('#desc-edit')){return}
+  // Don't rebuild DOM while user is editing inline or typing a note — UNLESS forced
+  if(!force&&($('#desc-edit')||$('#note-input'))){return}
   const app=$('#app');
   if(!S.connected){rSetup(app);return}
   if(S.loading&&!S.headers.length){app.innerHTML='<div class="loading-state"><div class="spinner"></div>Loading…</div>';return}
@@ -2251,7 +2251,7 @@ function render(force=true){
       h+=`</div>`;
     });
     h+=`</div>`;
-    h+=`<div class="note-popup-input" style="position:relative"><div class="mention-dropdown" id="mention-dd" style="display:none"></div><input id="note-input" placeholder="Type a comment… Use @ to mention" autocomplete="off"><button id="note-send">Send</button></div>`;
+    h+=`<div class="note-popup-input" style="position:relative"><div class="mention-dropdown" id="mention-dd" style="display:none"></div><textarea id="note-input" placeholder="Type a comment… Use @ to mention" autocomplete="off" rows="4" style="resize:vertical;min-height:80px"></textarea><button id="note-send" style="align-self:flex-end">Send</button></div>`;
     h+=`</div></div>`;
   }
   if(S.notesPopup)h+=rNotesPopup();
@@ -3483,13 +3483,14 @@ function bindAll(){
     const dd=$('#mention-dd');
     if(e.key==='Enter'){
       if(dd&&dd.style.display==='block'){
-        // Select first mention
         const first=dd.querySelector('.mention-item');
         if(first)first.click();
         e.preventDefault();
-      }else{
+      }else if(e.ctrlKey||e.metaKey){
+        // Ctrl/Cmd+Enter to send
         e.preventDefault();$('#note-send')?.click();
       }
+      // Plain Enter = newline (default textarea behavior)
     }
     if(e.key==='Escape'&&dd)dd.style.display='none';
   });
