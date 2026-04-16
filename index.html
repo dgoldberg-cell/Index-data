@@ -479,7 +479,8 @@ checks:[
 {id:'word_choice',name:'Rule 8 — Choose precise, elevated language. Write like a professional index editor. Replace casual/generic phrasing with refined, concise alternatives. "Fought cancer" not "dealing with cancer." Every word should be the most vivid and precise option.',on:true},
 {id:'spelling',name:'Rule 9 — Fix spelling: G-d not God, G-dly not Godly, G-dliness not Godliness. Fix common typos.',on:true},
 {id:'generate_empty',name:'Rule 10 — If description is blank, generate one based on transcript and entry context.',on:true},
-{id:'leave_good',name:'Rule 11 — If description already follows all rules, leave it alone. Do not change for the sake of changing.',on:true}
+{id:'leave_good',name:'Rule 11 — If description already follows all rules, leave it alone. Do not change for the sake of changing.',on:true},
+{id:'transcript_check',name:'Rule 12 — Verify against transcript. If a transcript is provided, check that the description accurately reflects the clip content. Flag if the description seems inaccurate, misleading, or unrelated to what the transcript describes.',on:true}
 ],
 pairedExamples:[
 {tag:'Tefillin',rule:'Rule 1 — length',good:'donning prior to Bar Mitzvah',goodNote:'5 words, concise',bad:'donning prior to Bar Mitzvah celebration event in the synagogue',badNote:'10 words, way too long'},
@@ -966,8 +967,8 @@ function registerTeamMember(){
 }
 
 function getMyNotifications(){
-  const myEmail=S.user?.email||'';
-  return(S.notifications||[]).filter(n=>n.to===myEmail);
+  const myEmail=(S.user?.email||'').toLowerCase();
+  return(S.notifications||[]).filter(n=>(n.to||'').toLowerCase()===myEmail);
 }
 
 function getUnreadCount(){
@@ -976,6 +977,7 @@ function getUnreadCount(){
 
 function sendMention(toEmail,fromName,noteKey,noteTitle,text){
   if(!S.notifications)S.notifications=[];
+  console.log('sendMention:',{toEmail,fromName,noteKey,noteTitle,text:text.slice(0,50)});
   S.notifications.push({
     id:Date.now()+'_'+Math.random().toString(36).slice(2,6),
     type:'mention',to:toEmail,from:fromName,
@@ -2133,21 +2135,26 @@ async function runAudit(){
   const bs=S.auditBatch;let totalFixed=0;
   for(let i=0;i<allEntries.length;i+=bs){
     const batch=allEntries.slice(i,i+bs);
-    S.auditLog.push(`Batch ${Math.floor(i/bs)+1}/${Math.ceil(allEntries.length/bs)}...`);render();
+    S.auditLog.push(`Processing batch ${Math.floor(i/bs)+1}/${Math.ceil(allEntries.length/bs)} (${batch.length} descriptions)…`);
+    // Show rule-checking steps
+    const ruleNames=RULES.tagDesc.checks.filter(c=>c.on).map(c=>c.name.replace(/^Rule \d+ — /,''));
+    S.auditLog.push(`  ↳ Checking: ${ruleNames.slice(0,4).join(', ')}…`);
+    render();
     try{
       const fullRules=buildAuditRulesText();
       const prompt=`Audit these tag descriptions for the JEM Video Index book.
 
 ${fullRules}
 
-IMPORTANT: For EACH description below, walk through every rule (1-11) individually. Check each one. Only mark "ok" if it passes ALL rules.
+IMPORTANT: For EACH description below, walk through every rule individually. Check each one. Only mark "ok" if it passes ALL rules.
 
 The description reads as "[Entry name]: [description]" like a subtitle. It must add meaning beyond the entry name.
 
 JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}
 
 ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,150)}"`).join('\n\n')}`;
-      const sysPrompt='You are a strict professional index editor. For EACH description, mentally walk through EVERY rule (1-11) one by one. Do not skip rules. Do not batch-judge. Treat each description individually.\n\nYour checklist per description:\n1. Count words — 2-6? (max 8)\n2. Does it repeat any word from the entry name or its root?\n3. Does it start with "the," "a," or "an"?\n4. Could it be shorter and still clear?\n5. Are non-proper words incorrectly capitalized?\n6. Were structural prepositions dropped that should be kept?\n7. Is it a full sentence instead of a noun phrase?\n8. Is the word choice casual/generic — could a more precise/elevated word work?\n9. Spelling issues? (God→G-d, Godly→G-dly)\n10. Is it blank? Generate if so.\n11. If it passes ALL rules, mark ok. Do NOT change good descriptions.\n\nRespond with JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}';
+      const ruleChecklist=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
+      const sysPrompt=`You are a strict professional index editor. For EACH description, mentally walk through EVERY rule one by one. Do not skip rules. Do not batch-judge. Treat each description individually.\n\nYour checklist per description:\n${ruleChecklist}\n\nIf it passes ALL rules, mark ok. Do NOT change good descriptions.\n\nRespond with JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}`;
       const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
       if(!resp.ok)throw new Error('API '+resp.status);
       const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
@@ -2190,7 +2197,8 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
         })();
       }
       totalFixed+=fx;
-      S.auditLog.push(`  ${fx} need review, ${batch.length-fx} OK`);
+      S.auditLog.push(`  ✓ ${fx} need review, ${batch.length-fx} passed all rules`);
+      S.auditLog.push(`  ↳ Now checking: word count, name repetition, articles, length, capitals, prepositions, noun phrases, word choice, spelling, transcript…`);
     }catch(e){S.auditLog.push(`  Error: ${e.message}`)}
     S.auditProgress=Math.min(i+bs,allEntries.length);render();
     if(i+bs<allEntries.length)await new Promise(r=>setTimeout(r,1500));
@@ -2287,7 +2295,13 @@ function render(force=true){
   if(S.auditSelectMode&&(S.auditSelected.size>0||S.auditRunning)){
     h+='<div class="audit-float" id="audit-float">';
     if(S.auditRunning){
-      h+=`<div class="af-spinner"></div> Auditing… ${S.auditProgress}/${S.auditTotal}`;
+      const pct=S.auditTotal?(S.auditProgress/S.auditTotal*100):0;
+      const lastLog=S.auditLog.length?S.auditLog[S.auditLog.length-1]:'Starting…';
+      h+=`<div style="flex:1">`;
+      h+=`<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span><div class="af-spinner" style="display:inline-block"></div> Auditing… ${S.auditProgress}/${S.auditTotal}</span><span>${Math.round(pct)}%</span></div>`;
+      h+=`<div class="audit-progress-bar" style="height:4px;margin:0"><div class="audit-progress-fill" style="width:${pct}%"></div></div>`;
+      h+=`<div style="font-size:10px;color:var(--tx-4);margin-top:3px">${esc(lastLog)}</div>`;
+      h+=`</div>`;
     }else{
       h+=`<span class="af-count">${S.auditSelected.size}</span> selected `;
       h+=`<button class="af-run" id="idx-audit-selected2">Run Audit</button>`;
@@ -2887,8 +2901,16 @@ function rAuditor(){
   RULES.tagDesc.checks.forEach(c=>{h+=`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px"><span style="color:${c.on?'var(--green)':'var(--tx-4)'}">${c.on?'✓':'✗'}</span>${c.name}</div>`});
   h+='</div>';
   if(S.auditRunning){
-    h+=`<div style="padding:14px;background:var(--bg-0);border:1px solid var(--border);border-radius:var(--radius)"><div style="font-size:13px;font-weight:600">Auditing… ${S.auditProgress}/${S.auditTotal}</div><div class="audit-progress-bar"><div class="audit-progress-fill" style="width:${S.auditTotal?(S.auditProgress/S.auditTotal*100):0}%"></div></div><div class="audit-log">`;
-    S.auditLog.forEach(l=>{h+=`<div>${esc(l)}</div>`});h+='</div></div>';
+    const pct=S.auditTotal?(S.auditProgress/S.auditTotal*100):0;
+    h+=`<div style="padding:14px;background:var(--bg-0);border:1px solid var(--border);border-radius:var(--radius)">`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">`;
+    h+=`<div style="font-size:14px;font-weight:600">🔍 Auditing… ${S.auditProgress}/${S.auditTotal}</div>`;
+    h+=`<div style="font-size:13px;font-weight:600;color:var(--gold)">${Math.round(pct)}%</div>`;
+    h+=`</div>`;
+    h+=`<div class="audit-progress-bar" style="height:8px;margin-bottom:10px"><div class="audit-progress-fill" style="width:${pct}%;transition:width 0.3s"></div></div>`;
+    h+=`<div class="audit-log" style="max-height:200px;overflow-y:auto;font-size:11px">`;
+    S.auditLog.forEach(l=>{h+=`<div style="padding:2px 0;color:${l.startsWith('  ')?'var(--tx-3)':'var(--tx-1)'}">${esc(l)}</div>`});
+    h+='</div></div>';
   }else{
     h+=`<button class="btn btn-gold" id="btn-audit" style="height:40px;padding:0 24px;font-size:13px;font-weight:600">${IC.play} Run Audit</button>`;
     h+=`<span style="font-size:11px;color:var(--tx-3);margin-left:10px">${S.auditBatch} per batch · Results appear inline in Index Preview</span>`;
@@ -3445,17 +3467,17 @@ function bindAll(){
     const key=S.notePopup.key;
     if(!S.descNotes[key])S.descNotes[key]={thread:[]};
     if(!S.descNotes[key].thread)S.descNotes[key].thread=[];
-    // Detect @mentions
+    // Detect @mentions by matching against actual team member names
     const mentions=[];
-    const mentionRegex=/@(\w[\w\s]*?)(?=\s@|\s*$|[.,!?])/g;
-    let m;
-    while((m=mentionRegex.exec(text))!==null){
-      const name=m[1].trim();
-      const member=S.teamMembers.find(tm=>tm.name.toLowerCase()===name.toLowerCase());
-      if(member)mentions.push(member);
-    }
+    S.teamMembers.forEach(tm=>{
+      if(tm.email===S.user?.email)return; // Don't notify yourself
+      // Check if text contains @Name (case-insensitive)
+      const pattern=new RegExp('@'+tm.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');
+      if(pattern.test(text))mentions.push(tm);
+    });
     S.descNotes[key].thread.push({user:S.user?.name||'Unknown',text,timestamp:Date.now(),mentions:mentions.map(m=>m.email)});
     // Send notifications for each mention
+    console.log('Mentions detected:',mentions.map(m=>m.name+' ('+m.email+')'));
     mentions.forEach(member=>{
       if(member.email!==S.user?.email){
         sendMention(member.email,S.user?.name||'Unknown',key,S.notePopup.title,text);
@@ -3788,7 +3810,7 @@ function bindAll(){
     S.testResult=null;render();toast('Testing…');
     try{
       const fullRules=buildAuditRulesText();
-      const prompt=`Audit this tag description. Walk through EVERY rule (1-11) one by one.
+      const prompt=`Audit this tag description. Walk through EVERY rule one by one.
 
 ${fullRules}
 
@@ -3905,7 +3927,7 @@ async function auditSingleDesc(entryName,rowIdx,segType){
   toast('Auditing…');
   try{
     const fullRules=buildAuditRulesText();
-    const prompt=`Audit this single tag description. Walk through EVERY rule (1-11) one by one.
+    const prompt=`Audit this single tag description. Walk through EVERY rule one by one.
 
 Entry: "${entryName}" | Section: ${entry.section} | Relationship: ${r.rel}
 Description: "${r.desc||'[empty]'}"
@@ -4026,7 +4048,7 @@ async function auditSelectedItems(){
 
 ${fullRules}
 
-IMPORTANT: For EACH description below, walk through every rule (1-11) individually. Check each one. Only mark "ok" if it passes ALL rules.
+IMPORTANT: For EACH description below, walk through every rule individually. Check each one. Only mark "ok" if it passes ALL rules.
 
 The description reads as "[Entry name]: [description]" like a subtitle. It must add meaning beyond the entry name.
 
@@ -4263,12 +4285,12 @@ async function bulkAuditSection(sectionName){
 
 ${fullRules}
 
-IMPORTANT: For EACH description, walk through every rule (1-11) individually. Only mark "ok" if it passes ALL rules.
+IMPORTANT: For EACH description, walk through every rule individually. Only mark "ok" if it passes ALL rules.
 
 JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}
 
 ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,150)}"`).join('\n\n')}`;
-      const sysPrompt='You are a strict professional index editor. For EACH description, walk through EVERY rule (1-11). Respond with JSON array only.';
+      const sysPrompt='You are a strict professional index editor. For EACH description, walk through EVERY rule. Respond with JSON array only.';
       const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
       if(!resp.ok)throw new Error('API '+resp.status);
       const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
