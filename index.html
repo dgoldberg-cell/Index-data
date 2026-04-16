@@ -480,7 +480,7 @@ checks:[
 {id:'spelling',name:'Rule 9 — Fix spelling: G-d not God, G-dly not Godly, G-dliness not Godliness. Fix common typos.',on:true},
 {id:'generate_empty',name:'Rule 10 — If description is blank, generate one based on transcript and entry context.',on:true},
 {id:'leave_good',name:'Rule 11 — If description already follows all rules, leave it alone. Do not change for the sake of changing.',on:true},
-{id:'transcript_check',name:'Rule 12 — Verify against transcript. If a transcript is provided, check that the description accurately reflects the clip content. Flag if the description seems inaccurate, misleading, or unrelated to what the transcript describes.',on:true},
+{id:'transcript_check',name:'Rule 12 — Verify against transcript. If a transcript is provided, check that the description plausibly relates to the clip content. Only flag if the description CLEARLY contradicts what the transcript says. You are seeing an excerpt — if you cannot find the connection in the excerpt, assume the full transcript covers it. Do NOT flag as a mismatch just because the excerpt does not mention the topic.',on:true},
 {id:'english_pref',name:'Rule 13 — Default to English. Use common English words over Hebrew/Yiddish when a clear English equivalent exists. "Charity" not "Tzedakah", "Repentance" not "Teshuvah", "Sabbath" or "Shabbos" not "Shabbat". Exception: terms that have no precise English equivalent or are proper names (Farbrengen, Chassidus, Chabad) stay as-is.',on:true},
 {id:'trailing_links',name:'Rule 14 — Preserve trailing linking words. Words like "of", "in", "at", "to", "for" at the end of a description connect it forward to the clip reference. Do NOT remove them. "Significance of" is correct. "Foundation of world" — the "of" connects. Only remove if they dangle with no clear forward link.',on:true},
 {id:'semicolon_format',name:'Rule 15 — Semicolons mean dual points. When a description has a semicolon (;), the clip covers two distinct points. Keep both as separate sub-entries joined by semicolon. Edit each side independently but preserve the two-point structure. Check transcript to verify both points are covered.',on:true}
@@ -2181,7 +2181,7 @@ Respond with JSON array. Each item:
   "verification": "noun phrase ✓, no verb ✓, no repeat ✓, N words ✓"
 }
 
-${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,200)}"`).join('\n\n')}`;
+${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,800)}"`).join('\n\n')}`;
 
       const sys1=`You are a ruthless professional index editor. You do NOT do surface-level fixes. When a description has a verb, you restructure it into a true noun phrase. When it repeats the entry name, you rewrite completely. When it's generic, you use the transcript to create something specific and vivid.\n\nChecklist:\n${ruleChecklist}\n\nJSON array only.`;
 
@@ -2236,6 +2236,45 @@ ${needsVerify.map((p,j)=>`[${p.idx}] Entry:"${batch[p.idx]?.entryName}" Original
               });
             }
           }catch(e2){S.auditLog.push(`  Pass 2 parse warning: ${e2.message}`)}
+        }
+      }
+
+      // ── TRANSCRIPT VERIFICATION — only for items flagged as transcript mismatch ──
+      const transcriptFlags=finalResults.filter(p=>(p.status==='fix'||p.status==='generate')&&p.reason&&/rule 12|transcript/i.test(p.reason));
+      if(transcriptFlags.length>0){
+        S.auditLog.push(`  Verifying ${transcriptFlags.length} transcript flag(s) with full transcript…`);
+        render();
+        await new Promise(r=>setTimeout(r,50));
+        for(const tf of transcriptFlags){
+          const e=batch[tf.idx!=null?tf.idx:tf.index];
+          if(!e||!e.transcript)continue;
+          try{
+            const vPrompt=`Does this index description plausibly match this video transcript?
+
+Entry: "${e.entryName}"
+Description: "${e.desc||'[empty]'}"
+
+FULL TRANSCRIPT:
+${e.transcript}
+
+Answer with JSON only: {"matches": true/false, "reason": "brief explanation"}
+If ANY part of the transcript relates to the description topic, answer true.`;
+            const vResp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,system:'You verify if index descriptions match video transcripts. Be generous — if any part of the transcript relates to the description, say true. JSON only.',messages:[{role:'user',content:vPrompt}]})});
+            if(vResp.ok){
+              const vd=await vResp.json(),vt=vd.content.map(c=>c.text||'').join('');
+              try{
+                const vr=JSON.parse(vt.replace(/```json?\s*/g,'').replace(/```/g,'').trim());
+                if(vr.matches===true){
+                  // Override — transcript actually matches, remove the flag
+                  tf.status='ok';
+                  tf.reason='Transcript verified ✓ (initially flagged but full transcript confirmed match)';
+                  S.auditLog.push(`    ✓ "${e.entryName}" — transcript confirmed match`);
+                }else{
+                  S.auditLog.push(`    ✗ "${e.entryName}" — transcript mismatch confirmed`);
+                }
+              }catch{}
+            }
+          }catch(ve){S.auditLog.push(`    Verify error: ${ve.message}`)}
         }
       }
 
@@ -4024,7 +4063,7 @@ async function auditSingleDesc(entryName,rowIdx,segType){
 
 Entry: "${entryName}" | Section: ${entry.section} | Relationship: ${r.rel}
 Description: "${r.desc||'[empty]'}"
-Transcript: "${(r.transcript||'').slice(0,300)}"
+Transcript: "${(r.transcript||'').slice(0,800)}"
 
 ${fullRules}
 
@@ -4165,7 +4204,7 @@ For EACH description, walk through every rule. Your suggestion must be a SHORT N
 
 JSON array. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated"}
 
-${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,200)}"`).join('\n\n')}`;
+${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,800)}"`).join('\n\n')}`;
 
       const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:`Ruthless professional index editor. Walk through EVERY rule per description.\n\nChecklist:\n${ruleChecklist}\n\nJSON array only.`,messages:[{role:'user',content:prompt}]})});
       if(!resp.ok)throw new Error('API '+resp.status);
@@ -4406,7 +4445,7 @@ IMPORTANT: For EACH description, walk through every rule individually. Only mark
 
 JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}
 
-${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,150)}"`).join('\n\n')}`;
+${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,800)}"`).join('\n\n')}`;
       const sysPrompt='You are a strict professional index editor. For EACH description, walk through EVERY rule. Respond with JSON array only.';
       const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
       if(!resp.ok)throw new Error('API '+resp.status);
