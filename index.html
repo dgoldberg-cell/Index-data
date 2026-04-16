@@ -467,61 +467,61 @@ const DISC='https://sheets.googleapis.com/$discovery/rest?version=v4',SCOPES='ht
 // sectionFromPath is a function — must never be serialized
 function sectionFromPath(p){if(p.startsWith('People/'))return'People';if(p.includes('History'))return'History';if(p.startsWith('Time/')||p.includes('Calendar'))return'Dates';if(p.startsWith('Place/')||p.includes('Location')||p.includes('Country'))return'Locations';if(p.includes('Nigun'))return'Nigunim';if(p.includes('Organization')||p.includes('Book'))return'Orgs & Books';return'Topics'}
 
-const DEFAULT_RULES={tagDesc:{minWords:2,maxWords:5,absMax:8,
+const DEFAULT_RULES={tagDesc:{minWords:2,maxWords:6,absMax:8,
 checks:[
-{id:'length',name:'Rule 0 — Length: 2–6 words, max 8 absolute. Most should be 3–5 words.',on:true},
-{id:'no_repeat',name:'Rule 1 — Never repeat the entry name (or its root) in the sub-entry. The entry heading is already visible; restating it wastes space.',on:true},
-{id:'no_articles',name:'Rule 2 — Drop leading articles: no "the," "a," "an" at the start. Start with the first meaningful word.',on:true},
-{id:'keep_short',name:'Rule 3 — Keep sub-entries to the shortest phrase that is still clear. Aim for 2–5 words. If it reads like a sentence, it\'s too long.',on:true},
-{id:'lowercase',name:'Rule 4 — Use lowercase unless a proper noun demands capitals. Only names, places, and titles get capitals.',on:true},
-{id:'keep_preps',name:'Rule 5 — Prepositions at the start are intentional when they establish location or context. Keep "in," "at," "during" — they carry structural meaning.',on:true},
-{id:'noun_phrases',name:'Rule 6 — Sub-entries are noun phrases, not full sentences. No verbs like "is," "was," "discusses." Just the noun phrase.',on:true},
-{id:'spelling',name:'Fix spelling: G-d not God, G-dly not Godly, G-dliness not Godliness. Fix common typos.',on:true},
-{id:'generate_empty',name:'If description is blank, generate one based on transcript and entry context.',on:true},
-{id:'leave_good',name:'If description already follows all rules, leave it alone. Do not change for the sake of changing.',on:true}
+{id:'length',name:'Rule 1 — Length: 2–6 words, max 8 absolute. Most should be 3–5 words.',on:true},
+{id:'no_repeat',name:'Rule 2 — Never repeat the entry name (or its root) in the sub-entry. The entry heading is already visible; restating it wastes space.',on:true},
+{id:'no_articles',name:'Rule 3 — Drop leading articles: no "the," "a," "an" at the start. Start with the first meaningful word.',on:true},
+{id:'keep_short',name:'Rule 4 — Keep sub-entries to the shortest clear phrase. Aim for 2–5 words. If it reads like a sentence, it\'s too long.',on:true},
+{id:'lowercase',name:'Rule 5 — Lowercase unless a proper noun demands capitals. Only names, places, and titles get capitals.',on:true},
+{id:'keep_preps',name:'Rule 6 — Keep structural prepositions. "In," "at," "during" at the start establish location or context — don\'t drop them.',on:true},
+{id:'noun_phrases',name:'Rule 7 — Noun phrases only, not full sentences. No verbs like "is," "was," "discusses." Just the noun phrase.',on:true},
+{id:'word_choice',name:'Rule 8 — Choose precise, elevated language. Write like a professional index editor. Replace casual/generic phrasing with refined, concise alternatives. "Fought cancer" not "dealing with cancer." Every word should be the most vivid and precise option.',on:true},
+{id:'spelling',name:'Rule 9 — Fix spelling: G-d not God, G-dly not Godly, G-dliness not Godliness. Fix common typos.',on:true},
+{id:'generate_empty',name:'Rule 10 — If description is blank, generate one based on transcript and entry context.',on:true},
+{id:'leave_good',name:'Rule 11 — If description already follows all rules, leave it alone. Do not change for the sake of changing.',on:true}
 ],
-good:[
-{tag:'Tefillin',desc:'donning prior to Bar Mitzvah',note:'Clean — no repetition of entry name'},
-{tag:'Siddur',desc:'printing of Siddur Tehillat Hashem',note:'Starts with meaningful word, no leading article'},
-{tag:'Simchat Torah',desc:'R. dancing on',note:'Tight phrase, 3 words'},
-{tag:'Library',desc:'of R. Levi Yitzchak',note:'Proper name capitalized, descriptor lowercase'},
-{tag:'Tashlich',desc:'in Nikolayev',note:'Preposition establishes location'},
-{tag:'Solar Eclipse',desc:'discussed in R.\'s writings',note:'Clean noun phrase'},
-{tag:'Terror',desc:'following Ma\'alot Massacre',note:'Preposition links to event'},
-{tag:'Kosher food',desc:'impact on wellbeing',note:'Lowercase, concise'},
-{tag:'Charity',desc:'given with joy',note:'Lowercase, no repetition'},
-{tag:'Tanya',desc:'printing during upheaval',note:'Noun phrase, no articles'}
+pairedExamples:[
+{tag:'Tefillin',rule:'Rule 1 — length',good:'donning prior to Bar Mitzvah',goodNote:'5 words, concise',bad:'donning prior to Bar Mitzvah celebration event in the synagogue',badNote:'10 words, way too long'},
+{tag:'Torah',rule:'Rule 1 — length',good:'daily study of',goodNote:'3 words, tight',bad:'importance and value of regularly studying on a daily basis',badNote:'10 words — a sentence crammed into a sub-entry'},
+{tag:'Tefillin',rule:'Rule 2 — no repeat',good:'donning prior to Bar Mitzvah',goodNote:'no repetition of entry name',bad:'donning tefillin prior to Bar Mitzvah',badNote:'repeats "tefillin"'},
+{tag:'Jewish Education',rule:'Rule 2 — no repeat',good:'in public schools',goodNote:'adds context without repeating',bad:'Jewish education in schools',badNote:'repeats both words of entry name'},
+{tag:'Mezuzah',rule:'Rule 2 — no repeat',good:'on doorpost of study',goodNote:'specific, no repeat',bad:'Mezuzah on the door',badNote:'repeats "Mezuzah" + has article'},
+{tag:'Siddur',rule:'Rule 3 — drop articles',good:'printing of Siddur Tehillat Hashem',goodNote:'starts with meaningful word',bad:'the printing of Siddur Tehillat Hashem',badNote:'leading "the"'},
+{tag:'Charity',rule:'Rules 2 & 3',good:'generosity in adversity',goodNote:'elevated, no repeat, no article',bad:'the importance of giving charity',badNote:'leading "the" + repeats "charity"'},
+{tag:'Simchat Torah',rule:'Rule 4 — keep it short',good:'dancing on',goodNote:'2 words, tight',bad:'dancing and celebrating joyfully on this special occasion',badNote:'8 words, sentence-like'},
+{tag:'Healing',rule:'Rules 4 & 8',good:'miraculous recovery',goodNote:'2 precise words',bad:'getting better in a surprising way',badNote:'six weak words vs two precise ones'},
+{tag:'Library',rule:'Rule 5 — lowercase',good:'of R. Levi Yitzchak',goodNote:'proper names capitalized, descriptor lowercase',bad:'Of R. Levi Yitzchak',badNote:'"Of" incorrectly capitalized'},
+{tag:'Kosher Food',rule:'Rule 5 — lowercase',good:'impact on wellbeing',goodNote:'all lowercase, concise',bad:'Impact On Wellbeing',badNote:'title case where lowercase belongs'},
+{tag:'Tashlich',rule:'Rule 6 — keep prepositions',good:'in Nikolayev',goodNote:'preposition establishes location',bad:'Nikolayev',badNote:'drops "in," loses locative structure'},
+{tag:'Terror',rule:'Rule 6 — keep prepositions',good:'following Ma\'alot Massacre',goodNote:'preposition links to event',bad:'Ma\'alot Massacre',badNote:'drops "following," loses cause-response context'},
+{tag:'Solar Eclipse',rule:'Rule 7 — noun phrases',good:'in R.\'s writings',goodNote:'clean noun phrase',bad:'R. discusses it in his writings',badNote:'full sentence with verb "discusses"'},
+{tag:'Shabbos',rule:'Rules 2, 3, 7',good:'candle lighting time',goodNote:'noun phrase, no repeat',bad:'The Rebbe speaks about Shabbos observance',badNote:'repeats entry, has article, full sentence with verb'},
+{tag:'Cancer',rule:'Rule 8 — word choice',good:'fought cancer',goodNote:'"fought" is vivid and precise',bad:'dealing with cancer',badNote:'"dealing with" is vague and casual'},
+{tag:'Shlichus',rule:'Rule 8 — word choice',good:'unexpected journey to',goodNote:'paints a picture',bad:'going on',badNote:'"going on" is flat and childish'},
+{tag:'Faith',rule:'Rules 4 & 8',good:'unwavering commitment',goodNote:'refined, 2 words',bad:'really strong belief in it',badNote:'playground talk, 5 words'},
+{tag:'Antisemitism',rule:'Rules 4, 7, 8',good:'confronting persecution',goodNote:'professional index language',bad:'dealing with people being mean to Jews',badNote:'casual, sentence-like, childish'},
+{tag:'Tanya',rule:'Rules 4, 7, 8',good:'printing during upheaval',goodNote:'noun phrase, "upheaval" is precise',bad:'when they printed it during hard times',badNote:'full sentence; "hard times" is vague'},
+{tag:'Ahavat Yisrael',rule:'Rules 4 & 8',good:'unifying communities',goodNote:'one word replaces five',bad:'bringing different groups of people together',badNote:'6 words, casual phrasing'},
+{tag:'Prayer',rule:'Rules 7 & 8',good:'power of concentration',goodNote:'noun phrase, elevated',bad:'trying to focus when you pray',badNote:'full sentence with "you"'},
+{tag:'Farbrengen',rule:'Rules 7 & 8',good:'broadcast at',goodNote:'"broadcast" = one precise word',bad:'it was shown on TV at',badNote:'full sentence, "shown on TV" = 3 words for 1'},
+{tag:'Mivtza Chanukah',rule:'Rules 4 & 8',good:'spreading light worldwide',goodNote:'poetic and tight',bad:'getting people all over to light candles',badNote:'clumsy, wordy, casual'},
+{tag:'Charity',rule:'Rules 4 & 8',good:'generosity in adversity',goodNote:'elevated, concise, professional',bad:'giving money even when times are tough',badNote:'casual rambling, 7 words'}
 ],
-bad:[
-{tag:'Tefillin',desc:'donning tefillin prior to Bar Mitzvah',note:'Repeats "tefillin" — Rule 1 violation'},
-{tag:'Siddur',desc:'the printing of Siddur Tehillat Hashem',note:'Leading "the" — Rule 2 violation'},
-{tag:'Simchat Torah',desc:'R. dancing and celebrating joyfully on this occasion',note:'Sentence-like, wordy — Rule 3 violation'},
-{tag:'Library',desc:'Of R. Levi Yitzchak',note:'"Of" incorrectly capitalized — Rule 4 violation'},
-{tag:'Tashlich',desc:'Nikolayev',note:'Drops the preposition, loses locative structure — Rule 5 violation'},
-{tag:'Solar Eclipse',desc:'R. discusses it in his writings',note:'Full sentence with verb — Rule 6 violation'},
-{tag:'Shabbos',desc:'The Rebbe speaks about Shabbos observance',note:'Repeats entry name, has verb, has article'},
-{tag:'Chinuch',desc:'Education',note:'Just a translation — adds no info'},
-{tag:'Jewish Education',desc:'Jewish education in schools',note:'Repeats both words of entry name'},
-{tag:'Torah',desc:'Torah study',note:'Repeats entry name'},
-{tag:'Charity',desc:'The importance of giving charity',note:'Article + sentence + repeats entry'},
-{tag:'Israel',desc:'About Israel',note:'Repeats entry + generic'},
-{tag:'Shlichus',desc:'Going on Shlichus',note:'Repeats entry name'},
-{tag:'Mezuzah',desc:'Mezuzah on the door',note:'Repeats entry name'},
-{tag:'Children',desc:'Get the children involved',note:'Full sentence, repeats entry'}
-],
+good:[],bad:[],
 tightenExamples:[
-{before:'The power of prayer',after:'Power of prayer'},
-{before:'A lesson in faith',after:'Lesson in faith'},
-{before:'The importance of unity',after:'Importance of unity'},
-{before:'Speaking about the future',after:'Speaking about future'},
-{before:'In the time of exile',after:'In time of exile'},
-{before:'With a sense of urgency',after:'With urgency'},
-{before:'The role that it plays in',after:'Role in'},
-{before:'At the time of the rally',after:'At the rally'},
-{before:'During the period of',after:'During'},
-{before:'Is able to overcome',after:'Overcoming'},
-{before:'The need to be involved in',after:'Involvement in'},
-{before:'A discussion on the topic of',after:'Discussion on'}
+{before:'The power of prayer',after:'power of prayer'},
+{before:'A lesson in faith',after:'lesson in faith'},
+{before:'The importance of unity',after:'importance of unity'},
+{before:'Speaking about the future',after:'speaking about future'},
+{before:'In the time of exile',after:'in time of exile'},
+{before:'With a sense of urgency',after:'with urgency'},
+{before:'The role that it plays in',after:'role in'},
+{before:'At the time of the rally',after:'at the rally'},
+{before:'During the period of',after:'during'},
+{before:'Is able to overcome',after:'overcoming'},
+{before:'The need to be involved in',after:'involvement in'},
+{before:'A discussion on the topic of',after:'discussion on'}
 ],
 spelling:[{wrong:'prier',right:'prior'},{wrong:'preformed',right:'performed'},{wrong:'begining',right:'beginning'},{wrong:'Godliness',right:'G-dliness'},{wrong:'Godly',right:'G-dly'},{wrong:'God',right:'G-d'},{wrong:"Farbrengen's",right:'Farbrengens'}]},
 consistency:{
@@ -903,13 +903,14 @@ async function loadSharedDataFromSheet(){
     if(data.activityLog)S.activityLog=data.activityLog;
     if(data.rules&&data.rules.tagDesc){
       RULES.tagDesc=data.rules.tagDesc;
-      // Auto-upgrade: if saved rules don't have notes on examples, apply new defaults
-      if(RULES.tagDesc.good&&RULES.tagDesc.good.length&&!RULES.tagDesc.good[0].note){
+      // Auto-upgrade: if saved rules don't have pairedExamples, apply new defaults
+      if(!RULES.tagDesc.pairedExamples||!RULES.tagDesc.pairedExamples.length){
         RULES.tagDesc.checks=DEFAULT_RULES.tagDesc.checks;
+        RULES.tagDesc.pairedExamples=DEFAULT_RULES.tagDesc.pairedExamples;
         RULES.tagDesc.good=DEFAULT_RULES.tagDesc.good;
         RULES.tagDesc.bad=DEFAULT_RULES.tagDesc.bad;
         RULES.tagDesc.tightenExamples=DEFAULT_RULES.tagDesc.tightenExamples;
-        console.log('Auto-upgraded audit rules to new defaults');
+        console.log('Auto-upgraded audit rules to paired examples format');
       }
       if(data.rules.consistency)RULES.consistency=data.rules.consistency;
       if(data.rules.segOrder)RULES.segOrder=data.rules.segOrder;
@@ -1646,21 +1647,30 @@ function scrollAI(){setTimeout(()=>{const el=$('.ai-msgs');if(el)el.scrollTop=el
 function buildAuditRulesText(){
   let t='INDEX ENTRY STYLE GUIDE\n\n';
   t+='THE RULES:\n';
-  RULES.tagDesc.checks.filter(c=>c.on).forEach((c,i)=>{t+=`${i+1}. ${c.name}\n`});
-  t+='\nQUICK REFERENCE: Write index sub-entries as short noun phrases (2–5 words). Never repeat the entry heading word. Drop leading articles ("the," "a," "an"). Use lowercase unless the word is a proper noun. Keep prepositions ("in," "at," "during") when they establish location or context. No verbs, no full sentences.\n';
-  if(RULES.tagDesc.good.length){
+  RULES.tagDesc.checks.filter(c=>c.on).forEach((c,i)=>{t+=`${c.name}\n`});
+  t+='\nQUICK REFERENCE: Write index sub-entries as short noun phrases (2–5 words). Never repeat the entry heading word. Drop leading articles ("the," "a," "an"). Use lowercase unless the word is a proper noun. Keep prepositions ("in," "at," "during") when they establish location or context. No verbs, no full sentences. Choose precise, elevated language — not casual speech.\n';
+  if(RULES.tagDesc.pairedExamples&&RULES.tagDesc.pairedExamples.length){
+    t+='\nPAIRED EXAMPLES (good vs bad for same entry):\n';
+    RULES.tagDesc.pairedExamples.forEach(e=>{
+      t+=`\n  Entry: "${e.tag}" (${e.rule})\n`;
+      t+=`  ✅ "${e.good}" — ${e.goodNote}\n`;
+      t+=`  ❌ "${e.bad}" — ${e.badNote}\n`;
+    });
+  }
+  // Fallback for old format
+  if(RULES.tagDesc.good&&RULES.tagDesc.good.length){
     t+='\nGOOD EXAMPLES:\n';
     RULES.tagDesc.good.forEach(e=>{t+=`  Entry: "${e.tag}" → "${e.desc}"${e.note?' ('+e.note+')':''}\n`});
   }
-  if(RULES.tagDesc.bad.length){
+  if(RULES.tagDesc.bad&&RULES.tagDesc.bad.length){
     t+='\nBAD EXAMPLES (DO NOT PRODUCE THESE):\n';
     RULES.tagDesc.bad.forEach(e=>{t+=`  Entry: "${e.tag}" → "${e.desc}"${e.note?' — '+e.note:''}\n`});
   }
-  if(RULES.tagDesc.tightenExamples.length){
+  if(RULES.tagDesc.tightenExamples&&RULES.tagDesc.tightenExamples.length){
     t+='\nTIGHTENING EXAMPLES:\n';
     RULES.tagDesc.tightenExamples.forEach(e=>{t+=`  "${e.before}" → "${e.after}"\n`});
   }
-  if(RULES.tagDesc.spelling.length){
+  if(RULES.tagDesc.spelling&&RULES.tagDesc.spelling.length){
     t+='\nSPELLING CORRECTIONS:\n';
     RULES.tagDesc.spelling.forEach(e=>{t+=`  "${e.wrong}" → "${e.right}"\n`});
   }
@@ -2125,33 +2135,20 @@ async function runAudit(){
     const batch=allEntries.slice(i,i+bs);
     S.auditLog.push(`Batch ${Math.floor(i/bs)+1}/${Math.ceil(allEntries.length/bs)}...`);render();
     try{
-      const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
-      const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' ('+e.note+')':''}`).join('\n  ');
-      const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' — '+e.note:''}`).join('\n  ');
-      const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
-      const tightenEx=(RULES.tagDesc.tightenExamples||[]).map(e=>`"${e.before}" → "${e.after}"`).join('\n  ');
+      const fullRules=buildAuditRulesText();
       const prompt=`Audit these tag descriptions for the JEM Video Index book.
 
-RULES — flag as "fix" if ANY rule is violated:
-${rulesText}
+${fullRules}
 
-SPELLING FIXES: ${spellingFixes}
-
-GOOD EXAMPLES:
-  ${goodEx}
-
-BAD EXAMPLES:
-  ${badEx}
-
-TIGHTENING EXAMPLES (remove unnecessary words):
-  ${tightenEx}
+IMPORTANT: For EACH description below, walk through every rule (1-11) individually. Check each one. Only mark "ok" if it passes ALL rules.
 
 The description reads as "[Entry name]: [description]" like a subtitle. It must add meaning beyond the entry name.
 
-JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}
+JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}
 
 ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,150)}"`).join('\n\n')}`;
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'You are a strict index editor for a printed book index. Your job: check each sub-entry against the style rules and fix violations. The #1 error is repeating the entry name — catch EVERY instance. Also catch: leading articles, sentences instead of noun phrases, unnecessary capitals, dropped structural prepositions. Respond with a JSON array only. Each item: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}',messages:[{role:'user',content:prompt}]})});
+      const sysPrompt='You are a strict professional index editor. For EACH description, mentally walk through EVERY rule (1-11) one by one. Do not skip rules. Do not batch-judge. Treat each description individually.\n\nYour checklist per description:\n1. Count words — 2-6? (max 8)\n2. Does it repeat any word from the entry name or its root?\n3. Does it start with "the," "a," or "an"?\n4. Could it be shorter and still clear?\n5. Are non-proper words incorrectly capitalized?\n6. Were structural prepositions dropped that should be kept?\n7. Is it a full sentence instead of a noun phrase?\n8. Is the word choice casual/generic — could a more precise/elevated word work?\n9. Spelling issues? (God→G-d, Godly→G-dly)\n10. Is it blank? Generate if so.\n11. If it passes ALL rules, mark ok. Do NOT change good descriptions.\n\nRespond with JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}';
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
       if(!resp.ok)throw new Error('API '+resp.status);
       const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
       let parsed;try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{const m=txt.match(/\[[\s\S]*\]/);if(m)parsed=JSON.parse(m[0]);else throw new Error('Parse fail')}
@@ -3920,26 +3917,31 @@ async function auditSingleDesc(entryName,rowIdx,segType){
   if(!r)return;
   toast('Auditing…');
   try{
-    const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map(c=>c.name).join('; ');
-    const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' ('+e.note+')':''}`).join(', ');
-    const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
-    const prompt=`Audit this single tag description STRICTLY.
+    const fullRules=buildAuditRulesText();
+    const prompt=`Audit this single tag description. Walk through EVERY rule (1-11) one by one.
 
 Entry: "${entryName}" | Section: ${entry.section} | Relationship: ${r.rel}
 Description: "${r.desc||'[empty]'}"
 Transcript: "${(r.transcript||'').slice(0,300)}"
 
-RULES (flag "fix" if ANY violated):
-1. LENGTH: 3-6 words, max 8
-2. NO TAG NAME REPETITION: Description must NOT repeat ANY word from the entry name "${entryName}". Check every word.
-3. "REBBE" RULE: Default subject is always the Rebbe. Do not include "Rebbe"/"The Rebbe" unless the Rebbe's specific action IS the point.
-4. NO GENERIC: Must be specific, not vague restating of the tag name.
-5. SPELLING: Fix known errors: ${spellingFixes}
+${fullRules}
 
-Good examples: ${goodEx}
+CHECKLIST — check each one:
+1. Word count 2-6? (max 8)
+2. Repeats any word from "${entryName}"?
+3. Starts with "the/a/an"?
+4. Could be shorter?
+5. Incorrect capitals?
+6. Structural preposition dropped?
+7. Full sentence instead of noun phrase?
+8. Casual/generic word choice?
+9. Spelling issues?
+10. Blank?
+11. If passes all → ok
 
-Respond with JSON only: {status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}`;
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:512,system:'You are a strict editor auditing tag descriptions for the JEM Video Index book about the Lubavitcher Rebbe. Enforce all rules rigorously. The most common error is repeating words from the tag name. JSON only.',messages:[{role:'user',content:prompt}]})});
+Respond with JSON only: {status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}`;
+    const sysPrompt='You are a strict professional index editor. Walk through every rule for this description. JSON only.';
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:512,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
     if(!resp.ok)throw new Error('API '+resp.status);
     const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
     let parsed;try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{throw new Error('Parse fail')}
@@ -4032,30 +4034,16 @@ async function auditSelectedItems(){
   for(let i=0;i<items.length;i+=bs){
     const batch=items.slice(i,i+bs);
     try{
-      const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
-      const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' ('+e.note+')':''}`).join('\n  ');
-      const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' — '+e.note:''}`).join('\n  ');
-      const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
-      const tightenEx=(RULES.tagDesc.tightenExamples||[]).map(e=>`"${e.before}" → "${e.after}"`).join('\n  ');
+      const fullRules=buildAuditRulesText();
       const prompt=`Audit these tag descriptions for the JEM Video Index book.
 
-RULES — flag as "fix" if ANY rule is violated:
-${rulesText}
+${fullRules}
 
-SPELLING FIXES: ${spellingFixes}
-
-GOOD EXAMPLES:
-  ${goodEx}
-
-BAD EXAMPLES:
-  ${badEx}
-
-TIGHTENING EXAMPLES (remove unnecessary words):
-  ${tightenEx}
+IMPORTANT: For EACH description below, walk through every rule (1-11) individually. Check each one. Only mark "ok" if it passes ALL rules.
 
 The description reads as "[Entry name]: [description]" like a subtitle. It must add meaning beyond the entry name.
 
-JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}
+JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}
 
 ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,150)}"`).join('\n\n')}`;
       const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'Strict editor for JEM Video Index. JSON array only.',messages:[{role:'user',content:prompt}]})});
@@ -4283,33 +4271,18 @@ async function bulkAuditSection(sectionName){
   for(let i=0;i<items.length;i+=bs){
     const batch=items.slice(i,i+bs);
     try{
-      const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
-      const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" \u2192 "${e.desc}"`).join('\n  ');
-      const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" \u2192 "${e.desc}"`).join('\n  ');
-      const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}\u2192${s.right}`).join(', ');
-      const tightenEx=(RULES.tagDesc.tightenExamples||[]).map(e=>`"${e.before}" \u2192 "${e.after}"`).join('\n  ');
+      const fullRules=buildAuditRulesText();
       const prompt=`Audit these tag descriptions for the JEM Video Index book.
 
-RULES \u2014 flag as "fix" if ANY rule is violated:
-${rulesText}
+${fullRules}
 
-SPELLING FIXES: ${spellingFixes}
+IMPORTANT: For EACH description, walk through every rule (1-11) individually. Only mark "ok" if it passes ALL rules.
 
-GOOD EXAMPLES:
-  ${goodEx}
-
-BAD EXAMPLES:
-  ${badEx}
-
-TIGHTENING EXAMPLES:
-  ${tightenEx}
-
-The description reads as "[Entry name]: [description]" like a subtitle.
-
-JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}
+JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}
 
 ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,150)}"`).join('\n\n')}`;
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'Strict editor for JEM Video Index. JSON array only.',messages:[{role:'user',content:prompt}]})});
+      const sysPrompt='You are a strict professional index editor. For EACH description, walk through EVERY rule (1-11). Respond with JSON array only.';
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
       if(!resp.ok)throw new Error('API '+resp.status);
       const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
       let parsed;try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{const m2=txt.match(/\[[\s\S]*\]/);if(m2)parsed=JSON.parse(m2[0]);else throw new Error('Parse fail')}
