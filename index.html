@@ -467,49 +467,47 @@ const DISC='https://sheets.googleapis.com/$discovery/rest?version=v4',SCOPES='ht
 // sectionFromPath is a function — must never be serialized
 function sectionFromPath(p){if(p.startsWith('People/'))return'People';if(p.includes('History'))return'History';if(p.startsWith('Time/')||p.includes('Calendar'))return'Dates';if(p.startsWith('Place/')||p.includes('Location')||p.includes('Country'))return'Locations';if(p.includes('Nigun'))return'Nigunim';if(p.includes('Organization')||p.includes('Book'))return'Orgs & Books';return'Topics'}
 
-const DEFAULT_RULES={tagDesc:{minWords:2,maxWords:6,absMax:8,
+const DEFAULT_RULES={tagDesc:{minWords:2,maxWords:5,absMax:8,
 checks:[
-{id:'length',name:'Length: 2-6 words, max 8 absolute. Most should be 3-5 words.',on:true},
-{id:'no_repeat',name:'Never repeat the tag/entry name in the description. If entry is "Tefillin", description cannot contain "Tefillin". If entry is "Jewish Education", cannot say "Education" or "Jewish". This is the #1 error.',on:true},
-{id:'rebbe',name:'"Rebbe" only when his specific action IS the point (e.g. "Gift from Rebbe"). The entire index is about the Rebbe so he is the default subject. Never "The Rebbe speaks about..." or "Rebbe discusses..."',on:true},
-{id:'trailing_prep',name:'Trailing prepositions (at, in, of, by) are OK only when they link FORWARD to the clip reference (a location, person, or event in the clip). Never use if it circles back to the entry name or dangles without clear forward connection.',on:true},
-{id:'no_generic',name:'No generic restating. Description must add info beyond the tag name. A translation of the Hebrew is not a description. Must tell the user WHY this tag appears on this clip - what angle or aspect.',on:true},
-{id:'user_clarity',name:'Must make sense to a browsing user. Someone scanning reads it as "[Entry name]: [description]" like a subtitle. The connection must be clear.',on:true},
-{id:'tighten',name:'Tighten aggressively but keep readable. Remove articles (the, a, an), filler words. Drop "The/A" at start. Collapse verb phrases ("is able to overcome" to "Overcoming", "the need to be involved" to "Involvement"). Every word must earn its place.',on:true},
-{id:'linking_vocab',name:'Use standard linking vocabulary: "at" for events, "following" for responses, "through" for methods, "during" for time periods, "in" for contexts, "attended by" for participation.',on:true},
+{id:'length',name:'Rule 0 — Length: 2–6 words, max 8 absolute. Most should be 3–5 words.',on:true},
+{id:'no_repeat',name:'Rule 1 — Never repeat the entry name (or its root) in the sub-entry. The entry heading is already visible; restating it wastes space.',on:true},
+{id:'no_articles',name:'Rule 2 — Drop leading articles: no "the," "a," "an" at the start. Start with the first meaningful word.',on:true},
+{id:'keep_short',name:'Rule 3 — Keep sub-entries to the shortest phrase that is still clear. Aim for 2–5 words. If it reads like a sentence, it\'s too long.',on:true},
+{id:'lowercase',name:'Rule 4 — Use lowercase unless a proper noun demands capitals. Only names, places, and titles get capitals.',on:true},
+{id:'keep_preps',name:'Rule 5 — Prepositions at the start are intentional when they establish location or context. Keep "in," "at," "during" — they carry structural meaning.',on:true},
+{id:'noun_phrases',name:'Rule 6 — Sub-entries are noun phrases, not full sentences. No verbs like "is," "was," "discusses." Just the noun phrase.',on:true},
 {id:'spelling',name:'Fix spelling: G-d not God, G-dly not Godly, G-dliness not Godliness. Fix common typos.',on:true},
 {id:'generate_empty',name:'If description is blank, generate one based on transcript and entry context.',on:true},
 {id:'leave_good',name:'If description already follows all rules, leave it alone. Do not change for the sake of changing.',on:true}
 ],
 good:[
-{tag:'Tefillin',desc:'With pride'},
-{tag:'Terror',desc:'Following Ma\'alot Massacre'},
-{tag:'Farbrengen',desc:'Broadcast at'},
-{tag:'Tzitzis',desc:'Significance of'},
-{tag:'Kosher food',desc:'Impact on wellbeing'},
-{tag:'Yizkor',desc:'Brings honor to souls'},
-{tag:'Tanya',desc:'Printing during upheaval'},
-{tag:'Ahavat Yisrael',desc:'Unifying communities'},
-{tag:'Mivtza Chanukah',desc:'Spreading light worldwide'},
-{tag:'Charity',desc:'Given with joy'}
+{tag:'Tefillin',desc:'donning prior to Bar Mitzvah',note:'Clean — no repetition of entry name'},
+{tag:'Siddur',desc:'printing of Siddur Tehillat Hashem',note:'Starts with meaningful word, no leading article'},
+{tag:'Simchat Torah',desc:'R. dancing on',note:'Tight phrase, 3 words'},
+{tag:'Library',desc:'of R. Levi Yitzchak',note:'Proper name capitalized, descriptor lowercase'},
+{tag:'Tashlich',desc:'in Nikolayev',note:'Preposition establishes location'},
+{tag:'Solar Eclipse',desc:'discussed in R.\'s writings',note:'Clean noun phrase'},
+{tag:'Terror',desc:'following Ma\'alot Massacre',note:'Preposition links to event'},
+{tag:'Kosher food',desc:'impact on wellbeing',note:'Lowercase, concise'},
+{tag:'Charity',desc:'given with joy',note:'Lowercase, no repetition'},
+{tag:'Tanya',desc:'printing during upheaval',note:'Noun phrase, no articles'}
 ],
 bad:[
-{tag:'Tefillin',desc:'Praying publicly with pride wearing tefillin'},
-{tag:'Shabbos',desc:'The Rebbe speaks about Shabbos observance'},
-{tag:'Chinuch',desc:'Education'},
-{tag:'Jewish Education',desc:'Jewish education in schools'},
-{tag:'Torah',desc:'Torah study'},
-{tag:'Charity',desc:'The importance of giving charity'},
-{tag:'Israel',desc:'About Israel'},
-{tag:'Farbrengen',desc:'Farbrengen broadcast at'},
-{tag:'Mitzvah',desc:'Performing mitzvos with joy'},
-{tag:'Mezuzah',desc:'Mezuzah on the door'},
-{tag:'Shlichus',desc:'Going on Shlichus'},
-{tag:'Family Purity',desc:'Through observance of'},
-{tag:'Mivtza Chanukah',desc:'Worldwide campaign for'},
-{tag:'Children',desc:'Get the children involved'},
-{tag:'Pesach',desc:'Communal Seders in'},
-{tag:'Rally',desc:'Attended by'}
+{tag:'Tefillin',desc:'donning tefillin prior to Bar Mitzvah',note:'Repeats "tefillin" — Rule 1 violation'},
+{tag:'Siddur',desc:'the printing of Siddur Tehillat Hashem',note:'Leading "the" — Rule 2 violation'},
+{tag:'Simchat Torah',desc:'R. dancing and celebrating joyfully on this occasion',note:'Sentence-like, wordy — Rule 3 violation'},
+{tag:'Library',desc:'Of R. Levi Yitzchak',note:'"Of" incorrectly capitalized — Rule 4 violation'},
+{tag:'Tashlich',desc:'Nikolayev',note:'Drops the preposition, loses locative structure — Rule 5 violation'},
+{tag:'Solar Eclipse',desc:'R. discusses it in his writings',note:'Full sentence with verb — Rule 6 violation'},
+{tag:'Shabbos',desc:'The Rebbe speaks about Shabbos observance',note:'Repeats entry name, has verb, has article'},
+{tag:'Chinuch',desc:'Education',note:'Just a translation — adds no info'},
+{tag:'Jewish Education',desc:'Jewish education in schools',note:'Repeats both words of entry name'},
+{tag:'Torah',desc:'Torah study',note:'Repeats entry name'},
+{tag:'Charity',desc:'The importance of giving charity',note:'Article + sentence + repeats entry'},
+{tag:'Israel',desc:'About Israel',note:'Repeats entry + generic'},
+{tag:'Shlichus',desc:'Going on Shlichus',note:'Repeats entry name'},
+{tag:'Mezuzah',desc:'Mezuzah on the door',note:'Repeats entry name'},
+{tag:'Children',desc:'Get the children involved',note:'Full sentence, repeats entry'}
 ],
 tightenExamples:[
 {before:'The power of prayer',after:'Power of prayer'},
@@ -1636,6 +1634,31 @@ Always explain what you're doing before the action block. Be concise and helpful
 }
 function scrollAI(){setTimeout(()=>{const el=$('.ai-msgs');if(el)el.scrollTop=el.scrollHeight},50)}
 
+// Build the full audit rules text for AI prompts
+function buildAuditRulesText(){
+  let t='INDEX ENTRY STYLE GUIDE\n\n';
+  t+='THE RULES:\n';
+  RULES.tagDesc.checks.filter(c=>c.on).forEach((c,i)=>{t+=`${i+1}. ${c.name}\n`});
+  t+='\nQUICK REFERENCE: Write index sub-entries as short noun phrases (2–5 words). Never repeat the entry heading word. Drop leading articles ("the," "a," "an"). Use lowercase unless the word is a proper noun. Keep prepositions ("in," "at," "during") when they establish location or context. No verbs, no full sentences.\n';
+  if(RULES.tagDesc.good.length){
+    t+='\nGOOD EXAMPLES:\n';
+    RULES.tagDesc.good.forEach(e=>{t+=`  Entry: "${e.tag}" → "${e.desc}"${e.note?' ('+e.note+')':''}\n`});
+  }
+  if(RULES.tagDesc.bad.length){
+    t+='\nBAD EXAMPLES (DO NOT PRODUCE THESE):\n';
+    RULES.tagDesc.bad.forEach(e=>{t+=`  Entry: "${e.tag}" → "${e.desc}"${e.note?' — '+e.note:''}\n`});
+  }
+  if(RULES.tagDesc.tightenExamples.length){
+    t+='\nTIGHTENING EXAMPLES:\n';
+    RULES.tagDesc.tightenExamples.forEach(e=>{t+=`  "${e.before}" → "${e.after}"\n`});
+  }
+  if(RULES.tagDesc.spelling.length){
+    t+='\nSPELLING CORRECTIONS:\n';
+    RULES.tagDesc.spelling.forEach(e=>{t+=`  "${e.wrong}" → "${e.right}"\n`});
+  }
+  return t;
+}
+
 // ── Generate Index Tab in Google Sheet ────────────────────
 async function generateIndexTab(sectionName){
   if(!S.indexData||!S.indexData.sections[sectionName]){toast('No data for '+sectionName,'error');return}
@@ -2095,8 +2118,8 @@ async function runAudit(){
     S.auditLog.push(`Batch ${Math.floor(i/bs)+1}/${Math.ceil(allEntries.length/bs)}...`);render();
     try{
       const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
-      const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
-      const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
+      const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' ('+e.note+')':''}`).join('\n  ');
+      const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' — '+e.note:''}`).join('\n  ');
       const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
       const tightenEx=(RULES.tagDesc.tightenExamples||[]).map(e=>`"${e.before}" → "${e.after}"`).join('\n  ');
       const prompt=`Audit these tag descriptions for the JEM Video Index book.
@@ -2120,7 +2143,7 @@ The description reads as "[Entry name]: [description]" like a subtitle. It must 
 JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}
 
 ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,150)}"`).join('\n\n')}`;
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'You are a strict, expert editor auditing tag descriptions for the JEM Video Index book about the Lubavitcher Rebbe. You must enforce all rules rigorously. The most common error is repeating words from the tag name in the description — catch every instance. Respond with a JSON array only. Each item: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}',messages:[{role:'user',content:prompt}]})});
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'You are a strict index editor for a printed book index. Your job: check each sub-entry against the style rules and fix violations. The #1 error is repeating the entry name — catch EVERY instance. Also catch: leading articles, sentences instead of noun phrases, unnecessary capitals, dropped structural prepositions. Respond with a JSON array only. Each item: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"..."}',messages:[{role:'user',content:prompt}]})});
       if(!resp.ok)throw new Error('API '+resp.status);
       const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
       let parsed;try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{const m=txt.match(/\[[\s\S]*\]/);if(m)parsed=JSON.parse(m[0]);else throw new Error('Parse fail')}
@@ -3759,8 +3782,8 @@ function bindAll(){
     S.testResult=null;render();toast('Testing…');
     try{
       const rulesText2=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
-      const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
-      const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
+      const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' ('+e.note+')':''}`).join('\n  ');
+      const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' — '+e.note:''}`).join('\n  ');
       const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
       const tightenEx2=(RULES.tagDesc.tightenExamples||[]).map(e=>`"${e.before}" → "${e.after}"`).join('\n  ');
       const prompt=`Audit this tag description for the JEM Video Index book.
@@ -3890,7 +3913,7 @@ async function auditSingleDesc(entryName,rowIdx,segType){
   toast('Auditing…');
   try{
     const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map(c=>c.name).join('; ');
-    const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"`).join(', ');
+    const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' ('+e.note+')':''}`).join(', ');
     const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
     const prompt=`Audit this single tag description STRICTLY.
 
@@ -4002,8 +4025,8 @@ async function auditSelectedItems(){
     const batch=items.slice(i,i+bs);
     try{
       const rulesText=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
-      const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
-      const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"`).join('\n  ');
+      const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' ('+e.note+')':''}`).join('\n  ');
+      const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' — '+e.note:''}`).join('\n  ');
       const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
       const tightenEx=(RULES.tagDesc.tightenExamples||[]).map(e=>`"${e.before}" → "${e.after}"`).join('\n  ');
       const prompt=`Audit these tag descriptions for the JEM Video Index book.
