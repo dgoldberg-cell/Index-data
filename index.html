@@ -2296,8 +2296,7 @@ ${needsVerify.map((p,j)=>`[${p.idx}] Entry:"${batch[p.idx]?.entryName}" Original
     if(i+bs<allEntries.length)await new Promise(r=>setTimeout(r,500));
   }
   S.auditRunning=false;
-  // Auto-dismiss the selection bar
-  S.auditSelectMode=false;S.auditSelected=new Set();
+  S.auditSelected=new Set();
   S.auditLog.push(`\nDone! ${totalFixed} need changes, ${S.auditTotal-totalFixed} look good.`);
   toast(`Audit complete: ${totalFixed} need changes, ${S.auditTotal-totalFixed} look good`,'success');
   buildIndex();render();
@@ -2477,9 +2476,10 @@ function fixIdxScroll(){
 
 // Dynamically show/update/hide the floating audit bar without full re-render
 function updateAuditFloat(){
-  // Remove any leftover body-level pill — we only use the render-based UI now
-  const bar=document.querySelector('body > .audit-float');
-  if(bar)bar.remove();
+  // Clean up any legacy body-level pills
+  document.querySelectorAll('body > .audit-float').forEach(el=>el.remove());
+  // Trigger render to show/hide the pill inside #app
+  render();
 }
 
 function rSidebar(){
@@ -4130,9 +4130,10 @@ async function auditSelectedItems(){
   });
   if(!items.length){toast('No valid items selected','error');return}
   
-  S.auditSelected=new Set();
-  S.auditSelectMode=false;
+  S.auditSelected=new Set(); // Clear selection so pill disappears
+  // Keep S.auditSelectMode=true so checkboxes stay visible
   S.auditRunning=true;S.auditProgress=0;S.auditTotal=items.length;S.auditLog=[];
+  document.querySelectorAll('body > .audit-float').forEach(el=>el.remove());
   render();
   await new Promise(r=>setTimeout(r,50));
   
@@ -4195,7 +4196,8 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
     if(i+bs<items.length)await new Promise(r=>setTimeout(r,500));
   }
   S.auditRunning=false;
-  S.auditSelectMode=false;S.auditSelected=new Set();
+  // Keep S.auditSelectMode=true so checkboxes stay visible for more selections
+  S.auditSelected=new Set();
   S.auditLog.push(`Done! ${totalFixed} need changes, ${items.length-totalFixed} look good.`);
   toast(`Audit complete: ${totalFixed} need changes, ${items.length-totalFixed} look good`,'success');
   buildIndex();render();
@@ -4386,8 +4388,8 @@ async function bulkAuditSection(sectionName){
   if(!await customConfirm(`Audit entire "${sectionName}" section? (${items.length} descriptions)`))return;
   
   S.auditRunning=true;S.auditProgress=0;S.auditTotal=items.length;S.auditLog=[];
-  S.auditSelectMode=false;S.auditSelected=new Set();
-  const _pill=$('#audit-float');if(_pill)_pill.remove();
+  S.auditSelected=new Set();
+  document.querySelectorAll('body > .audit-float').forEach(el=>el.remove());
   render();
   await new Promise(r=>setTimeout(r,50));
   
