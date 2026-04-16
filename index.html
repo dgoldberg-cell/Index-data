@@ -481,7 +481,9 @@ checks:[
 {id:'generate_empty',name:'Rule 10 — If description is blank, generate one based on transcript and entry context.',on:true},
 {id:'leave_good',name:'Rule 11 — If description already follows all rules, leave it alone. Do not change for the sake of changing.',on:true},
 {id:'transcript_check',name:'Rule 12 — Verify against transcript. If a transcript is provided, check that the description accurately reflects the clip content. Flag if the description seems inaccurate, misleading, or unrelated to what the transcript describes.',on:true},
-{id:'english_pref',name:'Rule 13 — Default to English. Use common English words over Hebrew/Yiddish when a clear English equivalent exists. "Charity" not "Tzedakah", "Repentance" not "Teshuvah", "Sabbath" or "Shabbos" not "Shabbat". Exception: terms that have no precise English equivalent or are proper names (Farbrengen, Chassidus, Chabad) stay as-is.',on:true}
+{id:'english_pref',name:'Rule 13 — Default to English. Use common English words over Hebrew/Yiddish when a clear English equivalent exists. "Charity" not "Tzedakah", "Repentance" not "Teshuvah", "Sabbath" or "Shabbos" not "Shabbat". Exception: terms that have no precise English equivalent or are proper names (Farbrengen, Chassidus, Chabad) stay as-is.',on:true},
+{id:'trailing_links',name:'Rule 14 — Preserve trailing linking words. Words like "of", "in", "at", "to", "for" at the end of a description connect it forward to the clip reference. Do NOT remove them. "Significance of" is correct. "Foundation of world" — the "of" connects. Only remove if they dangle with no clear forward link.',on:true},
+{id:'semicolon_format',name:'Rule 15 — Semicolons mean dual points. When a description has a semicolon (;), the clip covers two distinct points. Keep both as separate sub-entries joined by semicolon. Edit each side independently but preserve the two-point structure. Check transcript to verify both points are covered.',on:true}
 ],
 pairedExamples:[
 {tag:'Tefillin',rule:'Rule 1 — length',good:'donning prior to Bar Mitzvah',goodNote:'5 words, concise',bad:'donning prior to Bar Mitzvah celebration event in the synagogue',badNote:'10 words, way too long'},
@@ -4125,38 +4127,56 @@ async function auditSelectedItems(){
   if(!S.claudeKey){toast('No API key','error');return}
   const items=[];
   S.auditSelected.forEach(key=>{
-    const[entryName,segType,rowIdx]=key.split('|');
+    const parts=key.split('|');
+    // Handle entry names with | by splitting from right
+    const rowIdx=+parts[parts.length-1];
+    const segType=parts[parts.length-2];
+    const entryName=parts.slice(0,-2).join('|');
     const entry=findEntry(entryName);
     if(!entry)return;
-    const r=entry.results.find(x=>x.segType===segType&&x.rowIdx===+rowIdx);
+    const r=entry.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
     if(!r)return;
-    items.push({entryName,section:entry.section,desc:r.desc,rel:r.rel,transcript:r.transcript,rowIdx:+rowIdx,clipName:r.clipName,segType});
+    items.push({entryName,section:entry.section,desc:r.desc,rel:r.rel,transcript:r.transcript,rowIdx,clipName:r.clipName,segType});
   });
   if(!items.length){toast('No valid items selected','error');return}
   
-  // Stay on current page — just clear selection and show progress via toasts
   S.auditSelected=new Set();
-  S.auditRunning=true;S.auditProgress=0;S.auditTotal=items.length;
-  toast(`Auditing ${items.length} items…`);
+  S.auditSelectMode=false;
+  S.auditRunning=true;S.auditProgress=0;S.auditTotal=items.length;S.auditLog=[];
   render();
+  await new Promise(r=>setTimeout(r,50));
   
   const bs=S.auditBatch;let totalFixed=0;
+  const fullRules=buildAuditRulesText();
+  const ruleChecklist=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
+  const antiPatterns=`
+COMMON MISTAKES YOU MUST NOT MAKE:
+- Do NOT just lowercase the first letter. Restructure if needed.
+- Do NOT just change verb tense (Remain→remaining). Convert to noun phrase.
+- If your suggestion still has a verb as main action, you failed.
+- Your suggestion must ALSO follow all rules.`;
+
   for(let i=0;i<items.length;i+=bs){
     const batch=items.slice(i,i+bs);
+    const batchNum=Math.floor(i/bs)+1;
+    const totalBatches=Math.ceil(items.length/bs);
+    S.auditLog.push(`Batch ${batchNum}/${totalBatches} — analyzing ${batch.length} descriptions…`);
+    S.auditProgress=i;
+    render();
+    await new Promise(r=>setTimeout(r,50));
     try{
-      const fullRules=buildAuditRulesText();
-      const prompt=`Audit these tag descriptions for the JEM Video Index book.
+      const prompt=`Audit these tag descriptions for a printed book index.
 
 ${fullRules}
+${antiPatterns}
 
-IMPORTANT: For EACH description below, walk through every rule individually. Check each one. Only mark "ok" if it passes ALL rules.
+For EACH description, walk through every rule. Your suggestion must be a SHORT NOUN PHRASE (2-5 words).
 
-The description reads as "[Entry name]: [description]" like a subtitle. It must add meaning beyond the entry name.
+JSON array. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated"}
 
-JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}
+${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,200)}"`).join('\n\n')}`;
 
-${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,150)}"`).join('\n\n')}`;
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'Strict editor for JEM Video Index. JSON array only.',messages:[{role:'user',content:prompt}]})});
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:`Ruthless professional index editor. Walk through EVERY rule per description.\n\nChecklist:\n${ruleChecklist}\n\nJSON array only.`,messages:[{role:'user',content:prompt}]})});
       if(!resp.ok)throw new Error('API '+resp.status);
       const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
       let parsed;try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{const m2=txt.match(/\[[\s\S]*\]/);if(m2)parsed=JSON.parse(m2[0]);else throw new Error('Parse fail')}
@@ -4177,17 +4197,18 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
         }
       });
       totalFixed+=fx;
-    }catch(e){toast('Audit error: '+e.message,'error')}
+      S.auditLog.push(`  ✓ ${fx} need review, ${batch.length-fx} passed`);
+    }catch(e){S.auditLog.push(`  ✗ Error: ${e.message}`)}
     S.auditProgress=Math.min(i+bs,items.length);
-    if(i+bs<items.length){
-      toast(`Auditing… ${S.auditProgress}/${S.auditTotal}`);
-      await new Promise(r=>setTimeout(r,1500));
-    }
+    render();
+    await new Promise(r=>setTimeout(r,50));
+    if(i+bs<items.length)await new Promise(r=>setTimeout(r,500));
   }
   S.auditRunning=false;
-  const keptCount=items.length-totalFixed;
-  toast(`Done! ${totalFixed} need changes, ${keptCount} look good`,'success');
-  render();
+  S.auditSelectMode=false;S.auditSelected=new Set();
+  S.auditLog.push(`Done! ${totalFixed} need changes, ${items.length-totalFixed} look good.`);
+  toast(`Audit complete: ${totalFixed} need changes, ${items.length-totalFixed} look good`,'success');
+  buildIndex();render();
 }
 
 // ═══════════════════════════════════════════════════════════════
