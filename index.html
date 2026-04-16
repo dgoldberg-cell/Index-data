@@ -656,6 +656,7 @@ const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML.replace(/"/g,'&quot;')}
 function cl(n){let s='',c=n;while(c>=0){s=String.fromCharCode(c%26+65)+s;c=Math.floor(c/26)-1}return s}
 function toast(m,t=''){
+  if(S.auditRunning&&t!=='error')return; // Suppress non-error toasts during audit
   const tid=++S.tid;S.toasts.push({id:tid,m,t});
   updateToasts();
   setTimeout(()=>{S.toasts=S.toasts.filter(x=>x.id!==tid);updateToasts()},3500);
@@ -2188,6 +2189,7 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
       let pass1;try{pass1=JSON.parse(txt1.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{const m=txt1.match(/\[[\s\S]*\]/);if(m)pass1=JSON.parse(m[0]);else throw new Error('Pass 1 parse fail')}
 
       S.auditLog.push(`  Pass 1 complete. Running Pass 2: verifying suggestions…`);
+      S.auditProgress=i+Math.ceil(bs/2); // Show halfway progress during pass 2
       render();
       await new Promise(r=>setTimeout(r,50));
 
@@ -2383,32 +2385,30 @@ function render(force=true){
     h+=`</div></div>`;
   }
   if(S.notesPopup)h+=rNotesPopup();
-  // Floating audit bar
-  if(S.auditSelectMode&&(S.auditSelected.size>0||S.auditRunning)){
-    if(S.auditRunning){
-      const pct=S.auditTotal?(S.auditProgress/S.auditTotal*100):0;
-      const lastLog=S.auditLog.length?S.auditLog[S.auditLog.length-1]:'Starting…';
-      const batchNum=Math.ceil(S.auditProgress/Math.max(S.auditBatch,1));
-      const totalBatches=Math.ceil(S.auditTotal/Math.max(S.auditBatch,1));
-      h+=`<div style="position:fixed;bottom:0;left:210px;right:0;z-index:200;background:var(--bg-white);border-top:2px solid var(--gold);padding:14px 24px;box-shadow:0 -4px 20px rgba(0,0,0,.1)">`;
-      h+=`<div style="display:flex;align-items:center;gap:16px;margin-bottom:8px">`;
-      h+=`<div class="af-spinner" style="width:18px;height:18px;flex-shrink:0"></div>`;
-      h+=`<div style="flex:1">`;
-      h+=`<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">`;
-      h+=`<span style="font-size:14px;font-weight:600;color:var(--tx-1)">AI Audit in Progress</span>`;
-      h+=`<span style="font-size:13px;font-weight:600;color:var(--gold)">${S.auditProgress} / ${S.auditTotal} · ${Math.round(pct)}%</span>`;
-      h+=`</div>`;
-      h+=`<div class="audit-progress-bar" style="height:6px;margin:0"><div class="audit-progress-fill" style="width:${pct}%;transition:width 0.5s"></div></div>`;
-      h+=`</div></div>`;
-      h+=`<div style="font-size:11px;color:var(--tx-3);margin-top:4px">${esc(lastLog)}</div>`;
-      h+=`</div>`;
-    }else{
-      h+='<div class="audit-float" id="audit-float">';
-      h+=`<span class="af-count">${S.auditSelected.size}</span> selected `;
-      h+=`<button class="af-run" id="idx-audit-selected2">Run Audit</button>`;
-      h+=`<span class="af-close" id="idx-audit-float-x2" title="Dismiss">✕</span>`;
-      h+='</div>';
-    }
+  // Floating audit progress bar (when running)
+  if(S.auditRunning){
+    const pct=S.auditTotal?(S.auditProgress/S.auditTotal*100):0;
+    const lastLog=S.auditLog.length?S.auditLog[S.auditLog.length-1]:'Starting…';
+    h+=`<div style="position:fixed;bottom:0;left:210px;right:0;z-index:200;background:var(--bg-white);border-top:2px solid var(--gold);padding:14px 24px;box-shadow:0 -4px 20px rgba(0,0,0,.1)">`;
+    h+=`<div style="display:flex;align-items:center;gap:16px;margin-bottom:8px">`;
+    h+=`<div class="af-spinner" style="width:18px;height:18px;flex-shrink:0"></div>`;
+    h+=`<div style="flex:1">`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">`;
+    h+=`<span style="font-size:14px;font-weight:600;color:var(--tx-1)">AI Audit in Progress</span>`;
+    h+=`<span style="font-size:13px;font-weight:600;color:var(--gold)">${S.auditProgress} / ${S.auditTotal} · ${Math.round(pct)}%</span>`;
+    h+=`</div>`;
+    h+=`<div class="audit-progress-bar" style="height:6px;margin:0"><div class="audit-progress-fill" style="width:${pct}%;transition:width 0.5s"></div></div>`;
+    h+=`</div></div>`;
+    h+=`<div style="font-size:11px;color:var(--tx-3);margin-top:4px">${esc(lastLog)}</div>`;
+    h+=`</div>`;
+  }
+  // Floating selection pill (only when NOT running)
+  else if(S.auditSelectMode&&S.auditSelected.size>0){
+    h+='<div class="audit-float" id="audit-float">';
+    h+=`<span class="af-count">${S.auditSelected.size}</span> selected `;
+    h+=`<button class="af-run" id="idx-audit-selected2">Run Audit</button>`;
+    h+=`<span class="af-close" id="idx-audit-float-x2" title="Dismiss">✕</span>`;
+    h+='</div>';
   }
   // Floating move bar
   if(S.moveSelectMode&&S.moveSelected.size>0){
