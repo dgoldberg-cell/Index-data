@@ -23,7 +23,7 @@
 --radius:7px;--radius-lg:11px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{height:100%;overflow:hidden;background:var(--bg-0);color:var(--tx-1);font-family:var(--font)}
+html,body{height:100%;overflow:hidden;background:var(--bg-0);color:var(--tx-1);font-family:var(--font);font-size:14px}
 ::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-track{background:var(--bg-1)}::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:4px}
 button{font-family:var(--font);cursor:pointer}input,textarea,select{font-family:var(--font)}
 a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
@@ -72,7 +72,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 
 /* Page header */
 .page-hd{padding:20px 28px 14px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg-white)}
-.page-hd h1{font-family:var(--serif);font-size:20px;font-weight:700;letter-spacing:-.3px;color:var(--tx-1)}
+.page-hd h1{font-family:var(--serif);font-size:22px;font-weight:700;letter-spacing:-.3px;color:var(--tx-1)}
 .page-hd p{font-size:12px;color:var(--tx-3);margin-top:2px}
 .page-hd-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 
@@ -111,7 +111,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 
 .idx-main{display:flex;flex:1;overflow:hidden;min-height:0}
 
-.idx-body{overflow-y:auto;overflow-x:hidden;padding:20px 32px;font-size:13px;flex:1;width:100%}
+.idx-body{overflow-y:auto;overflow-x:hidden;padding:20px 32px;font-size:14px;flex:1;width:100%}
 /* Two-col content wrapper inside idx-body */
 .idx-cols{display:flex;gap:28px;width:100%}
 .idx-cols .idx-col{flex:1;min-width:0}
@@ -144,7 +144,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-seg-label{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--tx-4);margin-bottom:3px}
 
 /* Individual result — full width row, actions pushed right */
-.idx-result{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:13px;line-height:1.6}
+.idx-result{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:14px;line-height:1.6}
 .idx-result-desc{color:var(--tx-2);flex:1}
 .idx-result-desc.empty-desc{color:var(--red);font-style:italic;background:rgba(176,80,80,.05);padding:0 4px;border-radius:3px}
 .idx-result-desc.editable:hover{background:var(--bg-1);cursor:text;border-radius:3px;padding:0 4px}
@@ -903,6 +903,14 @@ async function loadSharedDataFromSheet(){
     if(data.activityLog)S.activityLog=data.activityLog;
     if(data.rules&&data.rules.tagDesc){
       RULES.tagDesc=data.rules.tagDesc;
+      // Auto-upgrade: if saved rules don't have notes on examples, apply new defaults
+      if(RULES.tagDesc.good&&RULES.tagDesc.good.length&&!RULES.tagDesc.good[0].note){
+        RULES.tagDesc.checks=DEFAULT_RULES.tagDesc.checks;
+        RULES.tagDesc.good=DEFAULT_RULES.tagDesc.good;
+        RULES.tagDesc.bad=DEFAULT_RULES.tagDesc.bad;
+        RULES.tagDesc.tightenExamples=DEFAULT_RULES.tagDesc.tightenExamples;
+        console.log('Auto-upgraded audit rules to new defaults');
+      }
       if(data.rules.consistency)RULES.consistency=data.rules.consistency;
       if(data.rules.segOrder)RULES.segOrder=data.rules.segOrder;
       if(data.rules.typeMap)RULES.typeMap=data.rules.typeMap;
