@@ -2135,7 +2135,7 @@ async function runAudit(){
   
   if(!allEntries.length){toast('No entries to audit','error');return}
   
-  S.auditRunning=true;S.auditProgress=0;S.auditTotal=allEntries.length;S.auditLog=[];render();
+  S.auditRunning=true;S.auditProgress=0;S.auditTotal=allEntries.length;S.auditLog=[];const _pill=$('#audit-float');if(_pill)_pill.remove();render();
   const bs=S.auditBatch;let totalFixed=0;
   const fullRules=buildAuditRulesText();
   const antiPatterns=`
@@ -2477,7 +2477,8 @@ function fixIdxScroll(){
 function updateAuditFloat(){
   const count=S.auditSelected.size;
   let bar=$('#audit-float');
-  if(count===0){
+  // Remove if no selection OR audit is running
+  if(count===0||S.auditRunning){
     if(bar)bar.remove();
     return;
   }
@@ -2489,7 +2490,7 @@ function updateAuditFloat(){
   }
   bar.innerHTML=`<span class="af-count">${count}</span> selected <button class="af-run" id="idx-audit-float-run">Run Audit</button><span class="af-close" id="idx-audit-float-x" title="Dismiss">✕</span>`;
   bar.querySelector('#idx-audit-float-run').onclick=()=>{if(S.auditSelected.size)auditSelectedItems()};
-  bar.querySelector('#idx-audit-float-x').onclick=()=>{S.auditSelected=new Set();$$('.idx-audit-chk').forEach(cb=>cb.checked=false);updateAuditFloat()};
+  bar.querySelector('#idx-audit-float-x').onclick=()=>{S.auditSelected=new Set();S.auditSelectMode=false;$$('.idx-audit-chk').forEach(cb=>cb.checked=false);updateAuditFloat();render()};
 }
 
 function rSidebar(){
@@ -4397,6 +4398,7 @@ async function bulkAuditSection(sectionName){
   
   S.auditRunning=true;S.auditProgress=0;S.auditTotal=items.length;S.auditLog=[];
   S.auditSelectMode=false;S.auditSelected=new Set();
+  const _pill=$('#audit-float');if(_pill)_pill.remove();
   render();
   await new Promise(r=>setTimeout(r,50));
   
