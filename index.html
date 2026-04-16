@@ -2968,22 +2968,23 @@ function rSettings(){
   h+=`<button class="btn btn-sm btn-green" id="add-rule" style="margin-top:8px">${IC.play} Add Rule</button>`;
   h+='</div>';
 
-  // Examples side by side
-  h+='<div style="display:flex;gap:18px;margin-bottom:24px;flex-wrap:wrap">';
-  h+='<div class="card" style="flex:1;min-width:280px">';
-  h+='<h4 style="margin-bottom:10px;color:var(--green)">Good Examples</h4>';
-  (RULES.tagDesc.good||[]).forEach((e,i)=>{
-    h+=`<div class="example-row"><input class="rule-edit-input" style="max-width:100px" data-goodtag="${i}" value="${esc(e.tag)}" placeholder="Tag"><span style="color:var(--tx-4)">\u2192</span><input class="rule-edit-input" data-gooddesc="${i}" value="${esc(e.desc)}" placeholder="Description"><button class="btn btn-sm btn-red btn-icon" data-gooddel="${i}">${IC.x}</button></div>`;
+
+  // Paired Examples
+  h+='<div class="card" style="margin-bottom:24px">';
+  h+='<h4 style="margin-bottom:10px">Paired Examples (Good vs Bad)</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:10px">Each example shows the same entry with a good and bad version, plus which rule is violated.</p>';
+  (RULES.tagDesc.pairedExamples||[]).forEach((e,i)=>{
+    h+=`<div style="padding:8px;margin-bottom:6px;background:var(--bg-1);border-radius:6px;font-size:12px">`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">`;
+    h+=`<strong>"${esc(e.tag)}"</strong>`;
+    h+=`<span style="font-size:10px;color:var(--tx-4)">${esc(e.rule)}</span>`;
+    h+=`</div>`;
+    h+=`<div style="color:var(--green);margin-bottom:2px">\u2705 "${esc(e.good)}" <span style="color:var(--tx-4);font-size:10px">\u2014 ${esc(e.goodNote)}</span></div>`;
+    h+=`<div style="color:var(--red)">\u274c "${esc(e.bad)}" <span style="color:var(--tx-4);font-size:10px">\u2014 ${esc(e.badNote)}</span></div>`;
+    h+=`</div>`;
   });
-  h+=`<button class="btn btn-sm btn-green" id="add-good-ex" style="margin-top:6px">+ Add</button>`;
   h+='</div>';
-  h+='<div class="card" style="flex:1;min-width:280px">';
-  h+='<h4 style="margin-bottom:10px;color:var(--red)">Bad Examples</h4>';
-  (RULES.tagDesc.bad||[]).forEach((e,i)=>{
-    h+=`<div class="example-row"><input class="rule-edit-input" style="max-width:100px" data-badtag="${i}" value="${esc(e.tag)}" placeholder="Tag"><span style="color:var(--tx-4)">\u2192</span><input class="rule-edit-input" data-baddesc="${i}" value="${esc(e.desc)}" placeholder="Description"><button class="btn btn-sm btn-red btn-icon" data-baddel="${i}">${IC.x}</button></div>`;
-  });
-  h+=`<button class="btn btn-sm btn-green" id="add-bad-ex" style="margin-top:6px">+ Add</button>`;
-  h+='</div></div>';
+
 
   // Spelling
   h+='<div class="card" style="margin-bottom:24px">';
@@ -3786,34 +3787,20 @@ function bindAll(){
     if(!S.claudeKey){toast('No API key','error');return}
     S.testResult=null;render();toast('Testing…');
     try{
-      const rulesText2=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
-      const goodEx=RULES.tagDesc.good.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' ('+e.note+')':''}`).join('\n  ');
-      const badEx=RULES.tagDesc.bad.map(e=>`"${e.tag}" → "${e.desc}"${e.note?' — '+e.note:''}`).join('\n  ');
-      const spellingFixes=(RULES.tagDesc.spelling||[]).map(s=>`${s.wrong}→${s.right}`).join(', ');
-      const tightenEx2=(RULES.tagDesc.tightenExamples||[]).map(e=>`"${e.before}" → "${e.after}"`).join('\n  ');
-      const prompt=`Audit this tag description for the JEM Video Index book.
+      const fullRules=buildAuditRulesText();
+      const prompt=`Audit this tag description. Walk through EVERY rule (1-11) one by one.
 
-RULES:
-${rulesText2}
+${fullRules}
 
-SPELLING: ${spellingFixes}
+CHECKLIST for this description:
+1. Word count 2-6? 2. Repeats entry name? 3. Leading article? 4. Could be shorter? 5. Incorrect capitals? 6. Dropped prepositions? 7. Full sentence? 8. Casual word choice? 9. Spelling? 10. Blank? 11. If all pass → ok
 
-GOOD EXAMPLES:
-  ${goodEx}
-
-BAD EXAMPLES:
-  ${badEx}
-
-TIGHTENING EXAMPLES:
-  ${tightenEx2}
-
-The description reads as "[Entry name]: [description]" like a subtitle.
-
-JSON only. Return: {status:"ok"|"fix", suggestion:"...", reason:"..."}
+JSON only. Return: {status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}
 
 Entry:"${S.testEntry}" Section:${S.testSection}
 Description:"${S.testDesc||'[empty]'}"`;
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,system:'Strict editor for JEM Video Index. JSON only.',messages:[{role:'user',content:prompt}]})});
+      const sysPrompt='You are a strict professional index editor. Walk through every rule for this description. JSON only.';
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
       const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
       const parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim());
       S.testResult=parsed;
