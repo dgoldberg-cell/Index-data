@@ -2404,8 +2404,8 @@ function render(force=true){
     h+=`<div style="font-size:11px;color:var(--tx-3);margin-top:4px">${esc(lastLog)}</div>`;
     h+=`</div>`;
   }
-  // Floating selection pill (only when NOT running)
-  else if(S.auditSelectMode&&S.auditSelected.size>0){
+  // Floating selection pill (only when NOT running and has selection)
+  if(!S.auditRunning&&S.auditSelectMode&&S.auditSelected.size>0){
     h+='<div class="audit-float" id="audit-float">';
     h+=`<span class="af-count">${S.auditSelected.size}</span> selected `;
     h+=`<button class="af-run" id="idx-audit-selected2">Run Audit</button>`;
@@ -4395,8 +4395,10 @@ async function bulkAuditSection(sectionName){
   });
   if(!await customConfirm(`Audit entire "${sectionName}" section? (${items.length} descriptions)`))return;
   
-  S.auditRunning=true;S.auditProgress=0;S.auditTotal=items.length;
-  toast(`Auditing ${sectionName}: ${items.length} items…`);render();
+  S.auditRunning=true;S.auditProgress=0;S.auditTotal=items.length;S.auditLog=[];
+  S.auditSelectMode=false;S.auditSelected=new Set();
+  render();
+  await new Promise(r=>setTimeout(r,50));
   
   const bs=S.auditBatch;let totalFixed=0;
   for(let i=0;i<items.length;i+=bs){
