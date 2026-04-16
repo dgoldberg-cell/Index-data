@@ -2343,6 +2343,8 @@ const IC={
 function render(force=true){
   // Don't rebuild DOM while user is editing inline or typing a note — UNLESS forced
   if(!force&&($('#desc-edit')||$('#note-input'))){return}
+  // Always clean up any body-level floating pills (legacy from updateAuditFloat)
+  document.querySelectorAll('body > .audit-float').forEach(el=>el.remove());
   const app=$('#app');
   if(!S.connected){rSetup(app);return}
   if(S.loading&&!S.headers.length){app.innerHTML='<div class="loading-state"><div class="spinner"></div>Loading…</div>';return}
@@ -2475,22 +2477,9 @@ function fixIdxScroll(){
 
 // Dynamically show/update/hide the floating audit bar without full re-render
 function updateAuditFloat(){
-  const count=S.auditSelected.size;
-  let bar=$('#audit-float');
-  // Remove if no selection OR audit is running
-  if(count===0||S.auditRunning){
-    if(bar)bar.remove();
-    return;
-  }
-  if(!bar){
-    bar=document.createElement('div');
-    bar.className='audit-float';
-    bar.id='audit-float';
-    document.body.appendChild(bar);
-  }
-  bar.innerHTML=`<span class="af-count">${count}</span> selected <button class="af-run" id="idx-audit-float-run">Run Audit</button><span class="af-close" id="idx-audit-float-x" title="Dismiss">✕</span>`;
-  bar.querySelector('#idx-audit-float-run').onclick=()=>{if(S.auditSelected.size)auditSelectedItems()};
-  bar.querySelector('#idx-audit-float-x').onclick=()=>{S.auditSelected=new Set();S.auditSelectMode=false;$$('.idx-audit-chk').forEach(cb=>cb.checked=false);updateAuditFloat();render()};
+  // Remove any leftover body-level pill — we only use the render-based UI now
+  const bar=document.querySelector('body > .audit-float');
+  if(bar)bar.remove();
 }
 
 function rSidebar(){
