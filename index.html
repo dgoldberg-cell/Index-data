@@ -2513,7 +2513,7 @@ function render(force=true){
     const sc=S.sugChat;
     h+=`<div class="sug-chat-overlay" id="sug-chat-overlay">`;
     h+=`<div class="sug-chat">`;
-    h+=`<div class="sug-chat-head"><h3>💬 "${esc(sc.entryName)}"</h3><button class="btn btn-sm btn-icon" id="sug-chat-close">✕</button></div>`;
+    h+=`<div class="sug-chat-head"><h3>🤖 "${esc(sc.entryName)}"</h3><button class="btn btn-sm btn-icon" id="sug-chat-close">✕</button></div>`;
     h+=`<div class="sug-chat-context">`;
     h+=`<div>Current: <strong>${esc(sc.desc||'[empty]')}</strong></div>`;
     if(sc.suggestion)h+=`<div>AI suggested: <strong style="color:var(--green)">${esc(sc.suggestion)}</strong></div>`;
@@ -2524,13 +2524,24 @@ function render(force=true){
     }
     sc.messages.forEach(m=>{
       h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">${esc(m.content).replace(/\n/g,'<br>')}`;
-      // If assistant message contains a suggestion (line starting with → or quoted), add "Use this" button
-      if(m.role==='assistant'&&m.suggestion){
-        h+=`<br><button class="use-btn" data-usesug="${esc(m.suggestion)}">Use "${esc(m.suggestion.length>30?m.suggestion.slice(0,30)+'…':m.suggestion)}" →</button>`;
+      // Add "Use this" buttons for all suggestions found in assistant messages
+      if(m.role==='assistant'&&m.suggestions&&m.suggestions.length){
+        h+=`<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">`;
+        m.suggestions.forEach(s=>{
+          h+=`<button class="use-btn" data-usesug="${esc(s)}">Use "${esc(s.length>35?s.slice(0,35)+'…':s)}" →</button>`;
+        });
+        h+=`</div>`;
+      }else if(m.role==='assistant'&&m.suggestion){
+        h+=`<br><button class="use-btn" data-usesug="${esc(m.suggestion)}">Use "${esc(m.suggestion.length>35?m.suggestion.slice(0,35)+'…':m.suggestion)}" →</button>`;
       }
       h+=`</div></div>`;
     });
     if(sc.typing)h+=`<div class="sug-chat-msg assistant"><div class="bubble" style="color:var(--tx-3)">Thinking…</div></div>`;
+    h+=`</div>`;
+    h+=`<div style="padding:4px 14px;display:flex;gap:4px;flex-wrap:wrap;border-top:1px solid var(--border)">`;
+    h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Give me 5 alternative descriptions to choose from" style="font-size:9px;padding:2px 8px">5 more options</button>`;
+    h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Choose better, more elevated wording for this description while keeping the same meaning" style="font-size:9px;padding:2px 8px">Better wording</button>`;
+    h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Check the full transcript carefully and verify if this description accurately reflects the clip content. If not, suggest a more accurate description." style="font-size:9px;padding:2px 8px">Check transcript</button>`;
     h+=`</div>`;
     h+=`<div class="sug-chat-input"><input id="sug-chat-input" placeholder="Ask about this description…" autocomplete="off"><button id="sug-chat-send">Send</button></div>`;
     h+=`</div></div>`;
@@ -2905,7 +2916,7 @@ function rIndex(){
             eh+=`<span class="idx-sug-btn accept" data-sugaccept="${esc(e.name)}|${seg}|${r.rowIdx}" title="Accept">${IC.check}</span>`;
             eh+=`<span class="idx-sug-btn deny" data-sugdeny="${esc(e.name)}|${seg}|${r.rowIdx}" title="Deny">${IC.x}</span>`;
             eh+=`<span class="idx-sug-btn custom" data-sugcustom="${esc(e.name)}|${seg}|${r.rowIdx}" title="Custom edit">✎</span>`;
-            eh+=`<span class="idx-sug-btn" data-sugchat="${esc(e.name)}|${seg}|${r.rowIdx}" title="Discuss with AI" style="color:var(--blue)">💬</span>`;
+            eh+=`<span class="idx-sug-btn" data-sugchat="${esc(e.name)}|${seg}|${r.rowIdx}" title="Discuss with AI" style="color:var(--blue)">🤖</span>`;
             eh+=`</span>`;
           }else if(hasOriginal){
             const editInfo=rv.editedBy?`Edited by ${rv.editedBy}${rv.editedAt?' at '+new Date(rv.editedAt).toLocaleString():''}. `:'';
@@ -3649,25 +3660,45 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
       const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,system:sys,messages:msgs})});
       if(!resp.ok)throw new Error('API '+resp.status);
       const d=await resp.json(),reply=d.content.map(c=>c.text||'').join('');
-      // Extract suggestion from reply (look for → prefix or quoted text)
-      let extracted=null;
-      const arrowMatch=reply.match(/→\s*(.+)/);
-      if(arrowMatch)extracted=arrowMatch[1].trim().replace(/^["']|["']$/g,'');
-      else{
-        // Look for numbered options
-        const opts=reply.match(/^\d+\.\s+(.+)/gm);
-        if(opts&&opts.length>=2){
-          // Multiple options — extract each as a button
-          extracted=opts[0].replace(/^\d+\.\s+/,'').trim();
-        }
+      // Extract ALL suggestions from reply
+      let allSuggestions=[];
+      // Look for numbered options: "1. something" "2. something"
+      const opts=reply.match(/^\d+[\.\)]\s*["""]?(.+?)["""]?\s*$/gm);
+      if(opts&&opts.length>=2){
+        opts.forEach(o=>{
+          let cleaned=o.replace(/^\d+[\.\)]\s*/,'').replace(/^[""""'']+|[""""'']+$/g,'').replace(/^\*+|\*+$/g,'').trim();
+          if(cleaned.length>1&&cleaned.length<80)allSuggestions.push(cleaned);
+        });
       }
-      sc.messages.push({role:'assistant',content:reply,suggestion:extracted});
+      // Also look for → arrows
+      const arrows=reply.match(/→\s*(.+)/g);
+      if(arrows){
+        arrows.forEach(a=>{
+          let cleaned=a.replace(/^→\s*/,'').replace(/^[""""'']+|[""""'']+$/g,'').trim();
+          if(cleaned.length>1&&cleaned.length<80&&!allSuggestions.includes(cleaned))allSuggestions.push(cleaned);
+        });
+      }
+      // Store as suggestions array
+      if(allSuggestions.length>1){
+        sc.messages.push({role:'assistant',content:reply,suggestions:allSuggestions});
+      }else if(allSuggestions.length===1){
+        sc.messages.push({role:'assistant',content:reply,suggestion:allSuggestions[0]});
+      }else{
+        // Try to find a single quoted suggestion
+        const quoted=reply.match(/[""]([^""]{3,60})[""]/);
+        sc.messages.push({role:'assistant',content:reply,suggestion:quoted?quoted[1]:null});
+      }
     }catch(e){sc.messages.push({role:'assistant',content:'Error: '+e.message})}
     sc.typing=false;
     render();
     setTimeout(()=>{const b=$('#sug-chat-body');if(b)b.scrollTop=b.scrollHeight;$('#sug-chat-input')?.focus()},50);
   });
   on('#sug-chat-input','keydown',(e)=>{if(e.key==='Enter'){e.preventDefault();$('#sug-chat-send')?.click()}});
+  // Quick action buttons
+  $$('[data-sugquick]').forEach(el=>el.onclick=()=>{
+    const inp=$('#sug-chat-input');
+    if(inp){inp.value=el.dataset.sugquick;$('#sug-chat-send')?.click()}
+  });
   // Mini chat — "Use this" button
   $$('[data-usesug]').forEach(el=>el.onclick=async()=>{
     const newDesc=el.dataset.usesug;
