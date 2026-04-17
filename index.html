@@ -482,7 +482,6 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 // JEM INDEX WORKSTATION v2
 // ═══════════════════════════════════════════════════════════════
 const DISC='https://sheets.googleapis.com/$discovery/rest?version=v4',SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
-const _HK=atob('c2stYW50LWFwaTAzLUpsMm1yUjJzYnZIQXA1MVZ5NEJaT3h5dkd5a0lvSzg4YVVCa3lLMEpDV19DUU5wZnd4WTJGeHpjbEZnWGxhZkw4ZjhSRjk3MXFPejMwUlYzelFCOEJnLXFlWnRFUUFB');
 
 // sectionFromPath is a function — must never be serialized
 function sectionFromPath(p){if(p.startsWith('People/'))return'People';if(p.includes('History'))return'History';if(p.startsWith('Time/')||p.includes('Calendar'))return'Dates';if(p.startsWith('Place/')||p.includes('Location')||p.includes('Country'))return'Locations';if(p.includes('Nigun'))return'Nigunim';if(p.includes('Organization')||p.includes('Book'))return'Orgs & Books';return'Topics'}
@@ -3302,9 +3301,10 @@ function rSetup(app){
   app.innerHTML=`<div class="setup-screen"><div class="setup-card" style="text-align:center">
   <img src="${JEM_LOGO}" alt="JEM" style="width:120px;margin:0 auto 14px;display:block;border-radius:8px">
   <h1>JEM Index Workstation</h1>
+  <div style="text-align:left;margin-top:14px"><label style="font-size:11px;color:var(--tx-3);font-weight:500">Code</label><input class="s-input" id="ik" type="password" placeholder="Enter team code" value="${esc(S.claudeKey)}" style="margin-top:4px"></div>
   <div class="setup-err" id="se"></div>
   <button class="btn btn-gold" id="btn-con" style="width:100%;height:42px;font-size:14px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center">Sign In</button></div></div>`;
-  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=_HK;if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadTab(0);registerTeamMember();startAutoRefresh();render()}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
+  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}if(!k){$('#se').textContent='Please enter the team code';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadTab(0);registerTeamMember();startAutoRefresh();render()}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4951,7 +4951,7 @@ window.addEventListener('resize',fixIdxScroll);
   if(savedCid&&savedSid&&!S.connected){
     try{
       S.loading=true;render();
-      await doConnect(savedCid,savedSid,_HK,true);
+      await doConnect(savedCid,savedSid,savedKey||'',true);
       await loadSharedDataFromSheet();
       await loadTab(0);
       registerTeamMember();
