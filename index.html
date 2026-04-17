@@ -2523,18 +2523,50 @@ function render(force=true){
       h+=`<div style="color:var(--tx-3);font-size:11px;text-align:center;padding:16px">Ask for alternatives, explain why the suggestion is wrong, or request specific changes.</div>`;
     }
     sc.messages.forEach(m=>{
-      h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">${esc(m.content).replace(/\n/g,'<br>')}`;
-      // Add "Use this" buttons for all suggestions found in assistant messages
       if(m.role==='assistant'&&m.suggestions&&m.suggestions.length){
-        h+=`<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">`;
-        m.suggestions.forEach(s=>{
-          h+=`<button class="use-btn" data-usesug="${esc(s)}">Use "${esc(s.length>35?s.slice(0,35)+'…':s)}" →</button>`;
+        // Replace numbered lines in content with inline Use buttons
+        let content=esc(m.content);
+        m.suggestions.forEach((s,si)=>{
+          // Match "N. → suggestion" or "N. suggestion" patterns and replace with inline button
+          const patterns=[
+            new RegExp(`${si+1}[\\.\)]\\s*→?\\s*${s.replace(/[.*+?^${}()|[\]\\]/g,'\\\\$&').slice(0,20)}[^\\n]*`),
+            new RegExp(`${si+1}[\\.\)]\\s*[^\\n]*`)
+          ];
+          // Just use a simple approach: we'll rebuild the content
         });
-        h+=`</div>`;
-      }else if(m.role==='assistant'&&m.suggestion){
-        h+=`<br><button class="use-btn" data-usesug="${esc(m.suggestion)}">Use "${esc(m.suggestion.length>35?m.suggestion.slice(0,35)+'…':m.suggestion)}" →</button>`;
+        // Rebuild: strip the raw text and show each option as a clean line with Use button
+        h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">`;
+        // Show intro text (first line before numbered list)
+        const lines=m.content.split('\n');
+        let inList=false;
+        lines.forEach(line=>{
+          const numMatch=line.match(/^\d+[\.\)]\s*/);
+          if(numMatch){
+            inList=true;
+            const cleaned=line.replace(/^\d+[\.\)]\s*→?\s*/,'').replace(/^["""'']+|["""'']+$/g,'').replace(/^\*+|\*+$/g,'').trim();
+            if(cleaned){
+              h+=`<div style="display:flex;align-items:center;gap:6px;margin:3px 0">`;
+              h+=`<span style="flex:1;font-size:12px">${numMatch[0]}${esc(cleaned)}</span>`;
+              h+=`<button class="use-btn" data-usesug="${esc(cleaned)}" style="flex-shrink:0;margin:0;white-space:nowrap">Use</button>`;
+              h+=`</div>`;
+            }
+          }else if(line.trim()){
+            h+=`${esc(line)}<br>`;
+          }
+        });
+        h+=`</div></div>`;
+      }else if(m.role==='assistant'){
+        h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">${esc(m.content).replace(/\n/g,'<br>')}`;
+        if(m.suggestion){
+          h+=`<div style="display:flex;align-items:center;gap:6px;margin-top:4px">`;
+          h+=`<span style="color:var(--green);font-weight:600;font-size:11px">→ ${esc(m.suggestion)}</span>`;
+          h+=`<button class="use-btn" data-usesug="${esc(m.suggestion)}" style="flex-shrink:0;margin:0">Use</button>`;
+          h+=`</div>`;
+        }
+        h+=`</div></div>`;
+      }else{
+        h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">${esc(m.content).replace(/\n/g,'<br>')}</div></div>`;
       }
-      h+=`</div></div>`;
     });
     if(sc.typing)h+=`<div class="sug-chat-msg assistant"><div class="bubble" style="color:var(--tx-3)">Thinking…</div></div>`;
     h+=`</div>`;
