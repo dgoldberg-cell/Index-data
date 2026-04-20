@@ -144,8 +144,8 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-seg-label{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--tx-4);margin-bottom:3px}
 
 /* Individual result — full width row, actions pushed right */
-.idx-result{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:14px;line-height:1.6}
-.idx-result-desc{color:var(--tx-2);flex:1}
+.idx-result{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:15px;line-height:1.6}
+.idx-result-desc{color:var(--tx-2);flex:1;font-size:15px}
 .idx-result-desc.empty-desc{color:var(--red);font-style:italic;background:rgba(176,80,80,.05);padding:0 4px;border-radius:3px}
 .idx-result-desc.editable:hover{background:var(--bg-1);cursor:text;border-radius:3px;padding:0 4px}
 .idx-result-rel{font-size:10px;color:var(--tx-4);font-style:italic;flex-shrink:0}
@@ -168,7 +168,12 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-orig-revert{font-size:9px;color:var(--amber);cursor:pointer;padding:1px 5px;border:1px solid rgba(154,122,48,.3);border-radius:8px;background:var(--bg-white);white-space:nowrap;transition:all .1s;font-family:var(--font)}
 .idx-orig-revert:hover{background:var(--amber-bg);border-color:var(--amber)}
 .idx-orig-sep{color:var(--tx-4);font-size:10px}
-.idx-mini-btn{width:20px;height:20px;border:1px solid var(--border);border-radius:4px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx-4);font-size:10px;transition:all .1s}
+.idx-mini-btn{width:28px;height:28px;border:1px solid var(--border);border-radius:5px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx-3);font-size:14px;transition:all .1s}
+.idx-mini-btn:hover{background:var(--bg-1);color:var(--tx-1);border-color:var(--border-hi)}
+
+/* When clip panel is open, squeeze main content so it stays fully visible */
+body.clip-panel-open .main-content{padding-right:420px;transition:padding-right .2s ease-out}
+body.clip-panel-open .idx-cols{gap:16px}
 
 /* Note popup — chat style like transcript popup */
 .note-popup-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:300;display:flex;align-items:center;justify-content:center}
@@ -409,7 +414,7 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .idx-sug-reason:hover{overflow:visible;max-width:none;z-index:20}
 .idx-sug-reason:hover::after{content:attr(data-reason);position:absolute;left:0;top:100%;margin-top:4px;background:var(--tx-1);color:#fff;padding:6px 10px;border-radius:6px;font-size:11px;line-height:1.4;white-space:normal;width:280px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.15);pointer-events:none}
 .idx-sug-actions{display:flex;gap:2px;flex-shrink:0}
-.idx-sug-btn{width:20px;height:20px;border:1px solid var(--border);border-radius:4px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;transition:all .1s}
+.idx-sug-btn{width:28px;height:28px;border:1px solid var(--border);border-radius:5px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;transition:all .1s}
 .idx-sug-btn.accept{color:var(--green);border-color:var(--green-bd)}.idx-sug-btn.accept:hover{background:var(--green-bg)}
 .idx-sug-btn.deny{color:var(--red);border-color:var(--red-bd)}.idx-sug-btn.deny:hover{background:var(--red-bg)}
 .idx-sug-btn.custom{color:var(--blue);border-color:var(--blue-bd)}.idx-sug-btn.custom:hover{background:var(--blue-bg)}
@@ -2780,6 +2785,8 @@ function render(force=true){
   const content=$('.content');if(content)scrollSave.content=content.scrollTop;
   const clipBody=$('#clip-panel-body');if(clipBody)scrollSave.clipBody=clipBody.scrollTop;
   app.innerHTML=h;bindAll();
+  // Toggle body class for layout squeeze when panel is open
+  document.body.classList.toggle('clip-panel-open',!!S.clipPanel);
   // Restore scroll positions
   const idxBody2=$('.idx-body');if(idxBody2&&scrollSave.idxBody)idxBody2.scrollTop=scrollSave.idxBody;
   const pad2=$('.pad');if(pad2&&scrollSave.pad)pad2.scrollTop=scrollSave.pad;
@@ -3139,7 +3146,7 @@ function rIndex(){
             eh+=`<span class="idx-sug-btn accept" data-sugaccept="${esc(e.name)}|${seg}|${r.rowIdx}" title="Accept">${IC.check}</span>`;
             eh+=`<span class="idx-sug-btn deny" data-sugdeny="${esc(e.name)}|${seg}|${r.rowIdx}" title="Deny">${IC.x}</span>`;
             eh+=`<span class="idx-sug-btn custom" data-sugcustom="${esc(e.name)}|${seg}|${r.rowIdx}" title="Custom edit">✎</span>`;
-            eh+=`<span class="idx-sug-btn" data-sugchat="${esc(e.name)}|${seg}|${r.rowIdx}" title="Discuss with AI" style="color:var(--blue)">🤖</span>`;
+            eh+=`<span class="idx-sug-btn" data-sugchat="${esc(e.name)}|${seg}|${r.rowIdx}" title="AI Chat" style="color:var(--blue)">🤖</span>`;
             eh+=`</span>`;
           }else if(hasOriginal){
             const editInfo=rv.editedBy?`Edited by ${rv.editedBy}${rv.editedAt?' at '+new Date(rv.editedAt).toLocaleString():''}. `:'';
@@ -3149,21 +3156,20 @@ function rIndex(){
             const editInfo2=(rv&&rv.editedBy)?`Edited by ${rv.editedBy}${rv.editedAt?' at '+new Date(rv.editedAt).toLocaleString():''}. `:'';
             eh+=`<span class="idx-result-desc ${descEmpty?'empty-desc':'editable'}" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="${esc(editInfo2)}Double-click to edit">${descEmpty?'[no description]':esc(r.desc)}</span>`;
           }
-          // Reference info — compact
+          // Reference info — compact (hide program numbers; panel has them)
           if(r.rel)eh+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
-          eh+=`<span class="idx-result-ref">`;
-          if(r.clipType==='Film Chapter'||r.clipType==='Film')eh+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">${esc(r.pvName||r.clipName)}</a>`;
-          else eh+=`<a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">#${esc(r.progNum)}</a>`;
-          eh+=`</span>`;
+          if(r.clipType==='Film Chapter'||r.clipType==='Film'){
+            eh+=`<span class="idx-result-ref"><a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">${esc(r.pvName||r.clipName)}</a></span>`;
+          }
           // Description-level notes/comments (threaded)
           const descNoteKey=e.name+'|'+seg+'|'+r.rowIdx;
           const descNote=S.descNotes?.[descNoteKey];
           const hasThread=descNote&&descNote.thread&&descNote.thread.length>0;
           eh+=`<span class="idx-mini-btn ${hasThread?'has-note':''}" data-descnote="${esc(descNoteKey)}" title="${hasThread?descNote.thread.length+' comment(s) — click to view':'Add comment'}" style="${hasThread?'color:var(--amber);background:var(--amber);color:#fff;border-color:var(--amber);font-size:9px;width:auto;padding:0 5px':''}">💬${hasThread?' '+descNote.thread.length:''}</span>`;
           // Audit shield icon (always visible)
-          eh+=`<span class="idx-mini-btn" data-auditone="${esc(e.name)}|${r.rowIdx}|${seg}" title="Audit this">${IC.audit}</span>`;
+          eh+=`<span class="idx-mini-btn" data-auditone="${esc(e.name)}|${r.rowIdx}|${seg}" title="AI Suggestion">${IC.audit}</span>`;
           // AI chat (always available)
-          eh+=`<span class="idx-mini-btn" data-aichat="${esc(e.name)}|${seg}|${r.rowIdx}" title="AI chat — discuss this description" style="color:var(--blue)">🤖</span>`;
+          eh+=`<span class="idx-mini-btn" data-aichat="${esc(e.name)}|${seg}|${r.rowIdx}" title="AI Chat" style="color:var(--blue)">🤖</span>`;
           // Info panel (clip details: video, summary, transcript)
           eh+=`<span class="idx-mini-btn" data-clippanel="${esc(e.name)}|${seg}|${r.rowIdx}" title="View clip details">ⓘ</span>`;
           // Status toggle — Pending/Reviewed
@@ -3532,10 +3538,10 @@ function rSetup(app){
   app.innerHTML=`<div class="setup-screen"><div class="setup-card" style="text-align:center">
   <img src="${JEM_LOGO}" alt="JEM" style="width:120px;margin:0 auto 14px;display:block;border-radius:8px">
   <h1>JEM Index Workstation</h1>
-  <div style="text-align:left;margin-top:14px"><label style="font-size:11px;color:var(--tx-3);font-weight:500">Code</label><input class="s-input" id="ik" type="password" placeholder="Enter team code" value="${esc(S.claudeKey)}" style="margin-top:4px"></div>
+  <div style="text-align:left;margin-top:14px"><label style="font-size:11px;color:var(--tx-3);font-weight:500">Code <span style="color:var(--tx-4);font-weight:400">(optional — leave blank to work without AI features)</span></label><input class="s-input" id="ik" type="password" placeholder="Enter team code (optional)" value="${esc(S.claudeKey)}" style="margin-top:4px"></div>
   <div class="setup-err" id="se"></div>
   <button class="btn btn-gold" id="btn-con" style="width:100%;height:42px;font-size:14px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center">Sign In</button></div></div>`;
-  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}if(!k){$('#se').textContent='Please enter the team code';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadTab(0);registerTeamMember();startAutoRefresh();render()}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
+  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadTab(0);registerTeamMember();startAutoRefresh();render();if(!k)toast('Signed in without AI features. Add a code in settings to enable AI.','info')}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
 }
 
 // ═══════════════════════════════════════════════════════════════
