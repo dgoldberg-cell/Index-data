@@ -670,6 +670,7 @@ notifOpen:false, // Toggle: show notifications panel
 viewHistory:[], // Stack of previous views for back navigation
 sugChat:null, // {entryName,segType,rowIdx,desc,suggestion,transcript,messages:[]} — mini chat for a suggestion
 clipPanel:null, // {entryName,segType,rowIdx} — slide-out clip details panel
+customEdit:null, // {entryName,segType,rowIdx,initialValue} — themed custom edit popup
 notesPopup:null, // {key, label} — currently open notes popup
 toolsOpen:false, // Toggle: show Tools section in sidebar
 tabsOpen:false, // Toggle: show Sheet Tabs in sidebar
@@ -1035,9 +1036,25 @@ function startAutoRefresh(){
   if(_syncTimer)clearInterval(_syncTimer);
   _syncTimer=setInterval(async()=>{
     if(!S.connected)return;
+    // Skip refresh if user is interacting with a popup or panel
+    if(S.sugChat||S.clipPanel||S.customEdit||S.notePopup||S.notesPopup)return;
     try{
+      // Snapshot data before refresh
+      const before=JSON.stringify({
+        notes:Object.keys(S.descNotes||{}).length,
+        notifs:(S.notifications||[]).length,
+        team:(S.teamMembers||[]).length,
+        activity:(S.activityLog||[]).length
+      });
       await loadSharedDataFromSheet();
-      render(false); // Don't force — don't interrupt editing
+      const after=JSON.stringify({
+        notes:Object.keys(S.descNotes||{}).length,
+        notifs:(S.notifications||[]).length,
+        team:(S.teamMembers||[]).length,
+        activity:(S.activityLog||[]).length
+      });
+      // Only re-render if something actually changed
+      if(before!==after)render(false);
     }catch(e){console.warn('Auto-refresh failed:',e)}
   },180000); // 3 minutes
 }
@@ -2528,6 +2545,24 @@ function render(force=true){
     });
     h+=`</div></div>`;
   }
+  // Custom edit popup (themed)
+  if(S.customEdit){
+    const ce=S.customEdit;
+    h+=`<div class="sug-chat-overlay" id="custom-edit-overlay">`;
+    h+=`<div class="sug-chat" style="width:480px">`;
+    h+=`<div class="sug-chat-head"><h3>✎ Edit Description</h3><button class="btn btn-sm btn-icon" id="custom-edit-close">✕</button></div>`;
+    h+=`<div class="sug-chat-context"><div>Entry: <strong>${esc(ce.entryName)}</strong></div></div>`;
+    h+=`<div style="padding:14px 18px">`;
+    h+=`<label style="font-size:11px;color:var(--tx-3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Description</label>`;
+    h+=`<textarea id="custom-edit-input" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;font-family:var(--font);resize:vertical;outline:none">${esc(ce.initialValue)}</textarea>`;
+    h+=`<div style="font-size:11px;color:var(--tx-4);margin-top:6px">Tweak the AI's suggestion or write your own version.</div>`;
+    h+=`</div>`;
+    h+=`<div class="sug-chat-input" style="border-top:1px solid var(--border);padding:10px 18px">`;
+    h+=`<button class="btn btn-sm" id="custom-edit-cancel" style="background:var(--bg-1);color:var(--tx-1)">Cancel</button>`;
+    h+=`<button class="btn btn-sm btn-gold" id="custom-edit-save" style="margin-left:auto">Save</button>`;
+    h+=`</div>`;
+    h+=`</div></div>`;
+  }
   // Clip details side panel
   if(S.clipPanel){
     const cp=S.clipPanel;
@@ -2577,7 +2612,7 @@ function render(force=true){
       // Actions
       h+=`<div class="clip-panel-actions">`;
       if(vidUrl)h+=`<a href="${vidUrl}" target="_blank" class="btn btn-sm" style="text-decoration:none;text-align:center">▶ Watch on JEM.tv</a>`;
-      h+=`<button class="btn btn-sm" id="clip-panel-audit">${IC.audit} Audit</button>`;
+      h+=`<button class="btn btn-sm" id="clip-panel-audit">🛡 Audit</button>`;
       h+=`<button class="btn btn-sm" id="clip-panel-chat" style="color:var(--blue)">🤖 AI Chat</button>`;
       h+=`</div>`;
       h+=`</div>`;
@@ -3690,8 +3725,26 @@ function bindAll(){
   });
   $$('[data-sugcustom]').forEach(el=>el.onclick=()=>{
     const[en,seg,ri]=el.dataset.sugcustom.split('|');
-    const val=prompt('Enter custom description:');
-    if(val&&val.trim())applyCustomDesc(en,seg,+ri,val.trim());
+    // Get the AI suggestion to pre-fill
+    const k=rvKey(en,seg,+ri);
+    const rv=getRV(k);
+    const initial=rv?.suggestion||'';
+    S.customEdit={entryName:en,segType:seg,rowIdx:+ri,initialValue:initial};
+    render();
+    setTimeout(()=>{const inp=$('#custom-edit-input');if(inp){inp.focus();inp.select()}},50);
+  });
+  // Custom edit popup handlers
+  on('#custom-edit-close','click',()=>{S.customEdit=null;render()});
+  on('#custom-edit-cancel','click',()=>{S.customEdit=null;render()});
+  on('#custom-edit-overlay','click',(e)=>{if(e.target.id==='custom-edit-overlay'){S.customEdit=null;render()}});
+  on('#custom-edit-save','click',()=>{
+    if(!S.customEdit)return;
+    const ce=S.customEdit;
+    const val=$('#custom-edit-input')?.value?.trim();
+    if(!val){toast('Description cannot be empty','error');return}
+    applyCustomDesc(ce.entryName,ce.segType,ce.rowIdx,val);
+    S.customEdit=null;
+    render();
   });
   // Custom from review queue page
   $$('[data-sugcustom2]').forEach(el=>el.onclick=()=>{
