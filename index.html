@@ -176,6 +176,21 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 
 /* Mini suggestion chat */
 .sug-chat-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:300;display:flex;align-items:center;justify-content:center}
+
+/* Clip details side panel */
+.clip-panel-overlay{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:90vw;background:var(--bg-white);border-left:2px solid var(--gold);box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:250;display:flex;flex-direction:column;animation:slideInRight .2s ease-out}
+@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.clip-panel-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-0)}
+.clip-panel-head h3{font-size:14px;font-family:var(--serif);margin:0}
+.clip-panel-body{flex:1;overflow-y:auto;padding:14px 18px}
+.clip-panel-img{width:100%;border-radius:8px;margin-bottom:12px;background:var(--bg-1);min-height:120px;display:flex;align-items:center;justify-content:center;color:var(--tx-4);font-size:11px}
+.clip-panel-img img{width:100%;border-radius:8px;display:block}
+.clip-panel-section{margin-bottom:14px}
+.clip-panel-label{font-size:10px;font-weight:600;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
+.clip-panel-text{font-size:12px;line-height:1.5;color:var(--tx-1)}
+.clip-panel-text.scrollable{max-height:200px;overflow-y:auto;background:var(--bg-1);padding:8px;border-radius:6px;font-size:11px}
+.clip-panel-actions{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;background:var(--bg-0)}
+.clip-panel-actions .btn{flex:1}
 .sug-chat{background:var(--bg-white);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2);width:440px;max-width:92vw;max-height:75vh;display:flex;flex-direction:column;overflow:hidden}
 .sug-chat-head{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-0)}
 .sug-chat-head h3{font-size:13px;font-family:var(--serif);margin:0}
@@ -653,6 +668,7 @@ notifications:[], // [{id, type, from, noteKey, noteTitle, text, timestamp, read
 notifOpen:false, // Toggle: show notifications panel
 viewHistory:[], // Stack of previous views for back navigation
 sugChat:null, // {entryName,segType,rowIdx,desc,suggestion,transcript,messages:[]} — mini chat for a suggestion
+clipPanel:null, // {entryName,segType,rowIdx} — slide-out clip details panel
 notesPopup:null, // {key, label} — currently open notes popup
 toolsOpen:false, // Toggle: show Tools section in sidebar
 tabsOpen:false, // Toggle: show Sheet Tabs in sidebar
@@ -1383,6 +1399,7 @@ function buildIndex(){
   const objIdCol=S.headers.findIndex(h=>h.toLowerCase()==='objectid');
   const transcriptCol=S.headers.findIndex(h=>h.toLowerCase()==='transcript');
   const summaryCol=S.headers.findIndex(h=>h.toLowerCase()==='summary');
+  const imageCol=4; // Column E (0-indexed)
   const progCol=S.headers.findIndex(h=>h.toLowerCase()==='program_number');
   const pvNameCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_name');
   const pvTypeCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_type');
@@ -1404,6 +1421,7 @@ function buildIndex(){
     const objId=(row[objIdCol]||'').trim();
     const transcript=(row[transcriptCol]||'').trim();
     const summary=(row[summaryCol]||'').trim();
+    const image=(row[imageCol]||'').trim();
     const progNum=(row[progCol]||'').trim();
     const pvName=(row[pvNameCol]||'').trim();
     const pvType=(row[pvTypeCol]||'').trim();
@@ -1421,6 +1439,7 @@ function buildIndex(){
       }
       entries[name].results.push({
         desc,rel,relevancy,clipName,clipId,objId,segType,transcript:transcript||summary||'',
+        summary,image,
         progNum,pvName,pvType,rowIdx:ri,clipType
       });
     });
@@ -2508,6 +2527,61 @@ function render(force=true){
     });
     h+=`</div></div>`;
   }
+  // Clip details side panel
+  if(S.clipPanel){
+    const cp=S.clipPanel;
+    const entry=findEntry(cp.entryName);
+    const r=entry?.results.find(x=>x.segType===cp.segType&&x.rowIdx===cp.rowIdx);
+    if(r){
+      let vidUrl='';
+      if(r.objId)vidUrl=`https://www.jem.tv/clip/${r.objId}`;
+      else if(r.clipId)vidUrl=`https://www.jem.tv/clip/${r.clipId}`;
+      h+=`<div class="clip-panel-overlay" id="clip-panel-overlay">`;
+      h+=`<div class="clip-panel-head">`;
+      h+=`<div><h3>📺 Clip Details</h3><div style="font-size:11px;color:var(--tx-3);margin-top:2px">${esc(cp.entryName)}</div></div>`;
+      h+=`<button class="btn btn-sm btn-icon" id="clip-panel-close">✕</button>`;
+      h+=`</div>`;
+      h+=`<div class="clip-panel-body">`;
+      // Image
+      if(r.image){
+        h+=`<div class="clip-panel-img">${vidUrl?`<a href="${vidUrl}" target="_blank"><img src="${esc(r.image)}" alt=""></a>`:`<img src="${esc(r.image)}" alt="">`}</div>`;
+      }else{
+        h+=`<div class="clip-panel-img">No image available</div>`;
+      }
+      // Title
+      h+=`<div class="clip-panel-section">`;
+      h+=`<div class="clip-panel-label">Title</div>`;
+      h+=`<div class="clip-panel-text"><strong>${esc(r.pvName||r.clipName||'Untitled')}</strong>${r.progNum?` <span style="color:var(--tx-3);font-weight:400">· #${esc(r.progNum)}</span>`:''}</div>`;
+      h+=`</div>`;
+      // Summary
+      if(r.summary){
+        h+=`<div class="clip-panel-section">`;
+        h+=`<div class="clip-panel-label">Summary</div>`;
+        h+=`<div class="clip-panel-text">${esc(r.summary)}</div>`;
+        h+=`</div>`;
+      }
+      // Transcript
+      if(r.transcript&&r.transcript!==r.summary){
+        h+=`<div class="clip-panel-section">`;
+        h+=`<div class="clip-panel-label">Transcript</div>`;
+        h+=`<div class="clip-panel-text scrollable">${esc(r.transcript)}</div>`;
+        h+=`</div>`;
+      }
+      // Description being audited
+      h+=`<div class="clip-panel-section">`;
+      h+=`<div class="clip-panel-label">This sub-entry</div>`;
+      h+=`<div class="clip-panel-text"><em>${esc(r.desc||'[empty]')}</em>${r.rel?` <span style="color:var(--tx-3)">[${esc(r.rel)}]</span>`:''}</div>`;
+      h+=`</div>`;
+      h+=`</div>`;
+      // Actions
+      h+=`<div class="clip-panel-actions">`;
+      if(vidUrl)h+=`<a href="${vidUrl}" target="_blank" class="btn btn-sm" style="text-decoration:none;text-align:center">▶ Watch on JEM.tv</a>`;
+      h+=`<button class="btn btn-sm" id="clip-panel-audit">${IC.audit} Audit</button>`;
+      h+=`<button class="btn btn-sm" id="clip-panel-chat" style="color:var(--blue)">🤖 AI Chat</button>`;
+      h+=`</div>`;
+      h+=`</div>`;
+    }
+  }
   // Mini suggestion chat popup
   if(S.sugChat){
     const sc=S.sugChat;
@@ -2971,13 +3045,10 @@ function rIndex(){
           eh+=`<span class="idx-mini-btn ${hasThread?'has-note':''}" data-descnote="${esc(descNoteKey)}" title="${hasThread?descNote.thread.length+' comment(s) — click to view':'Add comment'}" style="${hasThread?'color:var(--amber);background:var(--amber);color:#fff;border-color:var(--amber);font-size:9px;width:auto;padding:0 5px':''}">💬${hasThread?' '+descNote.thread.length:''}</span>`;
           // Audit shield icon (always visible)
           eh+=`<span class="idx-mini-btn" data-auditone="${esc(e.name)}|${r.rowIdx}|${seg}" title="Audit this">${IC.audit}</span>`;
-          // Clip dropdown (video + transcript)
-          if(vidUrl||r.transcript){
-            eh+=`<span class="idx-clip-menu" data-clipmenu><span class="idx-clip-btn" data-clipbtn>⋮</span><span class="idx-clip-dd">`;
-            if(vidUrl)eh+=`<a href="${vidUrl}" target="_blank">${IC.video} Watch clip</a>`;
-            if(r.transcript)eh+=`<span data-showtx="${r.rowIdx}">${IC.doc} View transcript</span>`;
-            eh+=`</span></span>`;
-          }
+          // AI chat (always available)
+          eh+=`<span class="idx-mini-btn" data-aichat="${esc(e.name)}|${seg}|${r.rowIdx}" title="AI chat — discuss this description" style="color:var(--blue)">🤖</span>`;
+          // Info panel (clip details: video, summary, transcript)
+          eh+=`<span class="idx-mini-btn" data-clippanel="${esc(e.name)}|${seg}|${r.rowIdx}" title="View clip details">ⓘ</span>`;
           // Status toggle — Pending/Reviewed
           eh+=`<button class="idx-status ${isReviewed?'reviewed':''}" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}">${isReviewed?'✓ Reviewed':'Pending'}</button>`;
           eh+=`</div>`;
@@ -3650,6 +3721,65 @@ function bindAll(){
       messages:[],
       typing:false
     };
+    render();
+    setTimeout(()=>{$('#sug-chat-input')?.focus()},50);
+  });
+  // AI chat (always available, not just after audit)
+  $$('[data-aichat]').forEach(el=>el.onclick=()=>{
+    const parts=el.dataset.aichat;
+    const lp=parts.lastIndexOf('|');const slp=parts.lastIndexOf('|',lp-1);
+    const entryName=parts.slice(0,slp);
+    const segType=parts.slice(slp+1,lp);
+    const rowIdx=+parts.slice(lp+1);
+    const entry=findEntry(entryName);
+    if(!entry)return;
+    const r=entry.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
+    if(!r)return;
+    const k=rvKey(entryName,segType,rowIdx);
+    const rv=getRV(k);
+    S.sugChat={
+      entryName,segType,rowIdx,
+      desc:r.desc||'',
+      suggestion:rv?.suggestion||'',
+      reason:rv?.reason||'',
+      transcript:r.transcript||'',
+      messages:[],
+      typing:false
+    };
+    render();
+    setTimeout(()=>{$('#sug-chat-input')?.focus()},50);
+  });
+  // Clip details side panel — open
+  $$('[data-clippanel]').forEach(el=>el.onclick=()=>{
+    const parts=el.dataset.clippanel;
+    const lp=parts.lastIndexOf('|');const slp=parts.lastIndexOf('|',lp-1);
+    const entryName=parts.slice(0,slp);
+    const segType=parts.slice(slp+1,lp);
+    const rowIdx=+parts.slice(lp+1);
+    S.clipPanel={entryName,segType,rowIdx};
+    render();
+  });
+  on('#clip-panel-close','click',()=>{S.clipPanel=null;render()});
+  on('#clip-panel-audit','click',()=>{
+    if(!S.clipPanel)return;
+    const cp=S.clipPanel;
+    auditSingleDesc(cp.entryName,cp.rowIdx,cp.segType);
+    S.clipPanel=null;
+    render();
+  });
+  on('#clip-panel-chat','click',()=>{
+    if(!S.clipPanel)return;
+    const cp=S.clipPanel;
+    const entry=findEntry(cp.entryName);
+    const r=entry?.results.find(x=>x.segType===cp.segType&&x.rowIdx===cp.rowIdx);
+    if(!r)return;
+    const rv=getRV(rvKey(cp.entryName,cp.segType,cp.rowIdx));
+    S.sugChat={
+      entryName:cp.entryName,segType:cp.segType,rowIdx:cp.rowIdx,
+      desc:r.desc||'',suggestion:rv?.suggestion||'',reason:rv?.reason||'',
+      transcript:r.transcript||'',messages:[],typing:false
+    };
+    S.clipPanel=null;
     render();
     setTimeout(()=>{$('#sug-chat-input')?.focus()},50);
   });
