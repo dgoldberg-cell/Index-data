@@ -179,6 +179,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 
 /* Clip details side panel */
 .clip-panel-overlay{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:90vw;background:var(--bg-white);border-left:2px solid var(--gold);box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:250;display:flex;flex-direction:column;animation:slideInRight .2s ease-out}
+.idx-result.panel-source{background:rgba(212,175,55,0.15);border-left:3px solid var(--gold);padding-left:6px;border-radius:4px}
 @keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
 .clip-panel-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-0)}
 .clip-panel-head h3{font-size:14px;font-family:var(--serif);margin:0}
@@ -188,7 +189,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .clip-panel-section{margin-bottom:14px}
 .clip-panel-label{font-size:10px;font-weight:600;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
 .clip-panel-text{font-size:12px;line-height:1.5;color:var(--tx-1)}
-.clip-panel-text.scrollable{max-height:200px;overflow-y:auto;background:var(--bg-1);padding:8px;border-radius:6px;font-size:11px}
+.clip-panel-text.scrollable{max-height:400px;overflow-y:auto;background:var(--bg-1);padding:12px;border-radius:6px;font-size:14px;line-height:1.6;color:var(--tx-1)}
 .clip-panel-actions{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;background:var(--bg-0)}
 .clip-panel-actions .btn{flex:1}
 .sug-chat{background:var(--bg-white);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2);width:440px;max-width:92vw;max-height:75vh;display:flex;flex-direction:column;overflow:hidden}
@@ -2652,8 +2653,8 @@ function render(force=true){
     h+=`<div class="sug-chat-input"><input id="sug-chat-input" placeholder="Ask about this description…" autocomplete="off"><button id="sug-chat-send">Send</button></div>`;
     h+=`</div></div>`;
   }
-  // Floating AI chat button (bottom-right, always visible)
-  if(!S.aiOpen){
+  // Floating AI chat button (bottom-right, always visible — except when panels are open)
+  if(!S.aiOpen&&!S.clipPanel&&!S.sugChat){
     h+=`<button id="ai-fab" style="position:fixed;bottom:20px;right:20px;z-index:100;width:48px;height:48px;border-radius:50%;background:var(--gold);color:#fff;border:none;box-shadow:0 4px 12px rgba(0,0,0,.2);cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;transition:transform .1s" title="AI Assistant">🤖</button>`;
   }
   // Toasts
@@ -3004,7 +3005,8 @@ function rIndex(){
           const isPending=rv&&rv.suggestion&&rv.status==='pending';
           if(S.reviewMode&&isReviewed&&!isPending)return;
 
-          eh+=`<div class="idx-result">`;
+          const isPanelSrc=S.clipPanel&&S.clipPanel.entryName===e.name&&S.clipPanel.segType===seg&&S.clipPanel.rowIdx===r.rowIdx;
+          eh+=`<div class="idx-result${isPanelSrc?' panel-source':''}">`;
           // Audit checkbox (hidden unless select mode)
           const selKey=esc(e.name)+'|'+seg+'|'+r.rowIdx;
           eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''} title="Select for AI audit">`;
