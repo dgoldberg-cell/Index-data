@@ -2446,6 +2446,74 @@ const IC={
 // ═══════════════════════════════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════════════════════════════
+// Partial render — only update the chat messages area, not the whole app
+function renderChatOnly(){
+  if(!S.clipPanel||!S.clipPanel.chat)return;
+  const cp=S.clipPanel;
+  const sc=cp.chat;
+  const container=$('#clip-chat-msgs');
+  if(!container)return;
+  let h='';
+  if(!sc.messages.length){
+    h+=`<div style="color:var(--tx-3);font-size:13px;text-align:center;padding:14px;background:var(--bg-1);border-radius:8px">Ask for alternatives, explain why a suggestion is wrong, or request specific changes.</div>`;
+  }
+  sc.messages.forEach(m=>{
+    if(m.role==='assistant'&&m.suggestions&&m.suggestions.length){
+      h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">`;
+      const lines=m.content.split('\n');
+      lines.forEach(line=>{
+        const numMatch=line.match(/^\d+[\.\)]\s*/);
+        if(numMatch){
+          const cleaned=line.replace(/^\d+[\.\)]\s*→?\s*/,'').replace(/^["""'']+|["""'']+$/g,'').replace(/^\*+|\*+$/g,'').trim();
+          if(cleaned){
+            h+=`<div style="display:flex;align-items:center;gap:8px;margin:4px 0">`;
+            h+=`<span style="flex:1;font-size:14px">${numMatch[0]}${esc(cleaned)}</span>`;
+            h+=`<button class="use-btn" data-usesug="${esc(cleaned)}" style="flex-shrink:0;margin:0;white-space:nowrap;font-size:12px;padding:4px 12px">Use</button>`;
+            h+=`</div>`;
+          }
+        }else if(line.trim()){
+          h+=`${esc(line)}<br>`;
+        }
+      });
+      h+=`</div></div>`;
+    }else if(m.role==='assistant'){
+      h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">${esc(m.content).replace(/\n/g,'<br>')}`;
+      if(m.suggestion){
+        h+=`<div style="display:flex;align-items:center;gap:8px;margin-top:6px">`;
+        h+=`<span style="color:var(--green);font-weight:600;font-size:13px">→ ${esc(m.suggestion)}</span>`;
+        h+=`<button class="use-btn" data-usesug="${esc(m.suggestion)}" style="flex-shrink:0;margin:0;font-size:12px;padding:4px 12px">Use</button>`;
+        h+=`</div>`;
+      }
+      h+=`</div></div>`;
+    }else{
+      h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">${esc(m.content).replace(/\n/g,'<br>')}</div></div>`;
+    }
+  });
+  if(sc.typing)h+=`<div class="sug-chat-msg assistant"><div class="bubble" style="color:var(--tx-3)">Thinking…</div></div>`;
+  container.innerHTML=h;
+  // Re-bind Use this buttons
+  container.querySelectorAll('[data-usesug]').forEach(el=>el.onclick=async()=>{
+    const newDesc=el.dataset.usesug;
+    if(!cp||!newDesc)return;
+    const ok=await updateTagDesc(cp.rowIdx,cp.entryName,newDesc);
+    if(ok){
+      const k=rvKey(cp.entryName,cp.segType,cp.rowIdx);
+      const rv=getRV(k)||{};
+      rv.reviewed=true;rv.status='manual';
+      rv.editedBy=S.user?.name||'Unknown';rv.editedAt=Date.now();
+      rv.suggestion='';rv.reason='';
+      setRV(k,rv);
+      logActivity(`Used AI suggestion for "${cp.entryName}": "${newDesc}"`);
+      toast('Description updated','success');
+      S.clipPanel=null;
+      buildIndex();render();
+    }else{toast('Failed to save','error')}
+  });
+  // Scroll to bottom
+  const target=$('#clip-section-chat');
+  if(target)target.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
 function render(force=true){
   // Don't rebuild DOM while user is actively typing — UNLESS forced
   if(!force){
@@ -3836,8 +3904,8 @@ function bindAll(){
     sc.messages.push({role:'user',content:text});
     sc.typing=true;
     inp.value='';
-    render();
-    setTimeout(()=>{const target=$('#clip-section-chat');if(target)target.scrollIntoView({behavior:'smooth',block:'start'});$('#sug-chat-input')?.focus()},80);
+    renderChatOnly(); // Partial update — no sidebar flash
+    setTimeout(()=>{$('#sug-chat-input')?.focus()},80);
 
     const fullRules=buildAuditRulesText();
     const sys=`You are helping a human editor refine a single index description. You see the FULL transcript.
@@ -3887,8 +3955,8 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
       }
     }catch(e){sc.messages.push({role:'assistant',content:'Error: '+e.message})}
     sc.typing=false;
-    render();
-    setTimeout(()=>{const b=$('#sug-chat-body');if(b)b.scrollTop=b.scrollHeight;$('#sug-chat-input')?.focus()},50);
+    renderChatOnly(); // Partial update — no sidebar flash
+    setTimeout(()=>{$('#sug-chat-input')?.focus()},50);
   });
   on('#sug-chat-input','keydown',(e)=>{if(e.key==='Enter'){e.preventDefault();$('#sug-chat-send')?.click()}});
   // Quick action buttons
