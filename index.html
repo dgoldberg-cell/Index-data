@@ -54,7 +54,14 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 
 /* Main */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-.main-content{flex:1;display:flex;overflow:hidden}
+.main-content{flex:1;display:flex;overflow:hidden;position:relative}
+.global-back-btn{position:fixed;top:12px;left:236px;z-index:240;background:var(--bg-white);color:var(--tx-1);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.06);transition:all .1s;font-family:var(--font)}
+.global-back-btn:hover{background:var(--gold);color:#fff;border-color:var(--gold);transform:translateX(-2px)}
+.jump-highlight{animation:jumpPulse 1.5s ease-out}
+@keyframes jumpPulse{
+  0%{background:rgba(212,175,55,0.35);box-shadow:0 0 0 4px rgba(212,175,55,0.25)}
+  100%{background:transparent;box-shadow:0 0 0 0 transparent}
+}
 .content{flex:1;overflow-y:auto;overflow-x:hidden}
 .content.content-index{overflow:hidden;display:flex;flex-direction:column}
 .idx-wrap{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
@@ -540,6 +547,30 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .denied-drawer{background:var(--bg-0);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-top:12px;max-height:200px;overflow-y:auto}
 .denied-item{display:flex;align-items:baseline;gap:6px;padding:3px 0;font-size:11px;color:var(--tx-3);border-bottom:1px solid var(--border)}
 .denied-item:last-child{border-bottom:none}
+
+/* Print / Save-as-PDF styles — only shows Book View content, hides all chrome */
+@media print{
+  /* Hide everything by default */
+  body > *{display:none !important}
+  /* Keep only the main app + book content */
+  body > #app, body > div[id]{display:block !important}
+  .sidebar,.global-back-btn,.page-hd-actions,.book-entry-edit,.book-comment,#clip-panel-overlay,.notif-panel,.ai-fab,#ai-fab,.toast-stack,.confirm-overlay,.note-popup-overlay,.transcript-popup,.rename-input,.idx-rename-input{display:none !important}
+  /* Let book view fill the page without shadows or max-widths */
+  .main, .main-content, .content{display:block !important;overflow:visible !important;width:100% !important;max-width:none !important;padding:0 !important;margin:0 !important}
+  .book-view{box-shadow:none !important;max-width:none !important;margin:0 !important;padding:18px 24px !important;border-radius:0 !important}
+  .page-hd{border:none !important;padding:0 0 8px !important;margin:0 !important;background:none !important}
+  .page-hd h1{font-size:22px !important;text-align:center !important}
+  .page-hd p{display:none !important}
+  /* Keep the book's two-column flow */
+  .book-page{column-count:2 !important;column-gap:24px !important}
+  .book-section-hd{break-before:page;column-span:all}
+  .book-section-hd:first-child{break-before:avoid}
+  .book-entry{break-inside:avoid}
+  /* Turn hyperlinks into plain text on paper (or keep color — your choice) */
+  .book-ref{color:#1a1a1a !important;text-decoration:none !important}
+  /* Print page setup */
+  @page{size:letter;margin:0.6in 0.5in}
+}
 </style>
 </head>
 <body>
@@ -2825,7 +2856,12 @@ function render(force=true){
   let h='';
   h+=rSidebar();
   const isIdx=S.view==='index';
-  h+=`<div class="main"><div class="main-content"><div class="content${isIdx?' content-index':''}">`;
+  h+=`<div class="main"><div class="main-content">`;
+  // Global floating back button (fixed top-left of main content)
+  if(S.viewHistory&&S.viewHistory.length){
+    h+=`<button class="global-back-btn" id="global-back" title="Go back to previous view">← Back</button>`;
+  }
+  h+=`<div class="content${isIdx?' content-index':''}">`;
   if(S.view==='dashboard')h+=rDash();
   else if(S.view==='book')h+=rBook();
   else if(isIdx)h+=rIndex();
@@ -3184,13 +3220,15 @@ const REL_DEFAULTS={
 // Rules:
 //   - Nigunim section: show ONLY if rel is "spoken about"; otherwise hide
 //   - All other sections: show if rel differs from segment default
+// Normalizes underscore to space for comparison (data may use "spoken_about" or "spoken about")
+function normalizeRel(s){return(s||'').toString().trim().toLowerCase().replace(/_/g,' ')}
 function shouldShowRel(r,section){
-  const rel=(r.rel||'').trim().toLowerCase();
+  const rel=normalizeRel(r.rel);
   if(!rel)return false;
   if(section==='Nigunim'){
     return rel==='spoken about';
   }
-  const def=(REL_DEFAULTS[r.segType]||'').toLowerCase();
+  const def=normalizeRel(REL_DEFAULTS[r.segType]);
   return rel!==def;
 }
 
@@ -3198,7 +3236,7 @@ function shouldShowRel(r,section){
 // In People Index, only "spoken about" relationships get descriptions; others are ref-only.
 function shouldShowDesc(r,section){
   if(section!=='People')return true;
-  return (r.rel||'').trim().toLowerCase()==='spoken about';
+  return normalizeRel(r.rel)==='spoken about';
 }
 
 function rBook(){
@@ -3207,7 +3245,7 @@ function rBook(){
   const scope=S.bookScope||'all'; // 'all' or a specific section name
   const sections=scope==='all'?RULES.sectionOrder:[scope];
   const title=scope==='all'?'Full Index':scope;
-  let h=`<div class="page-hd"><h1>📖 ${esc(title)}</h1><p>Book View — read-only. Click ✎ on any entry to edit.</p><div class="page-hd-actions"><button class="btn btn-gold" data-nav="dashboard">← Back to Dashboard</button></div></div>`;
+  let h=`<div class="page-hd"><h1>📖 ${esc(title)}</h1><p>Book View — read-only. Click ✎ on any entry to edit. Use "Download as PDF" to save or print.</p><div class="page-hd-actions"><button class="btn btn-sm" id="book-download-pdf" title="Open print dialog — choose 'Save as PDF'">📄 Download as PDF</button><button class="btn btn-gold" data-nav="dashboard">← Back to Dashboard</button></div></div>`;
   h+='<div class="book-view"><div class="book-page">';
 
   sections.forEach(section=>{
@@ -3579,8 +3617,8 @@ function rIndex(){
           }
           // Meta section — wraps as a unit to line 2 when row is tight
           eh+=`<span class="idx-result-meta">`;
-          // Relationship label
-          if(r.rel)eh+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
+          // Relationship label (hide when matching segment default; Nigunim exception)
+          if(shouldShowRel(r,e.section))eh+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
           // Reference code — book-style for all segments
           if(r.clipType==='Film Chapter'||r.clipType==='Film'){
             const filmRef=filmRefForResult(r);
@@ -4007,8 +4045,8 @@ function bindAll(){
     if(newView==='index'&&S.reviewFilter==='bookmarked'){S.reviewFilter='all'}
     render();
   });
-  // Back button
-  on('#nav-back','click',()=>{
+  // Back button — global + existing
+  function doBack(){
     if(!S.viewHistory.length)return;
     const prev=S.viewHistory.pop();
     S.view=prev.view;
@@ -4016,8 +4054,35 @@ function bindAll(){
     S.idxPage=prev.page||0;
     S.idxSearch=prev.search||'';
     S.reviewFilter=prev.filter||'all';
-    S.clipPanel=null; // Close clip panel
+    S.bookScope=prev.bookScope||S.bookScope;
+    S.clipPanel=null;
+    S.notifOpen=false;
     render();
+    // Restore scroll if we stored one
+    if(prev.scrollTop!=null){
+      setTimeout(()=>{
+        const mc=$('.main-content');
+        if(mc)mc.scrollTop=prev.scrollTop;
+        // Also restore highlight target if specified
+        if(prev.scrollToEntry){
+          const el=document.querySelector(`[data-entry="${CSS.escape(prev.scrollToEntry)}"]`);
+          if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('jump-highlight');setTimeout(()=>el.classList.remove('jump-highlight'),1500)}
+        }
+      },80);
+    }
+  }
+  on('#nav-back','click',doBack);
+  on('#global-back','click',doBack);
+  // Book View — Download as PDF (uses browser print → Save as PDF)
+  on('#book-download-pdf','click',()=>{
+    // Set document title to a nice filename for the PDF
+    const scope=S.bookScope||'all';
+    const title=scope==='all'?'JEM Index - Full':('JEM Index - '+scope);
+    const oldTitle=document.title;
+    document.title=title;
+    window.print();
+    // Restore title after print dialog closes
+    setTimeout(()=>{document.title=oldTitle},1000);
   });
   on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
   on('#ai-fab','click',()=>{S.aiOpen=true;render()});
@@ -4030,29 +4095,66 @@ function bindAll(){
     S.clipPanel=null;
     render();
   });
-  // Book View — edit button on entry (jump to editor at that entry)
+  // Book View — edit button on entry: jump to editor, scroll to entry, open rename
   $$('[data-bookedit]').forEach(el=>el.onclick=()=>{
     const entryName=el.dataset.bookedit;
+    // Push current Book View state so back returns here
+    S.viewHistory.push({view:S.view,bookScope:S.bookScope,section:S.idxActiveSection,page:S.idxPage,search:S.idxSearch,filter:S.reviewFilter});
     S.view='index';
-    S.idxSearch=entryName;
-    S.idxPage=0;
+    S.idxActiveSection='all'; // Ensure entry is visible regardless of current filter
     S.clipPanel=null;
+    // Start inline rename on this entry
+    S.renamingEntry={name:entryName,inputValue:entryName};
     render();
+    // Scroll to the entry and highlight
+    setTimeout(()=>{
+      const el=document.querySelector(`[data-entry="${CSS.escape(entryName)}"]`);
+      if(el){
+        el.scrollIntoView({behavior:'smooth',block:'center'});
+        const entryCard=el.closest('.idx-entry')||el;
+        entryCard.classList.add('jump-highlight');
+        setTimeout(()=>entryCard.classList.remove('jump-highlight'),1500);
+        // Focus rename input
+        const inp=$('#rename-input');
+        if(inp){inp.focus();inp.select()}
+      }else{
+        // Entry not on current page — fall back to search
+        S.idxSearch=entryName;
+        S.idxPage=0;
+        render();
+      }
+    },120);
   });
-  // Book View — comment bounce: jump to editor at specific sub-entry
+  // Book View — comment bounce: jump to editor at specific sub-entry, open note popup
   $$('[data-bookjump]').forEach(el=>el.onclick=()=>{
     const[entryName,segType,rowIdx]=el.dataset.bookjump.split('|');
+    // Push current Book View state
+    S.viewHistory.push({view:S.view,bookScope:S.bookScope,section:S.idxActiveSection,page:S.idxPage,search:S.idxSearch,filter:S.reviewFilter});
     S.view='index';
-    S.idxSearch=entryName;
-    S.idxPage=0;
+    S.idxActiveSection='all';
     S.clipPanel=null;
     render();
-    // After render, open the note popup for this sub-entry
     setTimeout(()=>{
-      const k=entryName+'|'+segType+'|'+rowIdx;
-      S.notePopup={key:k,entryName,segType,rowIdx:+rowIdx};
-      render();
-    },150);
+      // Scroll to entry
+      const el=document.querySelector(`[data-entry="${CSS.escape(entryName)}"]`);
+      if(el){
+        el.scrollIntoView({behavior:'smooth',block:'center'});
+        const entryCard=el.closest('.idx-entry')||el;
+        entryCard.classList.add('jump-highlight');
+        setTimeout(()=>entryCard.classList.remove('jump-highlight'),1500);
+      }else{
+        // Entry not on current page — fall back to search
+        S.idxSearch=entryName;
+        S.idxPage=0;
+        render();
+      }
+      // Then open the note popup for this sub-entry
+      setTimeout(()=>{
+        const k=entryName+'|'+segType+'|'+rowIdx;
+        S.notePopup={key:k,entryName,segType,rowIdx:+rowIdx};
+        render();
+      },200);
+    },120);
   });
 
   on('#tabs-toggle','click',()=>{S.tabsOpen=!S.tabsOpen;render()});
