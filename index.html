@@ -2648,8 +2648,8 @@ function render(force=true){
     const r=entry?.results.find(x=>x.segType===cp.segType&&x.rowIdx===cp.rowIdx);
     if(r){
       let vidUrl='';
-      if(r.objId)vidUrl=`https://videos.jem.tv/video-player?clip=${r.objId}`;
-      else if(r.clipId)vidUrl=`https://videos.jem.tv/video-player?clip=${r.clipId}`;
+      const cleanId=(r.objId||r.clipId||'').toString().replace(/^video_clip-/,'');
+      if(cleanId)vidUrl=`https://videos.jem.tv/video-player?clip=${cleanId}`;
       const k=rvKey(cp.entryName,cp.segType,cp.rowIdx);
       const rv=getRV(k);
       // Initialize chat state on this panel if missing
