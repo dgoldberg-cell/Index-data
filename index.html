@@ -180,6 +180,16 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 /* Clip details side panel */
 .clip-panel-overlay{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:90vw;background:var(--bg-white);border-left:2px solid var(--gold);box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:250;display:flex;flex-direction:column;animation:slideInRight .2s ease-out}
 .idx-result.panel-source{background:rgba(212,175,55,0.15);border-left:3px solid var(--gold);padding-left:6px;border-radius:4px}
+.clip-panel-chips{display:flex;gap:6px;padding:8px 18px;border-bottom:1px solid var(--border);background:var(--bg-0);overflow-x:auto;flex-shrink:0}
+.clip-chip{background:var(--bg-1);color:var(--tx-2);border:1px solid var(--border);border-radius:16px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all .15s}
+.clip-chip:hover{background:var(--gold);color:#fff;border-color:var(--gold)}
+.clip-chip-ai{background:var(--blue);color:#fff;border-color:var(--blue)}
+.clip-chip-ai:hover{background:var(--gold);border-color:var(--gold)}
+.clip-panel-chat-input{flex-shrink:0;padding:12px 18px;border-top:2px solid var(--gold);background:var(--bg-0)}
+.clip-chat-msgs{display:flex;flex-direction:column;gap:8px;min-height:80px}
+/* Increase font sizes in chat bubbles */
+.clip-chat-msgs .sug-chat-msg .bubble{font-size:14px;line-height:1.5;padding:10px 14px}
+.clip-chat-msgs .use-btn{font-size:13px;padding:5px 14px}
 @keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
 .clip-panel-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-0)}
 .clip-panel-head h3{font-size:14px;font-family:var(--serif);margin:0}
@@ -2563,7 +2573,7 @@ function render(force=true){
     h+=`</div>`;
     h+=`</div></div>`;
   }
-  // Clip details side panel
+  // Unified clip + chat side panel
   if(S.clipPanel){
     const cp=S.clipPanel;
     const entry=findEntry(cp.entryName);
@@ -2572,121 +2582,121 @@ function render(force=true){
       let vidUrl='';
       if(r.objId)vidUrl=`https://www.jem.tv/clip/${r.objId}`;
       else if(r.clipId)vidUrl=`https://www.jem.tv/clip/${r.clipId}`;
+      const k=rvKey(cp.entryName,cp.segType,cp.rowIdx);
+      const rv=getRV(k);
+      // Initialize chat state on this panel if missing
+      if(!cp.chat){
+        cp.chat={
+          desc:r.desc||'',
+          suggestion:rv?.suggestion||'',
+          reason:rv?.reason||'',
+          transcript:r.transcript||'',
+          messages:[],
+          typing:false
+        };
+      }
       h+=`<div class="clip-panel-overlay" id="clip-panel-overlay">`;
+      // Header
       h+=`<div class="clip-panel-head">`;
-      h+=`<div><h3>📺 Clip Details</h3><div style="font-size:11px;color:var(--tx-3);margin-top:2px">${esc(cp.entryName)}</div></div>`;
+      h+=`<div><h3>📺 Clip Workspace</h3><div style="font-size:12px;color:var(--tx-3);margin-top:2px">${esc(cp.entryName)}</div></div>`;
       h+=`<button class="btn btn-sm btn-icon" id="clip-panel-close">✕</button>`;
       h+=`</div>`;
-      h+=`<div class="clip-panel-body">`;
-      // Image
+      // Sticky navigation chips
+      h+=`<div class="clip-panel-chips">`;
+      h+=`<button class="clip-chip" data-scrollto="img">📺 Image</button>`;
+      h+=`<button class="clip-chip" data-scrollto="summary">📝 Summary</button>`;
+      h+=`<button class="clip-chip" data-scrollto="transcript">📜 Transcript</button>`;
+      h+=`<button class="clip-chip clip-chip-ai" data-scrollto="chat">🤖 AI Chat</button>`;
+      h+=`</div>`;
+      // Scrollable body
+      h+=`<div class="clip-panel-body" id="clip-panel-body">`;
+      // Image section
+      h+=`<div class="clip-panel-section" id="clip-section-img">`;
       if(r.image){
         h+=`<div class="clip-panel-img">${vidUrl?`<a href="${vidUrl}" target="_blank"><img src="${esc(r.image)}" alt=""></a>`:`<img src="${esc(r.image)}" alt="">`}</div>`;
       }else{
         h+=`<div class="clip-panel-img">No image available</div>`;
       }
-      // Title
-      h+=`<div class="clip-panel-section">`;
-      h+=`<div class="clip-panel-label">Title</div>`;
-      h+=`<div class="clip-panel-text"><strong>${esc(r.pvName||r.clipName||'Untitled')}</strong>${r.progNum?` <span style="color:var(--tx-3);font-weight:400">· #${esc(r.progNum)}</span>`:''}</div>`;
+      // Title under image
+      h+=`<div style="margin-top:10px"><strong style="font-size:15px">${esc(r.pvName||r.clipName||'Untitled')}</strong>${r.progNum?` <span style="color:var(--tx-3);font-weight:400;font-size:13px">· #${esc(r.progNum)}</span>`:''}</div>`;
+      if(vidUrl)h+=`<a href="${vidUrl}" target="_blank" class="btn btn-sm" style="text-decoration:none;display:inline-block;margin-top:8px">▶ Watch on JEM.tv</a>`;
       h+=`</div>`;
-      // Summary
+      // Summary section
       if(r.summary){
-        h+=`<div class="clip-panel-section">`;
+        h+=`<div class="clip-panel-section" id="clip-section-summary">`;
         h+=`<div class="clip-panel-label">Summary</div>`;
         h+=`<div class="clip-panel-text">${esc(r.summary)}</div>`;
         h+=`</div>`;
       }
-      // Transcript
+      // Transcript section
       if(r.transcript&&r.transcript!==r.summary){
-        h+=`<div class="clip-panel-section">`;
+        h+=`<div class="clip-panel-section" id="clip-section-transcript">`;
         h+=`<div class="clip-panel-label">Transcript</div>`;
         h+=`<div class="clip-panel-text scrollable">${esc(r.transcript)}</div>`;
         h+=`</div>`;
       }
-      // Description being audited
+      // Sub-entry being worked on
       h+=`<div class="clip-panel-section">`;
       h+=`<div class="clip-panel-label">This sub-entry</div>`;
       h+=`<div class="clip-panel-text"><em>${esc(r.desc||'[empty]')}</em>${r.rel?` <span style="color:var(--tx-3)">[${esc(r.rel)}]</span>`:''}</div>`;
-      h+=`</div>`;
-      h+=`</div>`;
-      // Actions
-      h+=`<div class="clip-panel-actions">`;
-      if(vidUrl)h+=`<a href="${vidUrl}" target="_blank" class="btn btn-sm" style="text-decoration:none;text-align:center">▶ Watch on JEM.tv</a>`;
-      h+=`<button class="btn btn-sm" id="clip-panel-audit">🛡 Audit</button>`;
-      h+=`<button class="btn btn-sm" id="clip-panel-chat" style="color:var(--blue)">🤖 AI Chat</button>`;
-      h+=`</div>`;
-      h+=`</div>`;
-    }
-  }
-  // Mini suggestion chat popup
-  if(S.sugChat){
-    const sc=S.sugChat;
-    h+=`<div class="sug-chat-overlay" id="sug-chat-overlay">`;
-    h+=`<div class="sug-chat">`;
-    h+=`<div class="sug-chat-head"><h3>🤖 "${esc(sc.entryName)}"</h3><button class="btn btn-sm btn-icon" id="sug-chat-close">✕</button></div>`;
-    h+=`<div class="sug-chat-context">`;
-    h+=`<div>Current: <strong>${esc(sc.desc||'[empty]')}</strong></div>`;
-    if(sc.suggestion)h+=`<div>AI suggested: <strong style="color:var(--green)">${esc(sc.suggestion)}</strong></div>`;
-    h+=`</div>`;
-    h+=`<div class="sug-chat-body" id="sug-chat-body">`;
-    if(!sc.messages.length){
-      h+=`<div style="color:var(--tx-3);font-size:11px;text-align:center;padding:16px">Ask for alternatives, explain why the suggestion is wrong, or request specific changes.</div>`;
-    }
-    sc.messages.forEach(m=>{
-      if(m.role==='assistant'&&m.suggestions&&m.suggestions.length){
-        // Replace numbered lines in content with inline Use buttons
-        let content=esc(m.content);
-        m.suggestions.forEach((s,si)=>{
-          // Match "N. → suggestion" or "N. suggestion" patterns and replace with inline button
-          const patterns=[
-            new RegExp(`${si+1}[\\.\)]\\s*→?\\s*${s.replace(/[.*+?^${}()|[\]\\]/g,'\\\\$&').slice(0,20)}[^\\n]*`),
-            new RegExp(`${si+1}[\\.\)]\\s*[^\\n]*`)
-          ];
-          // Just use a simple approach: we'll rebuild the content
-        });
-        // Rebuild: strip the raw text and show each option as a clean line with Use button
-        h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">`;
-        // Show intro text (first line before numbered list)
-        const lines=m.content.split('\n');
-        let inList=false;
-        lines.forEach(line=>{
-          const numMatch=line.match(/^\d+[\.\)]\s*/);
-          if(numMatch){
-            inList=true;
-            const cleaned=line.replace(/^\d+[\.\)]\s*→?\s*/,'').replace(/^["""'']+|["""'']+$/g,'').replace(/^\*+|\*+$/g,'').trim();
-            if(cleaned){
-              h+=`<div style="display:flex;align-items:center;gap:6px;margin:3px 0">`;
-              h+=`<span style="flex:1;font-size:12px">${numMatch[0]}${esc(cleaned)}</span>`;
-              h+=`<button class="use-btn" data-usesug="${esc(cleaned)}" style="flex-shrink:0;margin:0;white-space:nowrap">Use</button>`;
-              h+=`</div>`;
-            }
-          }else if(line.trim()){
-            h+=`${esc(line)}<br>`;
-          }
-        });
-        h+=`</div></div>`;
-      }else if(m.role==='assistant'){
-        h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">${esc(m.content).replace(/\n/g,'<br>')}`;
-        if(m.suggestion){
-          h+=`<div style="display:flex;align-items:center;gap:6px;margin-top:4px">`;
-          h+=`<span style="color:var(--green);font-weight:600;font-size:11px">→ ${esc(m.suggestion)}</span>`;
-          h+=`<button class="use-btn" data-usesug="${esc(m.suggestion)}" style="flex-shrink:0;margin:0">Use</button>`;
-          h+=`</div>`;
-        }
-        h+=`</div></div>`;
-      }else{
-        h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">${esc(m.content).replace(/\n/g,'<br>')}</div></div>`;
+      if(rv?.suggestion){
+        h+=`<div style="margin-top:6px;font-size:13px"><span style="color:var(--tx-3)">AI suggested: </span><strong style="color:var(--green)">${esc(rv.suggestion)}</strong></div>`;
       }
-    });
-    if(sc.typing)h+=`<div class="sug-chat-msg assistant"><div class="bubble" style="color:var(--tx-3)">Thinking…</div></div>`;
-    h+=`</div>`;
-    h+=`<div style="padding:4px 14px;display:flex;gap:4px;flex-wrap:wrap;border-top:1px solid var(--border)">`;
-    h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Give me 5 alternative descriptions to choose from" style="font-size:9px;padding:2px 8px">5 more options</button>`;
-    h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Choose better, more elevated wording for this description while keeping the same meaning" style="font-size:9px;padding:2px 8px">Better wording</button>`;
-    h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Check the full transcript carefully and verify if this description accurately reflects the clip content. If not, suggest a more accurate description." style="font-size:9px;padding:2px 8px">Check transcript</button>`;
-    h+=`</div>`;
-    h+=`<div class="sug-chat-input"><input id="sug-chat-input" placeholder="Ask about this description…" autocomplete="off"><button id="sug-chat-send">Send</button></div>`;
-    h+=`</div></div>`;
+      h+=`</div>`;
+      // AI Chat section
+      h+=`<div class="clip-panel-section" id="clip-section-chat">`;
+      h+=`<div class="clip-panel-label">🤖 AI Chat</div>`;
+      h+=`<div class="clip-chat-msgs" id="clip-chat-msgs">`;
+      if(!cp.chat.messages.length){
+        h+=`<div style="color:var(--tx-3);font-size:13px;text-align:center;padding:14px;background:var(--bg-1);border-radius:8px">Ask for alternatives, explain why a suggestion is wrong, or request specific changes.</div>`;
+      }
+      cp.chat.messages.forEach(m=>{
+        if(m.role==='assistant'&&m.suggestions&&m.suggestions.length){
+          h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">`;
+          const lines=m.content.split('\n');
+          lines.forEach(line=>{
+            const numMatch=line.match(/^\d+[\.\)]\s*/);
+            if(numMatch){
+              const cleaned=line.replace(/^\d+[\.\)]\s*→?\s*/,'').replace(/^["""'']+|["""'']+$/g,'').replace(/^\*+|\*+$/g,'').trim();
+              if(cleaned){
+                h+=`<div style="display:flex;align-items:center;gap:8px;margin:4px 0">`;
+                h+=`<span style="flex:1;font-size:14px">${numMatch[0]}${esc(cleaned)}</span>`;
+                h+=`<button class="use-btn" data-usesug="${esc(cleaned)}" style="flex-shrink:0;margin:0;white-space:nowrap;font-size:12px;padding:4px 12px">Use</button>`;
+                h+=`</div>`;
+              }
+            }else if(line.trim()){
+              h+=`${esc(line)}<br>`;
+            }
+          });
+          h+=`</div></div>`;
+        }else if(m.role==='assistant'){
+          h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">${esc(m.content).replace(/\n/g,'<br>')}`;
+          if(m.suggestion){
+            h+=`<div style="display:flex;align-items:center;gap:8px;margin-top:6px">`;
+            h+=`<span style="color:var(--green);font-weight:600;font-size:13px">→ ${esc(m.suggestion)}</span>`;
+            h+=`<button class="use-btn" data-usesug="${esc(m.suggestion)}" style="flex-shrink:0;margin:0;font-size:12px;padding:4px 12px">Use</button>`;
+            h+=`</div>`;
+          }
+          h+=`</div></div>`;
+        }else{
+          h+=`<div class="sug-chat-msg ${m.role}"><div class="bubble">${esc(m.content).replace(/\n/g,'<br>')}</div></div>`;
+        }
+      });
+      if(cp.chat.typing)h+=`<div class="sug-chat-msg assistant"><div class="bubble" style="color:var(--tx-3)">Thinking…</div></div>`;
+      h+=`</div>`;
+      h+=`</div>`;
+      h+=`</div>`;
+      // Sticky chat input at bottom
+      h+=`<div class="clip-panel-chat-input">`;
+      h+=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">`;
+      h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Give me 5 alternative descriptions to choose from" style="font-size:11px;padding:3px 10px">5 more options</button>`;
+      h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Choose better, more elevated wording for this description while keeping the same meaning" style="font-size:11px;padding:3px 10px">Better wording</button>`;
+      h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Check the full transcript carefully and verify if this description accurately reflects the clip content. If not, suggest a more accurate description." style="font-size:11px;padding:3px 10px">Check transcript</button>`;
+      h+=`</div>`;
+      h+=`<div style="display:flex;gap:6px"><input id="sug-chat-input" placeholder="Ask about this description…" autocomplete="off" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:14px;font-family:var(--font);outline:none"><button id="sug-chat-send" style="background:var(--gold);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer">Send</button></div>`;
+      h+=`</div>`;
+      h+=`</div>`;
+    }
   }
   // Floating AI chat button (bottom-right, always visible — except when panels are open)
   if(!S.aiOpen&&!S.clipPanel&&!S.sugChat){
@@ -2700,12 +2710,14 @@ function render(force=true){
   const pad=$('.pad');if(pad)scrollSave.pad=pad.scrollTop;
   const mainContent=$('.main-content');if(mainContent)scrollSave.mainContent=mainContent.scrollTop;
   const content=$('.content');if(content)scrollSave.content=content.scrollTop;
+  const clipBody=$('#clip-panel-body');if(clipBody)scrollSave.clipBody=clipBody.scrollTop;
   app.innerHTML=h;bindAll();
   // Restore scroll positions
   const idxBody2=$('.idx-body');if(idxBody2&&scrollSave.idxBody)idxBody2.scrollTop=scrollSave.idxBody;
   const pad2=$('.pad');if(pad2&&scrollSave.pad)pad2.scrollTop=scrollSave.pad;
   const mainContent2=$('.main-content');if(mainContent2&&scrollSave.mainContent)mainContent2.scrollTop=scrollSave.mainContent;
   const content2=$('.content');if(content2&&scrollSave.content)content2.scrollTop=scrollSave.content;
+  const clipBody2=$('#clip-panel-body');if(clipBody2&&scrollSave.clipBody)clipBody2.scrollTop=scrollSave.clipBody;
   // Fix idx-body scroll height
   fixIdxScroll();
 }
@@ -3471,6 +3483,7 @@ function bindAll(){
       if(S.viewHistory.length>20)S.viewHistory=S.viewHistory.slice(-20);
     }
     S.view=newView;
+    S.clipPanel=null; // Close clip panel when navigating
     if(newView==='index'&&S.reviewFilter==='bookmarked'){S.reviewFilter='all'}
     render();
   });
@@ -3483,6 +3496,7 @@ function bindAll(){
     S.idxPage=prev.page||0;
     S.idxSearch=prev.search||'';
     S.reviewFilter=prev.filter||'all';
+    S.clipPanel=null; // Close clip panel
     render();
   });
   on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
@@ -3581,6 +3595,7 @@ function bindAll(){
       const savedPos=curEl.selectionStart??savedValue.length;
       S.idxSearch=savedValue;
       S.idxPage=0;
+      S.clipPanel=null;
       render();
       requestAnimationFrame(()=>{
         const newEl=$('#idx-search');
@@ -3596,10 +3611,10 @@ function bindAll(){
   $$('[data-tree]').forEach(el=>el.onclick=()=>{S.idxActiveEntry=el.dataset.tree;render()});
   on('#idx-undo','click',()=>doUndo());
   on('#idx-sync','click',()=>manualRefresh());
-  on('#idx-page-prev','click',()=>{if(S.idxPage>0){S.idxPage--;render();$('.idx-body')?.scrollTo(0,0)}});
-  on('#idx-page-next','click',()=>{S.idxPage++;render();$('.idx-body')?.scrollTo(0,0)});
-  on('#idx-page-prev2','click',()=>{if(S.idxPage>0){S.idxPage--;render();$('.idx-body')?.scrollTo(0,0)}});
-  on('#idx-page-next2','click',()=>{S.idxPage++;render();$('.idx-body')?.scrollTo(0,0)});
+  on('#idx-page-prev','click',()=>{if(S.idxPage>0){S.idxPage--;S.clipPanel=null;render();$('.idx-body')?.scrollTo(0,0)}});
+  on('#idx-page-next','click',()=>{S.idxPage++;S.clipPanel=null;render();$('.idx-body')?.scrollTo(0,0)});
+  on('#idx-page-prev2','click',()=>{if(S.idxPage>0){S.idxPage--;S.clipPanel=null;render();$('.idx-body')?.scrollTo(0,0)}});
+  on('#idx-page-next2','click',()=>{S.idxPage++;S.clipPanel=null;render();$('.idx-body')?.scrollTo(0,0)});
   // Page jump input
   ['#idx-page-input','#idx-page-input2'].forEach(sel=>{
     const inp=$(sel);
@@ -3694,8 +3709,8 @@ function bindAll(){
     dd.classList.toggle('open');
   });
   // Toolbar dropdown item clicks — close dropdown after selection
-  $$('.tb-dd-item[data-idxsec]').forEach(el=>el.onclick=()=>{S.idxActiveSection=el.dataset.idxsec;S.idxPage=0;el.closest('.tb-dd')?.classList.remove('open');render()});
-  $$('.tb-dd-item[data-rvfilter]').forEach(el=>el.onclick=()=>{S.reviewFilter=el.dataset.rvfilter;S.idxPage=0;el.closest('.tb-dd')?.classList.remove('open');render()});
+  $$('.tb-dd-item[data-idxsec]').forEach(el=>el.onclick=()=>{S.idxActiveSection=el.dataset.idxsec;S.idxPage=0;S.clipPanel=null;el.closest('.tb-dd')?.classList.remove('open');render()});
+  $$('.tb-dd-item[data-rvfilter]').forEach(el=>el.onclick=()=>{S.reviewFilter=el.dataset.rvfilter;S.idxPage=0;S.clipPanel=null;el.closest('.tb-dd')?.classList.remove('open');render()});
   $$('.tb-dd-item[data-idxnav]').forEach(el=>el.onclick=()=>{S.idxNavMode=el.dataset.idxnav;if(S.idxNavMode!=='tabs')S.idxActiveSection='all';S.idxPage=0;el.closest('.tb-dd')?.classList.remove('open');render()});
   $$('.tb-dd-item[data-idxlayout]').forEach(el=>el.onclick=()=>{S.idxLayout=el.dataset.idxlayout;el.closest('.tb-dd')?.classList.remove('open');render()});
   $$('.tb-layout-btn[data-idxlayout]').forEach(el=>el.onclick=()=>{S.idxLayout=el.dataset.idxlayout;render()});
@@ -3755,30 +3770,6 @@ function bindAll(){
   });
 
   // Mini suggestion chat — open
-  $$('[data-sugchat]').forEach(el=>el.onclick=()=>{
-    const parts=el.dataset.sugchat;
-    const lp=parts.lastIndexOf('|');const slp=parts.lastIndexOf('|',lp-1);
-    const entryName=parts.slice(0,slp);
-    const segType=parts.slice(slp+1,lp);
-    const rowIdx=+parts.slice(lp+1);
-    const entry=findEntry(entryName);
-    if(!entry)return;
-    const r=entry.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
-    if(!r)return;
-    const k=rvKey(entryName,segType,rowIdx);
-    const rv=getRV(k);
-    S.sugChat={
-      entryName,segType,rowIdx,
-      desc:r.desc||'',
-      suggestion:rv?.suggestion||'',
-      reason:rv?.reason||'',
-      transcript:r.transcript||'',
-      messages:[],
-      typing:false
-    };
-    render();
-    setTimeout(()=>{$('#sug-chat-input')?.focus()},50);
-  });
   // AI chat (always available, not just after audit)
   $$('[data-aichat]').forEach(el=>el.onclick=()=>{
     const parts=el.dataset.aichat;
@@ -3786,23 +3777,28 @@ function bindAll(){
     const entryName=parts.slice(0,slp);
     const segType=parts.slice(slp+1,lp);
     const rowIdx=+parts.slice(lp+1);
-    const entry=findEntry(entryName);
-    if(!entry)return;
-    const r=entry.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
-    if(!r)return;
-    const k=rvKey(entryName,segType,rowIdx);
-    const rv=getRV(k);
-    S.sugChat={
-      entryName,segType,rowIdx,
-      desc:r.desc||'',
-      suggestion:rv?.suggestion||'',
-      reason:rv?.reason||'',
-      transcript:r.transcript||'',
-      messages:[],
-      typing:false
-    };
+    S.clipPanel={entryName,segType,rowIdx,scrollTo:'chat'};
     render();
-    setTimeout(()=>{$('#sug-chat-input')?.focus()},50);
+    setTimeout(()=>{
+      const target=$('#clip-section-chat');
+      if(target)target.scrollIntoView({behavior:'smooth',block:'start'});
+      $('#sug-chat-input')?.focus();
+    },80);
+  });
+  // Same for old sugchat trigger
+  $$('[data-sugchat]').forEach(el=>el.onclick=()=>{
+    const parts=el.dataset.sugchat;
+    const lp=parts.lastIndexOf('|');const slp=parts.lastIndexOf('|',lp-1);
+    const entryName=parts.slice(0,slp);
+    const segType=parts.slice(slp+1,lp);
+    const rowIdx=+parts.slice(lp+1);
+    S.clipPanel={entryName,segType,rowIdx,scrollTo:'chat'};
+    render();
+    setTimeout(()=>{
+      const target=$('#clip-section-chat');
+      if(target)target.scrollIntoView({behavior:'smooth',block:'start'});
+      $('#sug-chat-input')?.focus();
+    },80);
   });
   // Clip details side panel — open
   $$('[data-clippanel]').forEach(el=>el.onclick=()=>{
@@ -3822,42 +3818,31 @@ function bindAll(){
     S.clipPanel=null;
     render();
   });
-  on('#clip-panel-chat','click',()=>{
-    if(!S.clipPanel)return;
-    const cp=S.clipPanel;
-    const entry=findEntry(cp.entryName);
-    const r=entry?.results.find(x=>x.segType===cp.segType&&x.rowIdx===cp.rowIdx);
-    if(!r)return;
-    const rv=getRV(rvKey(cp.entryName,cp.segType,cp.rowIdx));
-    S.sugChat={
-      entryName:cp.entryName,segType:cp.segType,rowIdx:cp.rowIdx,
-      desc:r.desc||'',suggestion:rv?.suggestion||'',reason:rv?.reason||'',
-      transcript:r.transcript||'',messages:[],typing:false
-    };
-    S.clipPanel=null;
-    render();
-    setTimeout(()=>{$('#sug-chat-input')?.focus()},50);
+  // Chip navigation — scroll within panel without re-rendering
+  $$('[data-scrollto]').forEach(el=>el.onclick=(ev)=>{
+    ev.preventDefault();
+    const target=$('#clip-section-'+el.dataset.scrollto);
+    if(target)target.scrollIntoView({behavior:'smooth',block:'start'});
+    if(el.dataset.scrollto==='chat')setTimeout(()=>$('#sug-chat-input')?.focus(),300);
   });
-  // Mini chat — close
-  on('#sug-chat-close','click',()=>{S.sugChat=null;render()});
-  on('#sug-chat-overlay','click',(e)=>{if(e.target.id==='sug-chat-overlay'){S.sugChat=null;render()}});
-  // Mini chat — send
+  // Mini chat — send (now uses clipPanel.chat)
   on('#sug-chat-send','click',async()=>{
-    if(!S.sugChat||!S.claudeKey)return;
+    if(!S.clipPanel||!S.clipPanel.chat||!S.claudeKey)return;
     const inp=$('#sug-chat-input');
     const text=inp?.value?.trim();
     if(!text)return;
-    const sc=S.sugChat;
+    const sc=S.clipPanel.chat;
+    const cp=S.clipPanel;
     sc.messages.push({role:'user',content:text});
     sc.typing=true;
     inp.value='';
     render();
-    setTimeout(()=>{const b=$('#sug-chat-body');if(b)b.scrollTop=b.scrollHeight;$('#sug-chat-input')?.focus()},50);
+    setTimeout(()=>{const target=$('#clip-section-chat');if(target)target.scrollIntoView({behavior:'smooth',block:'start'});$('#sug-chat-input')?.focus()},80);
 
     const fullRules=buildAuditRulesText();
     const sys=`You are helping a human editor refine a single index description. You see the FULL transcript.
 
-Entry: "${sc.entryName}"
+Entry: "${cp.entryName}"
 Current description: "${sc.desc}"
 AI suggestion: "${sc.suggestion}"
 AI reason: "${sc.reason}"
@@ -3877,9 +3862,7 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
       const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,system:sys,messages:msgs})});
       if(!resp.ok)throw new Error('API '+resp.status);
       const d=await resp.json(),reply=d.content.map(c=>c.text||'').join('');
-      // Extract ALL suggestions from reply
       let allSuggestions=[];
-      // Look for numbered options: "1. something" "2. something"
       const opts=reply.match(/^\d+[\.\)]\s*["""]?(.+?)["""]?\s*$/gm);
       if(opts&&opts.length>=2){
         opts.forEach(o=>{
@@ -3887,7 +3870,6 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
           if(cleaned.length>1&&cleaned.length<80)allSuggestions.push(cleaned);
         });
       }
-      // Also look for → arrows
       const arrows=reply.match(/→\s*(.+)/g);
       if(arrows){
         arrows.forEach(a=>{
@@ -3895,13 +3877,11 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
           if(cleaned.length>1&&cleaned.length<80&&!allSuggestions.includes(cleaned))allSuggestions.push(cleaned);
         });
       }
-      // Store as suggestions array
       if(allSuggestions.length>1){
         sc.messages.push({role:'assistant',content:reply,suggestions:allSuggestions});
       }else if(allSuggestions.length===1){
         sc.messages.push({role:'assistant',content:reply,suggestion:allSuggestions[0]});
       }else{
-        // Try to find a single quoted suggestion
         const quoted=reply.match(/[""]([^""]{3,60})[""]/);
         sc.messages.push({role:'assistant',content:reply,suggestion:quoted?quoted[1]:null});
       }
@@ -3919,19 +3899,19 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
   // Mini chat — "Use this" button
   $$('[data-usesug]').forEach(el=>el.onclick=async()=>{
     const newDesc=el.dataset.usesug;
-    if(!S.sugChat||!newDesc)return;
-    const sc=S.sugChat;
-    const ok=await updateTagDesc(sc.rowIdx,sc.entryName,newDesc);
+    const cp=S.clipPanel;
+    if(!cp||!newDesc)return;
+    const ok=await updateTagDesc(cp.rowIdx,cp.entryName,newDesc);
     if(ok){
-      const k=rvKey(sc.entryName,sc.segType,sc.rowIdx);
+      const k=rvKey(cp.entryName,cp.segType,cp.rowIdx);
       const rv=getRV(k)||{};
       rv.reviewed=true;rv.status='manual';
       rv.editedBy=S.user?.name||'Unknown';rv.editedAt=Date.now();
       rv.suggestion='';rv.reason='';
       setRV(k,rv);
-      logActivity(`Used AI suggestion for "${sc.entryName}": "${newDesc}"`);
+      logActivity(`Used AI suggestion for "${cp.entryName}": "${newDesc}"`);
       toast('Description updated','success');
-      S.sugChat=null;
+      S.clipPanel=null;
       buildIndex();render();
     }else{toast('Failed to save','error')}
   });
