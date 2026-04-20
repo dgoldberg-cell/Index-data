@@ -131,6 +131,8 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-entry.flagged{border-left:3px solid var(--amber);padding-left:10px}
 .idx-entry.bookmarked::before{content:'🔖';position:absolute;left:-20px;top:0;font-size:12px}
 .idx-entry-name{font-family:var(--serif);font-size:15px;font-weight:700;color:var(--tx-1);margin-bottom:2px;display:flex;align-items:center;gap:6px}
+.idx-entry-name:hover .idx-entry-rename{opacity:1 !important}
+.idx-entry-rename:hover{color:var(--gold) !important}
 .idx-entry-badge{font-size:9px;font-weight:500;font-family:var(--font);padding:1px 6px;border-radius:8px;vertical-align:middle}
 .idx-entry-badge.warn{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(154,122,48,.2)}
 .idx-entry-badge.empty{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
@@ -144,13 +146,21 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-seg-label{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--tx-4);margin-bottom:3px}
 
 /* Individual result — full width row, actions pushed right */
-.idx-result{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:15px;line-height:1.6}
-.idx-result-desc{color:var(--tx-2);flex:1;font-size:15px}
+/* Individual result — flex-wraps so long descriptions get full width and meta wraps below */
+.idx-result{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:15px;line-height:1.6;flex-wrap:wrap}
+.idx-result-desc{color:var(--tx-2);flex:1 1 60%;min-width:220px;font-size:15px}
 .idx-result-desc.empty-desc{color:var(--red);font-style:italic;background:rgba(176,80,80,.05);padding:0 4px;border-radius:3px}
 .idx-result-desc.editable:hover{background:var(--bg-1);cursor:text;border-radius:3px;padding:0 4px}
 .idx-result-rel{font-size:10px;color:var(--tx-4);font-style:italic;flex-shrink:0}
 .idx-result-ref{font-family:var(--mono);font-size:10.5px;color:var(--blue);white-space:nowrap;flex-shrink:0}
 .idx-result-ref a{color:var(--blue)}
+/* Meta container: reference + relationship + buttons group together, wrap as one unit to line 2 */
+.idx-result-meta{display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+/* Relevance shading — 4 levels. 4 = highest (darkest/full color), 1 = lowest (lightest/grayest) */
+.idx-result[data-rel="4"] .idx-result-desc,.idx-result[data-rel="4"] .idx-result-ref{opacity:1}
+.idx-result[data-rel="3"] .idx-result-desc,.idx-result[data-rel="3"] .idx-result-ref{opacity:0.82}
+.idx-result[data-rel="2"] .idx-result-desc,.idx-result[data-rel="2"] .idx-result-ref{opacity:0.62}
+.idx-result[data-rel="1"] .idx-result-desc,.idx-result[data-rel="1"] .idx-result-ref{opacity:0.42}
 
 /* Single column — bigger text, more spread out */
 .idx-body:not(.two-col-mode) .idx-entry{margin-bottom:20px}
@@ -172,8 +182,36 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-mini-btn:hover{background:var(--bg-1);color:var(--tx-1);border-color:var(--border-hi)}
 
 /* When clip panel is open, squeeze main content so it stays fully visible */
-body.clip-panel-open .main-content{padding-right:420px;transition:padding-right .2s ease-out}
+/* When clip panel is open, shrink main content width so nothing hides behind panel */
+body.clip-panel-open .main-content{width:calc(100% - 420px);transition:width .2s ease-out}
 body.clip-panel-open .idx-cols{gap:16px}
+
+/* ═══ BOOK VIEW ═══ */
+.book-view{max-width:860px;margin:0 auto;padding:28px 40px;background:#fefdf8;color:#1a1a1a;font-family:Georgia,'Times New Roman',serif;line-height:1.55;box-shadow:0 2px 12px rgba(0,0,0,0.06);border-radius:4px}
+.book-page{column-count:2;column-gap:36px;column-rule:1px solid #e8e2d0}
+.book-section-hd{font-size:22px;font-weight:700;text-align:center;margin:18px 0 14px;padding:6px 0;border-top:2px solid #1a1a1a;border-bottom:1px solid #999;break-after:avoid;column-span:all;letter-spacing:0.5px}
+.book-entry{margin-bottom:10px;break-inside:avoid-column}
+.book-entry-head{display:flex;align-items:baseline;gap:6px;margin-bottom:2px}
+.book-entry-name{font-weight:700;font-size:15px}
+.book-entry-edit{opacity:0;background:none;border:none;cursor:pointer;font-size:12px;color:#888;padding:0 3px;transition:opacity .1s}
+.book-entry:hover .book-entry-edit{opacity:1}
+.book-entry-edit:hover{color:var(--gold)}
+.book-seg{margin-left:10px;margin-bottom:4px}
+.book-seg-label{font-style:italic;color:#666;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;margin:3px 0 1px}
+.book-row{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;font-size:13px;line-height:1.5;padding:1px 0 1px 10px}
+.book-desc{flex:1 1 auto;min-width:100px}
+.book-desc-empty{color:#c00;font-style:italic}
+.book-rel{font-size:10px;color:#888;font-style:italic;white-space:nowrap}
+.book-ref{font-family:Georgia,serif;color:#8a6d2e;text-decoration:none;font-size:12px;white-space:nowrap;font-weight:500}
+.book-ref:hover{text-decoration:underline}
+.book-comment{opacity:0;background:none;border:none;cursor:pointer;font-size:10px;padding:0 2px;transition:opacity .1s}
+.book-row:hover .book-comment{opacity:0.6}
+.book-comment:hover{opacity:1}
+/* Relevance shading inside book */
+.book-row[data-rel="4"] .book-desc,.book-row[data-rel="4"] .book-ref{opacity:1}
+.book-row[data-rel="3"] .book-desc,.book-row[data-rel="3"] .book-ref{opacity:0.82}
+.book-row[data-rel="2"] .book-desc,.book-row[data-rel="2"] .book-ref{opacity:0.62}
+.book-row[data-rel="1"] .book-desc,.book-row[data-rel="1"] .book-ref{opacity:0.44}
 
 /* Note popup — chat style like transcript popup */
 .note-popup-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:300;display:flex;align-items:center;justify-content:center}
@@ -530,7 +568,7 @@ checks:[
 {id:'spelling',name:'Rule 9 — Fix spelling: G-d not God, G-dly not Godly, G-dliness not Godliness. Fix common typos.',on:true},
 {id:'generate_empty',name:'Rule 10 — If description is blank, generate one based on transcript and entry context.',on:true},
 {id:'leave_good',name:'Rule 11 — If description already follows all rules, leave it alone. Do not change for the sake of changing.',on:true},
-{id:'transcript_check',name:'Rule 12 — Verify against transcript. If a transcript is provided, check that the description plausibly relates to the clip content. Only flag if the description CLEARLY contradicts what the transcript says. You are seeing an excerpt — if you cannot find the connection in the excerpt, assume the full transcript covers it. Do NOT flag as a mismatch just because the excerpt does not mention the topic.',on:true},
+{id:'transcript_check',name:'Rule 12 — CRITICAL: Descriptions describe the portion of the clip connected to THIS SPECIFIC TAG/TOPIC, NOT the main point of the clip. Most tags reference small details within a clip, not its central theme — that is why tags are ranked by relevancy 1-4 (a tag can be relevancy 1, meaning a minor mention, and still have a legitimate description). When verifying: look for ANY connection between the description and this specific tag within the clip content. Do NOT flag as mismatch just because the description is not the main topic of the clip. Only flag if the description has zero connection to this tag/topic whatsoever.',on:true},
 {id:'english_pref',name:'Rule 13 — Default to English. Use common English words over Hebrew/Yiddish when a clear English equivalent exists. "Charity" not "Tzedakah", "Repentance" not "Teshuvah", "Sabbath" or "Shabbos" not "Shabbat". Exception: terms that have no precise English equivalent or are proper names (Farbrengen, Chassidus, Chabad) stay as-is.',on:true},
 {id:'trailing_links',name:'Rule 14 — Preserve trailing linking words. Words like "of", "in", "at", "to", "for" at the end of a description connect it forward to the clip reference. Do NOT remove them. "Significance of" is correct. "Foundation of world" — the "of" connects. Only remove if they dangle with no clear forward link.',on:true},
 {id:'semicolon_format',name:'Rule 15 — Semicolons mean dual points. When a description has a semicolon (;), the clip covers two distinct points. Keep both as separate sub-entries joined by semicolon. Edit each side independently but preserve the two-point structure. Check transcript to verify both points are covered.',on:true}
@@ -624,6 +662,7 @@ function loadRules(){
     consistency:JSON.parse(JSON.stringify(DEFAULT_RULES.consistency)),
     segOrder:[...DEFAULT_RULES.segOrder],typeMap:{...DEFAULT_RULES.typeMap},
     sectionOrder:[...DEFAULT_RULES.sectionOrder],relDefaults:JSON.parse(JSON.stringify(DEFAULT_RULES.relDefaults)),
+    filmShortNames:{},
     sectionFromPath:sectionFromPath};
   try{
     const saved=localStorage.getItem('jw_rules');
@@ -636,6 +675,7 @@ function loadRules(){
       if(p.typeMap)rules.typeMap=p.typeMap;
       if(p.sectionOrder)rules.sectionOrder=p.sectionOrder;
       if(p.relDefaults)rules.relDefaults=p.relDefaults;
+      if(p.filmShortNames)rules.filmShortNames=p.filmShortNames;
     }
   }catch(e){console.warn('Rules load error',e)}
   // Always ensure function is set
@@ -643,7 +683,7 @@ function loadRules(){
   return rules;
 }
 function saveRulesLocal(){
-  const toSave={tagDesc:RULES.tagDesc,consistency:RULES.consistency,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults};
+  const toSave={tagDesc:RULES.tagDesc,consistency:RULES.consistency,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults,filmShortNames:RULES.filmShortNames||{}};
   localStorage.setItem('jw_rules',JSON.stringify(toSave));
 }
 function saveRules(){
@@ -674,6 +714,8 @@ auditSelectMode:false, // Toggle: show audit checkboxes in index preview
 moveSelectMode:false, // Toggle: show move checkboxes at entry level
 moveSelected:new Set(), // Set of entry names selected for moving
 sectionOverrides:{}, // {entryName: newSection} — persisted in shared data
+tagRenames:{}, // {currentName: {originalName, changedBy, timestamp, history:[{from,to,by,at}]}}
+renamingEntry:null, // {name, inputValue} — inline rename state
 undoStack:[], // [{type, data, label, timestamp}] — last 50 actions
 activityLog:[], // [{timestamp, user, action}] — shared, last 200 entries
 showAllActivity:false, // Toggle: show everyone's activity (admins only)
@@ -867,6 +909,7 @@ async function doSyncToSheet(){
       teamMembers:S.teamMembers,
       notifications:S.notifications,
       sectionOverrides:S.sectionOverrides,
+      tagRenames:S.tagRenames||{},
       activityLog:S.activityLog,
       rules:{tagDesc:RULES.tagDesc,consistency:RULES.consistency,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults},
       lastUpdated:Date.now(),
@@ -959,6 +1002,7 @@ async function loadSharedDataFromSheet(){
     }
     if(data.notifications)S.notifications=data.notifications;
     if(data.sectionOverrides)S.sectionOverrides=data.sectionOverrides;
+    if(data.tagRenames)S.tagRenames=data.tagRenames;
     if(data.activityLog)S.activityLog=data.activityLog;
     if(data.rules&&data.rules.tagDesc){
       RULES.tagDesc=data.rules.tagDesc;
@@ -1089,6 +1133,190 @@ async function manualRefresh(){
 }
 
 // Update a tag description in both the main keywords column AND the matching search.keywords_relevancy_N column
+// Rename a tag across ALL rows in the sheet. Updates:
+//  - Every tag.name occurrence in the keywords JSON
+//  - Every matching name in the 4 search.keywords_relevancy_N JSON columns
+//  - reviewData keys (reconstructs keys with new name)
+//  - descNotes keys
+//  - bookmarks
+//  - sectionOverrides
+//  - Logs history in S.tagRenames
+// Returns {ok:true, rowsUpdated} or {ok:false, reason}
+async function renameTag(oldName,newName){
+  const o=oldName.trim();
+  const n=newName.trim();
+  if(!o||!n)return{ok:false,reason:'Empty name'};
+  if(o===n)return{ok:false,reason:'Same name'};
+  if(!S.indexData)return{ok:false,reason:'Index not loaded'};
+
+  // Check for collision — does the target name already exist?
+  const existingEntry=findEntry(n);
+  if(existingEntry)return{ok:false,reason:`An entry named "${n}" already exists`};
+
+  const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
+  if(kwCol<0)return{ok:false,reason:'Cannot find keywords column'};
+  const relCols=[1,2,3,4].map(i=>S.headers.findIndex(h=>h.toLowerCase()==='search.keywords_relevancy_'+i));
+
+  toast(`Renaming "${o}" → "${n}"…`,'info');
+
+  // Find all rows that contain this tag
+  const rowsToUpdate=[];
+  S.rows.forEach((row,ri)=>{
+    const raw=(row[kwCol]||'').trim();
+    if(!raw||raw==='[]')return;
+    try{
+      const tags=JSON.parse(raw);
+      if(tags.some(t=>(t.name||'').trim()===o))rowsToUpdate.push(ri);
+    }catch{}
+  });
+
+  if(!rowsToUpdate.length)return{ok:false,reason:`No rows contain tag "${o}"`};
+
+  // Build batch update data
+  const updates=[];
+  let rowsChanged=0;
+  for(const ri of rowsToUpdate){
+    const row=S.rows[ri];
+    let rowChanged=false;
+    // Update master keywords column
+    try{
+      const tags=JSON.parse(row[kwCol]);
+      tags.forEach(t=>{if((t.name||'').trim()===o){t.name=n;rowChanged=true}});
+      if(rowChanged){
+        const newJson=JSON.stringify(tags);
+        row[kwCol]=newJson;
+        updates.push({range:`'${activeTabTitle()}'!${colLetter(kwCol)}${ri+2}`,values:[[newJson]]});
+      }
+    }catch{}
+    // Update each relevancy column
+    relCols.forEach(rc=>{
+      if(rc<0)return;
+      const raw=(row[rc]||'').trim();
+      if(!raw||raw==='[]')return;
+      try{
+        const tags=JSON.parse(raw);
+        let relChanged=false;
+        tags.forEach(t=>{if((t.name||'').trim()===o){t.name=n;relChanged=true}});
+        if(relChanged){
+          const newJson=JSON.stringify(tags);
+          row[rc]=newJson;
+          updates.push({range:`${S.activeTabTitle}!${colLetter(rc)}${ri+2}`,values:[[newJson]]});
+        }
+      }catch{}
+    });
+    if(rowChanged)rowsChanged++;
+  }
+
+  // Batch write
+  if(updates.length){
+    try{
+      await gapi.client.sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{data:updates,valueInputOption:'RAW'}
+      });
+    }catch(e){
+      return{ok:false,reason:'Sheet write failed: '+e.message};
+    }
+  }
+
+  // Update reviewData keys (old name → new name)
+  const newRV={};
+  Object.entries(S.reviewData).forEach(([k,v])=>{
+    // key format: "EntryName|SegType|RowIdx"
+    const parts=k.split('|');
+    if(parts.length>=3&&parts.slice(0,-2).join('|')===o){
+      const newK=n+'|'+parts.slice(-2).join('|');
+      newRV[newK]=v;
+    }else{
+      newRV[k]=v;
+    }
+  });
+  S.reviewData=newRV;
+
+  // Update descNotes keys (same format)
+  const newDN={};
+  Object.entries(S.descNotes||{}).forEach(([k,v])=>{
+    const parts=k.split('|');
+    // Entry-level note: "entry|EntryName"
+    if(parts[0]==='entry'&&parts.slice(1).join('|')===o){
+      newDN['entry|'+n]=v;
+    }else if(parts.length>=3&&parts.slice(0,-2).join('|')===o){
+      newDN[n+'|'+parts.slice(-2).join('|')]=v;
+    }else{
+      newDN[k]=v;
+    }
+  });
+  S.descNotes=newDN;
+
+  // Update bookmarks
+  if(S.idxBookmarks){
+    if(S.idxBookmarks instanceof Set){
+      if(S.idxBookmarks.has(o)){S.idxBookmarks.delete(o);S.idxBookmarks.add(n)}
+    }else if(Array.isArray(S.idxBookmarks)){
+      const i=S.idxBookmarks.indexOf(o);
+      if(i>=0)S.idxBookmarks[i]=n;
+    }
+  }
+
+  // Update sectionOverrides
+  if(S.sectionOverrides&&S.sectionOverrides[o]){
+    S.sectionOverrides[n]=S.sectionOverrides[o];
+    delete S.sectionOverrides[o];
+  }
+
+  // Log in tagRenames history
+  if(!S.tagRenames)S.tagRenames={};
+  const existing=S.tagRenames[o];
+  const originalName=existing?.originalName||o;
+  const history=existing?.history||[];
+  history.push({from:o,to:n,by:S.user?.name||S.user?.email||'Unknown',at:Date.now()});
+  // Remove old key, add new with full history
+  delete S.tagRenames[o];
+  S.tagRenames[n]={originalName,changedBy:S.user?.name||S.user?.email||'Unknown',timestamp:Date.now(),history,rowsUpdated:rowsChanged};
+
+  // Persist
+  syncSharedDataToSheet();
+  logActivity(`Renamed tag "${o}" → "${n}" (${rowsChanged} rows updated)`);
+  // Also log to a dedicated _TagNameChanges tab for audit trail
+  appendToNameChangesLog(originalName,o,n,rowsChanged).catch(e=>console.warn('Name log write failed:',e));
+
+  return{ok:true,rowsUpdated:rowsChanged};
+}
+
+// Append a rename to the _TagNameChanges tab (creates tab if missing)
+async function appendToNameChangesLog(originalName,fromName,toName,rowsUpdated){
+  const TAB='_TagNameChanges';
+  // Ensure tab exists
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      // Write header row
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`${TAB}!A1:F1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Original Name','From','To','Changed By','Rows Updated']]}
+      });
+    }catch(e){console.warn('Could not create _TagNameChanges tab:',e)}
+  }
+  // Append row
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`${TAB}!A:F`,
+      valueInputOption:'RAW',
+      resource:{values:[[new Date().toISOString(),originalName,fromName,toName,S.user?.name||S.user?.email||'Unknown',rowsUpdated]]}
+    });
+  }catch(e){console.warn('Could not append to name changes log:',e)}
+}
+
+// Helper: tab title lookup
+function activeTabTitle(){return S.sheetMeta?.tabs?.[S.activeTab]?.title||''}
+
 async function updateTagDesc(rowIdx,entryName,newDesc){
   const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
   if(kwCol<0||!S.rows[rowIdx]){console.error('updateTagDesc: no kwCol or row',{kwCol,rowIdx});return false}
@@ -1436,6 +1664,8 @@ function buildIndex(){
   const progCol=S.headers.findIndex(h=>h.toLowerCase()==='program_number');
   const pvNameCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_name');
   const pvTypeCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_type');
+  // Relevancy columns (1=lowest, 4=highest)
+  const relCols=[1,2,3,4].map(n=>S.headers.findIndex(h=>h.toLowerCase()==='search.keywords_relevancy_'+n));
 
   if(kwCol===-1){toast('Cannot find "keywords" column','error');return}
 
@@ -1459,12 +1689,28 @@ function buildIndex(){
     const pvName=(row[pvNameCol]||'').trim();
     const pvType=(row[pvTypeCol]||'').trim();
 
+    // Build tagName → relevancy (1-4) map by checking which relevancy column each tag appears in
+    // Highest-numbered column wins (in case a tag somehow appears in multiple)
+    const relMap={};
+    relCols.forEach((colIdx,i)=>{
+      if(colIdx===-1)return;
+      const raw=(row[colIdx]||'').trim();
+      if(!raw||raw==='[]')return;
+      let relTags;
+      try{relTags=JSON.parse(raw)}catch{return}
+      const score=i+1; // 1, 2, 3, or 4
+      relTags.forEach(rt=>{
+        const n=(rt.name||'').trim();
+        if(n)relMap[n]=Math.max(relMap[n]||0,score);
+      });
+    });
+
     tags.forEach(tag=>{
       const name=(tag.name||'').trim();
       const path=tag.path||'';
       const desc=(tag.description||'').trim();
       const rel=tag.relationship||'';
-      const relevancy=tag.relevancy||0;
+      const relevancy=relMap[name]||0; // 0 means unranked (shouldn't happen per user)
       if(!name)return;
 
       if(!entries[name]){
@@ -1725,9 +1971,9 @@ function scrollAI(){setTimeout(()=>{const el=$('.ai-msgs');if(el)el.scrollTop=el
 // Build the full audit rules text for AI prompts
 function buildAuditRulesText(){
   let t='INDEX ENTRY STYLE GUIDE\n\n';
-  t+='THE RULES:\n';
-  RULES.tagDesc.checks.filter(c=>c.on).forEach((c,i)=>{t+=`${c.name}\n`});
-  t+='\nQUICK REFERENCE: Write index sub-entries as short noun phrases (2–5 words). Never repeat the entry heading word. Drop leading articles ("the," "a," "an"). Use lowercase unless the word is a proper noun. Keep prepositions ("in," "at," "during") when they establish location or context. No verbs, no full sentences. Choose precise, elevated language — not casual speech.\n';
+  const activeRules=RULES.tagDesc.checks.filter(c=>c.on);
+  t+='THE RULES (these are the ONLY rules to enforce — any rules not listed here are intentionally disabled and must not be applied):\n';
+  activeRules.forEach((c,i)=>{t+=`${i+1}. ${c.name}\n`});
   if(RULES.tagDesc.pairedExamples&&RULES.tagDesc.pairedExamples.length){
     t+='\nPAIRED EXAMPLES (good vs bad for same entry):\n';
     RULES.tagDesc.pairedExamples.forEach(e=>{
@@ -2037,6 +2283,51 @@ function clipLinkForResult(r){
   return cid?('https://videos.jem.tv/video-player?clip='+cid):'';
 }
 
+// Build book-style reference code: A345 / C457 / ME123 / TM456 / SF789 for non-films.
+// Films get their own shortened format (returns null here — caller handles Film specially).
+function refCodeForResult(r){
+  const prefixMap={
+    'Addresses':'A',
+    'Conversations':'C',
+    'My Encounter':'ME',
+    'Timeless Moments':'TM',
+    'Short Films':'SF'
+  };
+  const prefix=prefixMap[r.segType];
+  if(!prefix)return null; // Films or unknown segment — handle separately
+  const num=(r.progNum||'').toString().replace(/[^0-9]/g,'');
+  if(!num)return prefix; // Fallback to bare prefix if no program number
+  return prefix+num;
+}
+
+// Shortened film reference: auto-derive shortened name from first meaningful word,
+// with user overrides stored in RULES.filmShortNames (tag name → short name).
+// Example: "Faithful and Fortified: Israel's Prime Ministers" → "Faithful 1 · Ch2"
+function filmRefForResult(r){
+  const rawTitle=r.pvName||r.clipName||'';
+  if(!rawTitle)return '';
+  // Extract main film name (strip Vol/chapter suffix)
+  const mainTitle=rawTitle.split(/[·:|\-–—]|Vol\.?|Chapter|Ch\.?/i)[0].trim();
+  // Check for user override
+  const overrides=RULES.filmShortNames||{};
+  let shortName=overrides[mainTitle]||overrides[rawTitle];
+  if(!shortName){
+    // Auto-shorten: first meaningful word (skip articles/possessives)
+    const skipWords=new Set(['a','an','the','my','our','your','his','her','its','their']);
+    const words=mainTitle.split(/\s+/).filter(w=>w.length>0);
+    shortName=words.find(w=>!skipWords.has(w.toLowerCase()))||words[0]||'Film';
+  }
+  // Detect volume number (e.g., "Vol 1", "Volume 2", or trailing digit)
+  let volPart='';
+  const volMatch=rawTitle.match(/Vol(?:ume)?\.?\s*(\d+)/i);
+  if(volMatch)volPart=' '+volMatch[1];
+  // Detect chapter
+  let chPart='';
+  const chMatch=rawTitle.match(/Ch(?:apter)?\.?\s*(\d+)/i);
+  if(chMatch)chPart=' · Ch'+chMatch[1];
+  return shortName+volPart+chPart;
+}
+
 // Cache for tab maps to avoid re-reading on every action
 let _tabMapCache={};
 let _tabMapCacheTime={};
@@ -2214,11 +2505,6 @@ async function runAudit(){
   const antiPatterns=`
 COMMON MISTAKES YOU MUST NOT MAKE:
 - Do NOT just lowercase the first letter and call it fixed. Restructure if needed.
-- Do NOT just change verb tense (Remain→remaining, Set→setting, Turn→turning). That is still a verb and still violates Rule 7.
-- "remaining committed to Judaism" is NOT a noun phrase. "commitment to Judaism" IS a noun phrase.
-- "setting times for Torah study" is NOT a noun phrase. "designated study times" IS.
-- "turning deficit into profit" is NOT a noun phrase. "deficit into profit" IS.
-- If your suggestion contains a gerund (-ing) as the MAIN action, you probably still have a verb. Convert to a true noun.
 - Do NOT leave the description essentially unchanged. If you flag it as "fix", your suggestion MUST be meaningfully different.
 - Your suggestion must ALSO follow all rules. Check your own suggestion before submitting.`;
 
@@ -2239,6 +2525,9 @@ COMMON MISTAKES YOU MUST NOT MAKE:
 ${fullRules}
 ${antiPatterns}
 
+CRITICAL CONTEXT — READ CAREFULLY:
+Each description describes the portion of the clip connected to the SPECIFIC TAG, NOT the main topic of the clip. Tags are ranked by relevancy 1-4 — a tag can be relevancy 1 (a brief mention, minor detail) and still have a legitimate description. When checking transcripts, look for the connection between THIS SPECIFIC TAG and the transcript content. Do NOT flag a description just because it is not the main theme of the clip. A good description captures the tag-relevant moment, however small.
+
 For EACH description:
 1. Walk through every rule one by one
 2. If ANY rule is violated, provide a PROPERLY RESTRUCTURED suggestion (not just a surface tweak)
@@ -2249,14 +2538,14 @@ Respond with JSON array. Each item:
   "idx": 0,
   "original": "the original text",
   "status": "ok"|"fix"|"generate",
-  "rule_violations": ["Rule 2 — repeats entry name", "Rule 7 — contains verb"],
+  "rule_violations": ["Rule 2 — repeats entry name"],
   "suggestion": "your fixed version",
-  "verification": "noun phrase ✓, no verb ✓, no repeat ✓, N words ✓"
+  "verification": "brief check"
 }
 
-${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,800)}"`).join('\n\n')}`;
+${batch.map((e,j)=>`[${j}] Entry(TAG):"${e.entryName}" Sec:${e.section} Rel:${e.rel} Relevancy:${e.relevancy||'?'}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,800)}"`).join('\n\n')}`;
 
-      const sys1=`You are a ruthless professional index editor. You do NOT do surface-level fixes. When a description has a verb, you restructure it into a true noun phrase. When it repeats the entry name, you rewrite completely. When it's generic, you use the transcript to create something specific and vivid.\n\nChecklist:\n${ruleChecklist}\n\nJSON array only.`;
+      const sys1=`You are a professional index editor auditing descriptions for a printed book index.\n\nKEY RULE: Each description describes the part of the clip connected to THIS SPECIFIC TAG. Tags are often minor details in the clip, not the main topic. Don't flag descriptions just because they aren't the central theme. The relevancy score (1-4) indicates how prominent the tag is; even relevancy 1 tags are legitimate and their descriptions should capture the tag-specific moment, however brief.\n\nRules to enforce:\n${ruleChecklist}\n\nJSON array only.`;
 
       const resp1=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:sys1,messages:[{role:'user',content:prompt1}]})});
       if(!resp1.ok)throw new Error('API '+resp1.status);
@@ -2273,13 +2562,12 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
       let finalResults=pass1;
 
       if(needsVerify.length>0){
-        const prompt2=`You are reviewing another editor's suggestions for a book index. Check if each suggestion ACTUALLY follows the rules. Many editors make lazy fixes like just changing verb tense or just lowercasing — reject those.
+        const prompt2=`You are reviewing another editor's suggestions for a book index. Check if each suggestion ACTUALLY follows the rules.
 
 RULES:
 ${ruleChecklist}
 
 For each suggestion below, verify:
-- Is it a true noun phrase (NO verbs as main action)?
 - Does it repeat the entry name?
 - Is it 2-6 words?
 - Is it meaningfully different from the original?
@@ -2291,7 +2579,7 @@ JSON array. Each: {idx, status:"ok"|"fix", suggestion:"...", reason:"..."}
 
 ${needsVerify.map((p,j)=>`[${p.idx}] Entry:"${batch[p.idx]?.entryName}" Original:"${p.original||batch[p.idx]?.desc}" Suggestion:"${p.suggestion}" Violations:${JSON.stringify(p.rule_violations||[])}`).join('\n')}`;
 
-        const resp2=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'You are a senior editor reviewing a junior editor\'s work. Be ruthless. If a suggestion is lazy (just lowercased, just changed verb tense, still a sentence), reject it and provide a proper noun phrase. JSON array only.',messages:[{role:'user',content:prompt2}]})});
+        const resp2=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'You are a senior editor reviewing a junior editor\'s work. Be ruthless. If a suggestion is lazy (just lowercased, still casual), reject it and provide a better one. JSON array only.',messages:[{role:'user',content:prompt2}]})});
 
         if(resp2.ok){
           const d2=await resp2.json(),txt2=d2.content.map(c=>c.text||'').join('');
@@ -2322,17 +2610,21 @@ ${needsVerify.map((p,j)=>`[${p.idx}] Entry:"${batch[p.idx]?.entryName}" Original
           const e=batch[tf.idx!=null?tf.idx:tf.index];
           if(!e||!e.transcript)continue;
           try{
-            const vPrompt=`Does this index description plausibly match this video transcript?
+            const vPrompt=`Does this index description describe ANY portion of the clip that relates to the TAG "${e.entryName}"?
 
-Entry: "${e.entryName}"
+Entry/Tag: "${e.entryName}"
 Description: "${e.desc||'[empty]'}"
 
 FULL TRANSCRIPT:
 ${e.transcript}
 
-Answer with JSON only: {"matches": true/false, "reason": "brief explanation"}
-If ANY part of the transcript relates to the description topic, answer true.`;
-            const vResp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,system:'You verify if index descriptions match video transcripts. Be generous — if any part of the transcript relates to the description, say true. JSON only.',messages:[{role:'user',content:vPrompt}]})});
+CRITICAL: This description does NOT need to describe the main point of the clip. It describes the specific part of the clip connected to the tag "${e.entryName}". The tag may refer to a small detail, a brief mention, or a minor moment — that is LEGITIMATE. Tags are ranked by relevancy precisely because they often are NOT central.
+
+Answer TRUE if ANY part of the transcript involves the tag "${e.entryName}" in a way that connects to this description — even tangentially, even briefly.
+Answer FALSE only if there is zero connection between the description and any mention/context of "${e.entryName}" in the transcript.
+
+Answer with JSON only: {"matches": true/false, "reason": "brief explanation focused on the tag-specific connection"}`;
+            const vResp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,system:'You verify if index descriptions describe the portion of a clip relating to a specific tag. Be VERY generous — descriptions describe tag-specific content, which is often a small detail of the clip, NOT the main topic. Only say false if there is zero connection. JSON only.',messages:[{role:'user',content:vPrompt}]})});
             if(vResp.ok){
               const vd=await vResp.json(),vt=vd.content.map(c=>c.text||'').join('');
               try{
@@ -2535,6 +2827,7 @@ function render(force=true){
   const isIdx=S.view==='index';
   h+=`<div class="main"><div class="main-content"><div class="content${isIdx?' content-index':''}">`;
   if(S.view==='dashboard')h+=rDash();
+  else if(S.view==='book')h+=rBook();
   else if(isIdx)h+=rIndex();
   else if(S.view==='sheet')h+=rSheet();
   else if(S.view==='auditor')h+=rAuditor();
@@ -2764,7 +3057,7 @@ function render(force=true){
       h+=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">`;
       h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Give me 5 alternative descriptions to choose from" style="font-size:11px;padding:3px 10px">5 more options</button>`;
       h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Choose better, more elevated wording for this description while keeping the same meaning" style="font-size:11px;padding:3px 10px">Better wording</button>`;
-      h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Check the full transcript carefully and verify if this description accurately reflects the clip content. If not, suggest a more accurate description." style="font-size:11px;padding:3px 10px">Check transcript</button>`;
+      h+=`<button class="btn btn-sm sug-chat-quick" data-sugquick="Check the full transcript for any connection to THIS TAG specifically. Remember: descriptions describe the part of the clip connected to this specific tag — even if it is only a small detail or minor mention. Do NOT evaluate against the main topic of the clip. Only suggest a change if there is zero connection between the description and any content related to this tag in the transcript." style="font-size:11px;padding:3px 10px">Check transcript</button>`;
       h+=`</div>`;
       h+=`<div style="display:flex;gap:6px"><input id="sug-chat-input" placeholder="Ask about this description…" autocomplete="off" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:14px;font-family:var(--font);outline:none"><button id="sug-chat-send" style="background:var(--gold);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer">Send</button></div>`;
       h+=`</div>`;
@@ -2873,6 +3166,107 @@ function rSidebar(){
   return h+'</div>';
 }
 
+// ═══════════════════════════════════════════════════════════════
+// BOOK VIEW — Read-only reader's view styled like the printed book
+// ═══════════════════════════════════════════════════════════════
+
+// Relationship label defaults per segment type. Hide label if it matches the default; show [label] if it differs.
+const REL_DEFAULTS={
+  'Addresses':'spoken about',
+  'Timeless Moments':'seen in',
+  'Conversations':'in conversation with',
+  'My Encounter':'interviewee',
+  'Short Films':'interviewee',
+  'Films':'interviewee'
+};
+
+// Should the relationship label be shown for this result?
+// Rules:
+//   - Nigunim section: show ONLY if rel is "spoken about"; otherwise hide
+//   - All other sections: show if rel differs from segment default
+function shouldShowRel(r,section){
+  const rel=(r.rel||'').trim().toLowerCase();
+  if(!rel)return false;
+  if(section==='Nigunim'){
+    return rel==='spoken about';
+  }
+  const def=(REL_DEFAULTS[r.segType]||'').toLowerCase();
+  return rel!==def;
+}
+
+// Should the description be rendered for this entry in Book View?
+// In People Index, only "spoken about" relationships get descriptions; others are ref-only.
+function shouldShowDesc(r,section){
+  if(section!=='People')return true;
+  return (r.rel||'').trim().toLowerCase()==='spoken about';
+}
+
+function rBook(){
+  if(!S.indexData)return'<div class="pad" style="color:var(--tx-3)">Loading index data…</div>';
+  const ix=S.indexData;
+  const scope=S.bookScope||'all'; // 'all' or a specific section name
+  const sections=scope==='all'?RULES.sectionOrder:[scope];
+  const title=scope==='all'?'Full Index':scope;
+  let h=`<div class="page-hd"><h1>📖 ${esc(title)}</h1><p>Book View — read-only. Click ✎ on any entry to edit.</p><div class="page-hd-actions"><button class="btn btn-gold" data-nav="dashboard">← Back to Dashboard</button></div></div>`;
+  h+='<div class="book-view"><div class="book-page">';
+
+  sections.forEach(section=>{
+    const entries=ix.sections[section]||[];
+    if(!entries.length)return;
+    if(scope==='all')h+=`<h2 class="book-section-hd">${esc(section)}</h2>`;
+    entries.forEach(e=>{
+      h+=`<div class="book-entry">`;
+      h+=`<div class="book-entry-head"><span class="book-entry-name">${esc(e.name)}</span><button class="book-entry-edit" data-bookedit="${esc(e.name)}" title="Edit in workstation">✎</button></div>`;
+      // Group results by segment type, in canonical order
+      const byseg={};
+      e.results.forEach(r=>{if(!byseg[r.segType])byseg[r.segType]=[];byseg[r.segType].push(r)});
+      RULES.segOrder.forEach(seg=>{
+        const rs=byseg[seg];
+        if(!rs||!rs.length)return;
+        h+=`<div class="book-seg"><div class="book-seg-label">${esc(seg)}</div>`;
+        rs.forEach(r=>{
+          const relRaw=parseInt(r.relevancy)||0;
+          const relScore=(relRaw>=1&&relRaw<=4)?relRaw:4;
+          h+=`<div class="book-row" data-rel="${relScore}">`;
+          // Description (People-exception: only "spoken about" gets description)
+          const showDesc=shouldShowDesc(r,section);
+          if(showDesc){
+            const d=(r.desc||'').trim();
+            if(d){
+              h+=`<span class="book-desc">${esc(d)}</span>`;
+            }else{
+              h+=`<span class="book-desc book-desc-empty">[empty]</span>`;
+            }
+          }
+          // Relationship label (only when it differs from segment default, or Nigunim "spoken about")
+          if(shouldShowRel(r,section)){
+            h+=`<span class="book-rel">[${esc(r.rel)}]</span>`;
+          }
+          // Reference code — hyperlinked to the clip
+          const vidUrl=clipLinkForResult(r);
+          let refText='';
+          if(r.clipType==='Film Chapter'||r.clipType==='Film'){
+            refText=filmRefForResult(r);
+          }else{
+            refText=refCodeForResult(r)||'';
+          }
+          if(refText){
+            h+=`<a class="book-ref" href="${vidUrl}" target="_blank" title="${esc(r.clipName||'')}">${esc(refText)}</a>`;
+          }
+          // Comment bounce — click to jump to editor at this exact spot
+          h+=`<button class="book-comment" data-bookjump="${esc(e.name)}|${esc(r.segType)}|${r.rowIdx}" title="Jump to editor to add a note">💬</button>`;
+          h+=`</div>`;
+        });
+        h+='</div>';
+      });
+      h+='</div>';
+    });
+  });
+
+  h+='</div></div>';
+  return h;
+}
+
 function rDash(){
   if(!S.indexData)return'<div class="pad" style="color:var(--tx-3)">Loading index data…</div>';
   const ix=S.indexData;
@@ -2917,6 +3311,17 @@ function rDash(){
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
   h+=`<button class="btn btn-sm" id="run-consistency" style="font-size:10px;border-color:var(--blue);color:var(--blue)">🔍 Consistency Check</button>`;
   h+=`<button class="btn btn-sm" data-nav="settings" style="font-size:10px">Test a Description →</button>`;
+  h+='</div></div>';
+
+  // Book View (read-only reader's view styled like the printed book)
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">📖 Book View</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Read the index as it will appear in print. Read-only; click ✎ on any entry to jump to the editor.</p>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
+  h+=`<button class="btn btn-sm btn-gold" data-bookview="all" style="font-size:10px">Full Index</button>`;
+  RULES.sectionOrder.forEach(sec=>{
+    const cnt=(ix.sections[sec]||[]).length;
+    if(cnt>0)h+=`<button class="btn btn-sm" data-bookview="${esc(sec)}" style="font-size:10px">${esc(sec)} <span style="color:var(--tx-4)">(${cnt})</span></button>`;
+  });
   h+='</div></div>';
   
   // Index Tabs
@@ -3099,12 +3504,25 @@ function rIndex(){
       eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-entry="${esc(e.name)}" ${allSelected?'checked':''} title="Select for AI audit">`;
       // Move checkbox (hidden unless move mode)
       eh+=`<input type="checkbox" class="idx-move-chk" data-move-entry="${esc(e.name)}" ${S.moveSelected.has(e.name)?'checked':''} title="Select to move">`;
-      eh+=`${esc(e.name)}`;
+      // Inline rename input if renaming this entry, otherwise name + pencil
+      if(S.renamingEntry&&S.renamingEntry.name===e.name){
+        eh+=`<input type="text" class="idx-rename-input" id="rename-input" value="${esc(S.renamingEntry.inputValue)}" data-rename-for="${esc(e.name)}" style="font-family:var(--serif);font-size:inherit;font-weight:700;padding:2px 6px;border:1px solid var(--gold);border-radius:4px;min-width:240px" autofocus>`;
+        eh+=`<button class="btn btn-sm btn-gold" data-rename-save="${esc(e.name)}" style="font-size:11px;padding:2px 8px">Save</button>`;
+        eh+=`<button class="btn btn-sm" data-rename-cancel="1" style="font-size:11px;padding:2px 8px">Cancel</button>`;
+      }else{
+        eh+=`${esc(e.name)}`;
+        eh+=`<button class="idx-entry-rename" data-rename-start="${esc(e.name)}" title="Rename this tag" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:12px;padding:0 4px;opacity:0;transition:opacity .15s">✎</button>`;
+      }
       if(tooMany)eh+=` <span class="idx-entry-badge warn">${e.results.length} results</span>`;
       if(hasEmpty)eh+=` <span class="idx-entry-badge empty">missing desc</span>`;
       // Status toggle — Pending/Reviewed
       eh+=`<button class="idx-entry-status ${entryDone?'reviewed':''}" data-entry-rv="${esc(e.name)}">${entryDone?'✓ Reviewed':'Pending'}</button>`;
       eh+=`</div>`;
+      // Show "was: X ↺" if this entry has been renamed
+      const renameRec=S.tagRenames&&S.tagRenames[e.name];
+      if(renameRec&&renameRec.originalName&&renameRec.originalName!==e.name){
+        eh+=`<div class="idx-entry-rename-note" style="font-size:10px;color:var(--amber);margin-top:-2px;margin-bottom:2px;padding-left:2px">was: <em>${esc(renameRec.originalName)}</em> <button data-rename-revert="${esc(e.name)}" title="Revert to original name" style="background:none;border:none;cursor:pointer;color:var(--amber);padding:0 4px;font-size:11px">↺</button></div>`;
+      }
       const entryNoteKey='entry|'+e.name;
       const entryNote=S.descNotes?.[entryNoteKey];
       const entryHasThread=entryNote&&entryNote.thread&&entryNote.thread.length>0;
@@ -3128,7 +3546,10 @@ function rIndex(){
           if(S.reviewMode&&isReviewed&&!isPending)return;
 
           const isPanelSrc=S.clipPanel&&S.clipPanel.entryName===e.name&&S.clipPanel.segType===seg&&S.clipPanel.rowIdx===r.rowIdx;
-          eh+=`<div class="idx-result${isPanelSrc?' panel-source':''}">`;
+          // Bucket relevance 1-4. Default 4 (full opacity) if unknown so text never disappears.
+          const relRaw=parseInt(r.relevancy)||0;
+          const relScore=(relRaw>=1&&relRaw<=4)?relRaw:4;
+          eh+=`<div class="idx-result${isPanelSrc?' panel-source':''}" data-rel="${relScore}">`;
           // Audit checkbox (hidden unless select mode)
           const selKey=esc(e.name)+'|'+seg+'|'+r.rowIdx;
           eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''} title="Select for AI audit">`;
@@ -3156,10 +3577,19 @@ function rIndex(){
             const editInfo2=(rv&&rv.editedBy)?`Edited by ${rv.editedBy}${rv.editedAt?' at '+new Date(rv.editedAt).toLocaleString():''}. `:'';
             eh+=`<span class="idx-result-desc ${descEmpty?'empty-desc':'editable'}" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="${esc(editInfo2)}Double-click to edit">${descEmpty?'[no description]':esc(r.desc)}</span>`;
           }
-          // Reference info — compact (hide program numbers; panel has them)
+          // Meta section — wraps as a unit to line 2 when row is tight
+          eh+=`<span class="idx-result-meta">`;
+          // Relationship label
           if(r.rel)eh+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
+          // Reference code — book-style for all segments
           if(r.clipType==='Film Chapter'||r.clipType==='Film'){
-            eh+=`<span class="idx-result-ref"><a href="${vidUrl}" target="_blank" title="${esc(r.clipName)}">${esc(r.pvName||r.clipName)}</a></span>`;
+            const filmRef=filmRefForResult(r);
+            eh+=`<span class="idx-result-ref"><a href="${vidUrl}" target="_blank" title="${esc(r.clipName||r.pvName||'')}">${esc(filmRef)}</a></span>`;
+          }else{
+            const code=refCodeForResult(r);
+            if(code){
+              eh+=`<span class="idx-result-ref"><a href="${vidUrl}" target="_blank" title="${esc(r.clipName||'')}">${esc(code)}</a></span>`;
+            }
           }
           // Description-level notes/comments (threaded)
           const descNoteKey=e.name+'|'+seg+'|'+r.rowIdx;
@@ -3174,6 +3604,7 @@ function rIndex(){
           eh+=`<span class="idx-mini-btn" data-clippanel="${esc(e.name)}|${seg}|${r.rowIdx}" title="View clip details">ⓘ</span>`;
           // Status toggle — Pending/Reviewed
           eh+=`<button class="idx-status ${isReviewed?'reviewed':''}" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}">${isReviewed?'✓ Reviewed':'Pending'}</button>`;
+          eh+=`</span>`; // end meta
           eh+=`</div>`;
         });
         eh+='</div>';
@@ -3439,6 +3870,21 @@ function rSettings(){
   h+=`<button class="btn btn-sm btn-green" id="add-spelling" style="margin-top:8px">+ Add</button>`;
   h+='</div>';
 
+  // Film Short Names
+  h+='<div class="card" style="margin-bottom:24px">';
+  h+='<h4 style="margin-bottom:10px">Film Short Names</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:10px">Custom short names for film references (e.g. "Faithful and Fortified" → "Faithful"). Only needed when auto-shortening picks a bad name. Leave blank to use the auto default.</p>';
+  const filmShorts=RULES.filmShortNames||{};
+  const filmKeys=Object.keys(filmShorts).sort();
+  if(!filmKeys.length){
+    h+='<div style="font-size:11px;color:var(--tx-4);font-style:italic;margin-bottom:8px">No overrides yet. Auto-shortened names are being used for all films.</div>';
+  }
+  filmKeys.forEach(k=>{
+    h+=`<div class="spelling-row"><input class="rule-edit-input" style="flex:1" data-filmfull="${esc(k)}" value="${esc(k)}" placeholder="Full film name"><span style="color:var(--tx-4)">\u2192</span><input class="rule-edit-input" style="flex:1" data-filmshort="${esc(k)}" value="${esc(filmShorts[k])}" placeholder="Short name"><button class="btn btn-sm btn-red btn-icon" data-filmdel="${esc(k)}">${IC.x}</button></div>`;
+  });
+  h+=`<div class="spelling-row" style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)"><input class="rule-edit-input" style="flex:1" id="film-new-full" placeholder="Full film name"><span style="color:var(--tx-4)">\u2192</span><input class="rule-edit-input" style="flex:1" id="film-new-short" placeholder="Short name"><button class="btn btn-sm btn-green" id="film-add">+ Add</button></div>`;
+  h+='</div>';
+
   // Management
   h+='<div class="card" style="margin-bottom:24px">';
   h+='<h4 style="margin-bottom:10px">Management</h4>';
@@ -3575,6 +4021,40 @@ function bindAll(){
   });
   on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
   on('#ai-fab','click',()=>{S.aiOpen=true;render()});
+
+  // Book View — open full/section
+  $$('[data-bookview]').forEach(el=>el.onclick=()=>{
+    S.viewHistory.push({view:S.view,section:S.idxActiveSection,page:S.idxPage,search:S.idxSearch,filter:S.reviewFilter});
+    S.bookScope=el.dataset.bookview;
+    S.view='book';
+    S.clipPanel=null;
+    render();
+  });
+  // Book View — edit button on entry (jump to editor at that entry)
+  $$('[data-bookedit]').forEach(el=>el.onclick=()=>{
+    const entryName=el.dataset.bookedit;
+    S.view='index';
+    S.idxSearch=entryName;
+    S.idxPage=0;
+    S.clipPanel=null;
+    render();
+  });
+  // Book View — comment bounce: jump to editor at specific sub-entry
+  $$('[data-bookjump]').forEach(el=>el.onclick=()=>{
+    const[entryName,segType,rowIdx]=el.dataset.bookjump.split('|');
+    S.view='index';
+    S.idxSearch=entryName;
+    S.idxPage=0;
+    S.clipPanel=null;
+    render();
+    // After render, open the note popup for this sub-entry
+    setTimeout(()=>{
+      const k=entryName+'|'+segType+'|'+rowIdx;
+      S.notePopup={key:k,entryName,segType,rowIdx:+rowIdx};
+      render();
+    },150);
+  });
+
   on('#tabs-toggle','click',()=>{S.tabsOpen=!S.tabsOpen;render()});
   on('#run-consistency','click',()=>runConsistencyCheck());
   on('#audit-sec-run','click',()=>{
@@ -3852,6 +4332,7 @@ function bindAll(){
     const segType=parts.slice(slp+1,lp);
     const rowIdx=+parts.slice(lp+1);
     S.clipPanel={entryName,segType,rowIdx,scrollTo:'chat'};
+    S.notifOpen=false; // Mutually exclusive with notification sidebar
     render();
     setTimeout(()=>{
       const target=$('#clip-section-chat');
@@ -3867,6 +4348,7 @@ function bindAll(){
     const segType=parts.slice(slp+1,lp);
     const rowIdx=+parts.slice(lp+1);
     S.clipPanel={entryName,segType,rowIdx,scrollTo:'chat'};
+    S.notifOpen=false; // Mutually exclusive with notification sidebar
     render();
     setTimeout(()=>{
       const target=$('#clip-section-chat');
@@ -3882,6 +4364,7 @@ function bindAll(){
     const segType=parts.slice(slp+1,lp);
     const rowIdx=+parts.slice(lp+1);
     S.clipPanel={entryName,segType,rowIdx};
+    S.notifOpen=false; // Mutually exclusive with notification sidebar
     render();
   });
   on('#clip-panel-close','click',()=>{S.clipPanel=null;render()});
@@ -4018,6 +4501,75 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
     render();
   });
 
+  // Rename tag — start
+  $$('[data-rename-start]').forEach(el=>el.onclick=(ev)=>{
+    ev.stopPropagation();
+    const name=el.dataset.renameStart;
+    S.renamingEntry={name,inputValue:name};
+    render();
+    setTimeout(()=>{const inp=$('#rename-input');if(inp){inp.focus();inp.select()}},50);
+  });
+  // Rename tag — cancel
+  $$('[data-rename-cancel]').forEach(el=>el.onclick=(ev)=>{
+    ev.stopPropagation();
+    S.renamingEntry=null;
+    render();
+  });
+  // Rename tag — live input tracking
+  on('#rename-input','input',()=>{
+    const inp=$('#rename-input');
+    if(inp&&S.renamingEntry)S.renamingEntry.inputValue=inp.value;
+  });
+  on('#rename-input','keydown',(ev)=>{
+    if(ev.key==='Enter'){ev.preventDefault();$('[data-rename-save]')?.click()}
+    else if(ev.key==='Escape'){ev.preventDefault();S.renamingEntry=null;render()}
+  });
+  // Rename tag — save
+  $$('[data-rename-save]').forEach(el=>el.onclick=async(ev)=>{
+    ev.stopPropagation();
+    const oldName=el.dataset.renameSave;
+    const newName=(S.renamingEntry?.inputValue||'').trim();
+    if(!newName){toast('Enter a new name','error');return}
+    if(newName===oldName){S.renamingEntry=null;render();return}
+    const ok=await customConfirm(`Rename "${oldName}" → "${newName}"?\n\nThis updates all matching tags across every clip in the sheet.`);
+    if(!ok){S.renamingEntry=null;render();return}
+    toast('Renaming…','info');
+    const result=await renameTag(oldName,newName);
+    if(result.ok){
+      toast(`Renamed across ${result.rowsUpdated} rows`,'success');
+      S.renamingEntry=null;
+      buildIndex();
+      render();
+    }else{
+      toast('Rename failed: '+result.reason,'error');
+    }
+  });
+  // Rename tag — revert to original
+  $$('[data-rename-revert]').forEach(el=>el.onclick=async()=>{
+    const currentName=el.dataset.renameRevert;
+    const rec=S.tagRenames?.[currentName];
+    if(!rec)return;
+    const original=rec.originalName;
+    if(!original||original===currentName)return;
+    const ok=await customConfirm(`Revert "${currentName}" back to "${original}"?\n\nThis will update all matching tags across every clip.`);
+    if(!ok)return;
+    toast('Reverting…','info');
+    const result=await renameTag(currentName,original);
+    if(result.ok){
+      // Clear rename record since we're back to original
+      if(S.tagRenames&&S.tagRenames[original]){
+        // renameTag just created an entry at the original name — but we want to CLEAR since we're back to start
+        delete S.tagRenames[original];
+        syncSharedDataToSheet();
+      }
+      toast(`Reverted across ${result.rowsUpdated} rows`,'success');
+      buildIndex();
+      render();
+    }else{
+      toast('Revert failed: '+result.reason,'error');
+    }
+  });
+
   // Bulk accept
   $$('[data-bulkaccept]').forEach(el=>el.onclick=(e)=>{
     e.stopPropagation();
@@ -4078,12 +4630,26 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
     if(!S.descNotes[key].thread)S.descNotes[key].thread=[];
     // Detect @mentions by matching against actual team member names
     const mentions=[];
-    S.teamMembers.forEach(tm=>{
+    (S.teamMembers||[]).forEach(tm=>{
+      if(!tm||!tm.name||!tm.email)return;
       if(tm.email===S.user?.email)return; // Don't notify yourself
-      // Check if text contains @Name (case-insensitive)
-      const pattern=new RegExp('@'+tm.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');
+      // Match @Name where Name is the team member's name (case-insensitive, full name match)
+      const escaped=tm.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      const pattern=new RegExp('@'+escaped+'(?![\\w])','i');
       if(pattern.test(text))mentions.push(tm);
     });
+    // Also allow @first-name match if no full-name match
+    if(!mentions.length){
+      (S.teamMembers||[]).forEach(tm=>{
+        if(!tm||!tm.name||!tm.email)return;
+        if(tm.email===S.user?.email)return;
+        const firstName=tm.name.split(/\s+/)[0];
+        if(!firstName||firstName.length<2)return;
+        const escaped=firstName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        const pattern=new RegExp('@'+escaped+'(?![\\w])','i');
+        if(pattern.test(text))mentions.push(tm);
+      });
+    }
     S.descNotes[key].thread.push({user:S.user?.name||'Unknown',text,timestamp:Date.now(),mentions:mentions.map(m=>m.email)});
     // Send notifications for each mention
     console.log('Mentions detected:',mentions.map(m=>m.name+' ('+m.email+')'));
@@ -4103,15 +4669,19 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
     if(!inp)return;
     const val=inp.value;
     const curPos=inp.selectionStart||0;
-    // Find @ before cursor
+    // Find @ before cursor — allow start of input, space, or newline before @
     const before=val.slice(0,curPos);
     const atIdx=before.lastIndexOf('@');
     const dd=$('#mention-dd');
-    if(atIdx>=0&&(atIdx===0||before[atIdx-1]===' ')){
-      const query=before.slice(atIdx+1).toLowerCase();
-      const matches=S.teamMembers.filter(tm=>tm.name.toLowerCase().includes(query)&&tm.email!==S.user?.email);
+    const prevChar=atIdx>0?before[atIdx-1]:'';
+    const validAtContext=atIdx===0||prevChar===' '||prevChar==='\n'||prevChar==='\t';
+    const afterAt=before.slice(atIdx+1);
+    const stillInMention=!/\s/.test(afterAt);
+    if(atIdx>=0&&validAtContext&&stillInMention){
+      const query=afterAt.toLowerCase();
+      const matches=(S.teamMembers||[]).filter(tm=>tm&&tm.name&&tm.name.toLowerCase().includes(query)&&tm.email!==S.user?.email);
       if(matches.length&&dd){
-        dd.innerHTML=matches.slice(0,5).map(tm=>`<div class="mention-item" data-mention-name="${esc(tm.name)}"><span class="mention-name">${esc(tm.name)}</span><span class="mention-email">${esc(tm.email)}</span></div>`).join('');
+        dd.innerHTML=matches.slice(0,5).map(tm=>`<div class="mention-item" data-mention-name="${esc(tm.name)}"><span class="mention-name">${esc(tm.name)}</span><span class="mention-email">${esc(tm.email||'')}</span></div>`).join('');
         dd.style.display='block';
       }else if(dd){dd.style.display='none'}
     }else if(dd){dd.style.display='none'}
@@ -4169,7 +4739,11 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
   });
 
   // Notification panel
-  on('#notif-toggle','click',()=>{S.notifOpen=!S.notifOpen;render()});
+  on('#notif-toggle','click',()=>{
+    if(!S.notifOpen){S.clipPanel=null} // Close clip panel when opening notifications
+    S.notifOpen=!S.notifOpen;
+    render();
+  });
   on('#notif-close','click',()=>{S.notifOpen=false;render()});
   on('#notif-readall','click',()=>{
     getMyNotifications().forEach(n=>{n.read=true});
@@ -4457,6 +5031,13 @@ Description:"${S.testDesc||'[empty]'}"`;
   $$('[data-spelldel]').forEach(el=>el.onclick=()=>{const i=+el.dataset.spelldel;RULES.tagDesc.spelling.splice(i,1);saveRules();render()});
   on('#add-spelling','click',()=>{RULES.tagDesc.spelling.push({wrong:'',right:''});saveRules();render()});
 
+  // Film Short Names
+  if(!RULES.filmShortNames)RULES.filmShortNames={};
+  $$('[data-filmshort]').forEach(el=>el.onchange=()=>{const k=el.dataset.filmshort;RULES.filmShortNames[k]=el.value.trim();saveRules()});
+  $$('[data-filmfull]').forEach(el=>el.onchange=()=>{const oldK=el.dataset.filmfull,newK=el.value.trim();if(newK&&newK!==oldK){RULES.filmShortNames[newK]=RULES.filmShortNames[oldK];delete RULES.filmShortNames[oldK];saveRules();render()}});
+  $$('[data-filmdel]').forEach(el=>el.onclick=()=>{delete RULES.filmShortNames[el.dataset.filmdel];saveRules();render()});
+  on('#film-add','click',()=>{const f=$('#film-new-full')?.value.trim(),s=$('#film-new-short')?.value.trim();if(!f||!s){toast('Both fields required','error');return}RULES.filmShortNames[f]=s;saveRules();render()});
+
   // Consistency rules editing
   $$('[data-constoggle]').forEach(el=>el.onclick=()=>{const i=+el.dataset.constoggle;RULES.consistency.checks[i].on=!RULES.consistency.checks[i].on;saveRules();render()});
   $$('[data-consedit]').forEach(el=>el.onblur=()=>{const i=+el.dataset.consedit;RULES.consistency.checks[i].name=el.value;saveRules()});
@@ -4662,8 +5243,6 @@ async function auditSelectedItems(){
   const antiPatterns=`
 COMMON MISTAKES YOU MUST NOT MAKE:
 - Do NOT just lowercase the first letter. Restructure if needed.
-- Do NOT just change verb tense (Remain→remaining). Convert to noun phrase.
-- If your suggestion still has a verb as main action, you failed.
 - Your suggestion must ALSO follow all rules.`;
 
   for(let i=0;i<items.length;i+=bs){
