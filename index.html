@@ -55,8 +55,9 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 /* Main */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .main-content{flex:1;display:flex;overflow:hidden;position:relative}
-.global-back-btn{position:fixed;top:12px;left:236px;z-index:240;background:var(--bg-white);color:var(--tx-1);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.06);transition:all .1s;font-family:var(--font)}
-.global-back-btn:hover{background:var(--gold);color:#fff;border-color:var(--gold);transform:translateX(-2px)}
+/* Inline back button for page headers — sits before h1, low-key style */
+.page-back-btn{display:inline-flex;align-items:center;background:var(--bg-white);color:var(--tx-2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;font-weight:500;cursor:pointer;transition:all .1s;font-family:var(--font);margin-bottom:8px}
+.page-back-btn:hover{background:var(--gold);color:#fff;border-color:var(--gold);transform:translateX(-2px)}
 .jump-highlight{animation:jumpPulse 1.5s ease-out}
 @keyframes jumpPulse{
   0%{background:rgba(212,175,55,0.35);box-shadow:0 0 0 4px rgba(212,175,55,0.25)}
@@ -554,7 +555,7 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
   body > *{display:none !important}
   /* Keep only the main app + book content */
   body > #app, body > div[id]{display:block !important}
-  .sidebar,.global-back-btn,.page-hd-actions,.book-entry-edit,.book-comment,#clip-panel-overlay,.notif-panel,.ai-fab,#ai-fab,.toast-stack,.confirm-overlay,.note-popup-overlay,.transcript-popup,.rename-input,.idx-rename-input{display:none !important}
+  .sidebar,.page-back-btn,.page-hd-actions,.book-entry-edit,.book-comment,#clip-panel-overlay,.notif-panel,.ai-fab,#ai-fab,.toast-stack,.confirm-overlay,.note-popup-overlay,.transcript-popup,.rename-input,.idx-rename-input{display:none !important}
   /* Let book view fill the page without shadows or max-widths */
   .main, .main-content, .content{display:block !important;overflow:visible !important;width:100% !important;max-width:none !important;padding:0 !important;margin:0 !important}
   .book-view{box-shadow:none !important;max-width:none !important;margin:0 !important;padding:18px 24px !important;border-radius:0 !important}
@@ -600,7 +601,7 @@ checks:[
 {id:'generate_empty',name:'Rule 10 — If description is blank, generate one based on transcript and entry context.',on:true},
 {id:'leave_good',name:'Rule 11 — If description already follows all rules, leave it alone. Do not change for the sake of changing.',on:true},
 {id:'transcript_check',name:'Rule 12 — CRITICAL: Descriptions describe the portion of the clip connected to THIS SPECIFIC TAG/TOPIC, NOT the main point of the clip. Most tags reference small details within a clip, not its central theme — that is why tags are ranked by relevancy 1-4 (a tag can be relevancy 1, meaning a minor mention, and still have a legitimate description). When verifying: look for ANY connection between the description and this specific tag within the clip content. Do NOT flag as mismatch just because the description is not the main topic of the clip. Only flag if the description has zero connection to this tag/topic whatsoever.',on:true},
-{id:'english_pref',name:'Rule 13 — Default to English. Use common English words over Hebrew/Yiddish when a clear English equivalent exists. "Charity" not "Tzedakah", "Repentance" not "Teshuvah", "Sabbath" or "Shabbos" not "Shabbat". Exception: terms that have no precise English equivalent or are proper names (Farbrengen, Chassidus, Chabad) stay as-is.',on:true},
+{id:'english_pref',name:'Rule 13 — Default to English. Use common English words over Hebrew/Yiddish when a clear English equivalent exists. "Charity" not "Tzedakah", "Repentance" not "Teshuva", "Sabbath" not "Shabbat". Exception: terms that have no precise English equivalent or are proper names (Farbrengen, Chassidut, Chabad) stay as-is.',on:true},
 {id:'trailing_links',name:'Rule 14 — Preserve trailing linking words. Words like "of", "in", "at", "to", "for" at the end of a description connect it forward to the clip reference. Do NOT remove them. "Significance of" is correct. "Foundation of world" — the "of" connects. Only remove if they dangle with no clear forward link.',on:true},
 {id:'semicolon_format',name:'Rule 15 — Semicolons mean dual points. When a description has a semicolon (;), the clip covers two distinct points. Keep both as separate sub-entries joined by semicolon. Edit each side independently but preserve the two-point structure. Check transcript to verify both points are covered.',on:true}
 ],
@@ -650,33 +651,80 @@ spelling:[{wrong:'prier',right:'prior'},{wrong:'preformed',right:'performed'},{w
 consistency:{
 checks:[
 {id:'phrase_match',name:'Flag when the same concept uses different phrasing across entries (e.g. "Establishment of local Chabad" vs "Inception of local Chabad")',on:true},
-{id:'word_order',name:'Flag inconsistent word order for the same phrase (e.g. "tefillin and mezuzos" vs "mezuzos and tefillin")',on:true},
+{id:'word_order',name:'Flag inconsistent word order for the same phrase (e.g. "tefillin and mezuzot" vs "mezuzot and tefillin")',on:true},
 {id:'transliteration',name:'Flag inconsistent Hebrew/Yiddish transliteration spelling across entries',on:true},
 {id:'capitalization',name:'Flag inconsistent capitalization of the same term across entries',on:true},
 {id:'style_voice',name:'Flag inconsistent style or voice — all descriptions should read the same way, like one person wrote them all',on:true}
 ],
 transliteration:[
 {correct:'Tefillin',wrong:['Tfilin','Tephillin','Phylacteries','tefilin']},
-{correct:'Mezuzos',wrong:['Mezuzot','Mezuzahs','Mezuza','mezuzos']},
+{correct:'Mezuzot',wrong:['Mezuzos','Mezuzahs','Mezuza','mezuzot','mezuzos']},
+{correct:'Mezuzah',wrong:['Mezuza','mezuzah']},
+{correct:'Tzitzit',wrong:['Tzitzis','Tsitsit','tzitzit','tzitzis']},
 {correct:'Farbrengen',wrong:['Farbrangen','Farbrengin','farbrengen']},
-{correct:'Shlichus',wrong:['Shlichut','Shlichos','shlichus']},
-{correct:'Tzedakah',wrong:['Tzedaka','Tsedakah','Tsedaka']},
-{correct:'Simchas Torah',wrong:['Simchat Torah','Simhas Torah']},
-{correct:'Chassidus',wrong:['Chassidut','Chasidus','Hassidut']},
+{correct:'Shlichut',wrong:['Shlichus','Shlichos','shlichut','shlichus']},
+{correct:'Tzedakah',wrong:['Tzedaka','Tsedakah','Tsedaka','tzedakah']},
+{correct:'Simchat Torah',wrong:['Simchas Torah','Simhas Torah','simchat torah']},
+{correct:'Chassidut',wrong:['Chassidus','Chasidus','Hassidut','chassidut']},
 {correct:'Mashiach',wrong:['Moshiach','Mashiakh','Messiah']},
-{correct:'Shabbos',wrong:['Shabbat','Shabbes']},
-{correct:'Beis HaMikdash',wrong:['Beit HaMikdash','Beis Hamikdosh']},
-{correct:'Teshuvah',wrong:['Teshuva','Tshuvah']},
-{correct:'Mitzvah',wrong:['Mitzva','Mitsvah']},
-{correct:'Mitzvos',wrong:['Mitzvot','Mitzvahs']},
-{correct:'Niggun',wrong:['Nigun','Niggun','niggun']},
-{correct:'Nigunim',wrong:['Niggunim','nigunim']},
-{correct:'Chassid',wrong:['Hasid','Chasid']},
-{correct:'Chassidim',wrong:['Hasidim','Chasidim']},
-{correct:'Halachah',wrong:['Halakha','Halacha']},
-{correct:'Tzivos Hashem',wrong:['Tzivos HaShem','Tzivos hashem']},
+{correct:'Shabbat',wrong:['Shabbos','Shabbes','shabbat','shabbos']},
+{correct:'Beit HaMikdash',wrong:['Beis HaMikdash','Beis Hamikdosh','Beit Hamikdash','beit hamikdash']},
+{correct:'Teshuva',wrong:['Teshuvah','Tshuva','Tshuvah','teshuva']},
+{correct:'Mitzvah',wrong:['Mitzva','Mitsvah','mitzvah']},
+{correct:'Mitzvot',wrong:['Mitzvos','Mitzvahs','mitzvot','mitzvos']},
+{correct:'Brit Milah',wrong:['Bris Milah','Bris','Brit','bris','brit milah']},
+{correct:'Bar Mitzvah',wrong:['Bar-Mitzvah','bar mitzvah','Bar mitzvah']},
+{correct:'Bat Mitzvah',wrong:['Bas Mitzvah','bat mitzvah','Bat mitzvah']},
+{correct:'Kiddush',wrong:['kiddush']},
+{correct:'Havdalah',wrong:['Havdala','havdalah','havdala']},
+{correct:'Seder',wrong:['seder']},
+{correct:'Pesach',wrong:['Pesah','pesach']},
+{correct:'Shavuot',wrong:['Shavuos','shavuot','shavuos']},
+{correct:'Sukkot',wrong:['Sukkos','sukkot','sukkos']},
+{correct:'Sukkah',wrong:['Sukka','sukkah']},
+{correct:'Yom Kippur',wrong:['Yom Kipur','yom kippur']},
+{correct:'Rosh Hashanah',wrong:['Rosh Hashana','rosh hashanah','Rosh HaShanah']},
+{correct:'Shemini Atzeret',wrong:['Shemini Atzeres','shemini atzeret']},
+{correct:'Chanukah',wrong:['Hanukkah','Hanukah','Chanuka','chanukah']},
+{correct:'Purim',wrong:['purim']},
+{correct:'Lag BaOmer',wrong:['Lag B\'Omer','Lag Baomer','Lag BOmer','lag baomer']},
+{correct:'Tu BiShvat',wrong:['Tu B\'Shvat','Tu Bishvat','tu bishvat']},
+{correct:'Tisha BeAv',wrong:['Tisha B\'Av','Tisha Bav','tisha beav']},
+{correct:'Niggun',wrong:['Nigun','niggun','nigun']},
+{correct:'Niggunim',wrong:['Nigunim','niggunim','nigunim']},
+{correct:'Chassid',wrong:['Hasid','Chasid','chassid']},
+{correct:'Chassidim',wrong:['Hasidim','Chasidim','chassidim']},
+{correct:'Halachah',wrong:['Halakha','Halacha','halachah','halacha']},
+{correct:'Tzivos Hashem',wrong:['Tzivos HaShem','Tzivot Hashem','tzivos hashem']},
 {correct:'Chabad',wrong:['chabad','CHABAD']},
 {correct:'Lubavitch',wrong:['lubavitch','Lubavich']},
+{correct:'Rebbe',wrong:['rebbe','REBBE']},
+{correct:'Rebbetzin',wrong:['Rebbitzen','rebbetzin','Rebbezin']},
+{correct:'Rambam',wrong:['rambam']},
+{correct:'Torah',wrong:['torah','TORAH']},
+{correct:'Talmud',wrong:['talmud']},
+{correct:'Tanya',wrong:['tanya']},
+{correct:'Moshe',wrong:['Moses','moshe']},
+{correct:'Avraham',wrong:['Abraham','avraham']},
+{correct:'Yitzchak',wrong:['Isaac','Itzhak','yitzchak']},
+{correct:'Yaakov',wrong:['Jacob','Yaacov','yaakov']},
+{correct:'Yisrael',wrong:['Israel','yisrael']},
+{correct:'Yerushalayim',wrong:['Jerusalem','yerushalayim']},
+{correct:'Mikvah',wrong:['Mikveh','mikvah','mikveh']},
+{correct:'Kashrut',wrong:['Kashrus','kashrut','kashrus']},
+{correct:'Kosher',wrong:['kosher','KOSHER']},
+{correct:'Yeshivah',wrong:['Yeshiva','yeshivah','yeshiva']},
+{correct:'Siddur',wrong:['siddur']},
+{correct:'Megillah',wrong:['Megila','megillah']},
+{correct:'Sefer Torah',wrong:['Sefer torah','sefer torah']},
+{correct:'Aliyah',wrong:['Aliya','aliyah','aliya']},
+{correct:'Bracha',wrong:['Brocha','Beracha','bracha']},
+{correct:'Brachot',wrong:['Brochos','Berachot','brachot','brochos']},
+{correct:'Minyan',wrong:['minyan']},
+{correct:'Kaddish',wrong:['kaddish']},
+{correct:'Neshamah',wrong:['Neshama','neshamah','neshama']},
+{correct:'Emunah',wrong:['Emuna','emunah','emuna']},
+{correct:'Bitachon',wrong:['bitachon']},
 {correct:'G-d',wrong:['God','G-D','god']},
 {correct:'G-dly',wrong:['Godly','godly']},
 {correct:'G-dliness',wrong:['Godliness','godliness']}
@@ -701,7 +749,15 @@ function loadRules(){
       const p=JSON.parse(saved);
       if(p.tagDesc)rules.tagDesc=p.tagDesc;
       if(!rules.tagDesc.spelling)rules.tagDesc.spelling=DEFAULT_RULES.tagDesc.spelling;
-      if(p.consistency)rules.consistency=p.consistency;
+      if(p.consistency){
+        rules.consistency=p.consistency;
+        // Migration: detect old Ashkenazi transliteration list and replace with Sephardic defaults
+        const tl=rules.consistency.transliteration||[];
+        const hasOldAshkenazi=tl.some(t=>t.correct==='Mezuzos'||t.correct==='Shabbos'||t.correct==='Simchas Torah'||t.correct==='Shlichus'||t.correct==='Chassidus'||t.correct==='Teshuvah'||t.correct==='Mitzvos');
+        if(hasOldAshkenazi){
+          rules.consistency.transliteration=JSON.parse(JSON.stringify(DEFAULT_RULES.consistency.transliteration));
+        }
+      }
       if(p.segOrder)rules.segOrder=p.segOrder;
       if(p.typeMap)rules.typeMap=p.typeMap;
       if(p.sectionOrder)rules.sectionOrder=p.sectionOrder;
@@ -947,16 +1003,27 @@ async function doSyncToSheet(){
       updatedBy:S.user?.name||'unknown'
     };
     const json=JSON.stringify(data);
-    // Split into chunks of 40000 chars to stay under cell limit
-    const CHUNK=40000;
+    // Split into chunks of 48000 chars (stays under Google Sheets 50KB cell limit)
+    const CHUNK=48000;
+    const MAX_CHUNKS=9995; // Up to ~480MB of JSON capacity (9995 × 48KB)
+    const WARN_AT=Math.floor(MAX_CHUNKS*0.7); // Warn at 70% full so we have time to react
     const chunks=[];
     for(let i=0;i<json.length;i+=CHUNK)chunks.push(json.slice(i,i+CHUNK));
-    if(chunks.length>495){console.error('Shared data too large!',json.length,'chars');toast('Data too large to sync — contact admin','error');_syncPending=false;return}
+    if(chunks.length>MAX_CHUNKS){
+      console.error('Shared data too large!',json.length,'chars, '+chunks.length+' chunks');
+      toast('Data too large to sync — contact admin','error');
+      _syncPending=false;
+      return;
+    }
+    if(chunks.length>WARN_AT){
+      console.warn('Shared data approaching limit:',chunks.length,'of',MAX_CHUNKS,'chunks used');
+      toast(`Warning: shared data at ${Math.round(chunks.length/MAX_CHUNKS*100)}% capacity`,'warn');
+    }
     const rows=chunks.map((c,i)=>[i===0?'CHUNKS:'+chunks.length+'|'+c:c]);
-    // Clear old data first
+    // Clear old data first (wide range to catch any legacy rows from older versions)
     await gapi.client.sheets.spreadsheets.values.clear({
       spreadsheetId:S.sheetId,
-      range:`'${SHARED_TAB}'!A2:A500`
+      range:`'${SHARED_TAB}'!A2:A${MAX_CHUNKS+5}`
     });
     await gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId:S.sheetId,
@@ -965,7 +1032,7 @@ async function doSyncToSheet(){
       resource:{values:rows}
     });
     _lastSyncTime=Date.now();
-    console.log(`Synced shared data: ${json.length} chars in ${chunks.length} chunk(s)`);
+    console.log(`Synced shared data: ${json.length} chars in ${chunks.length} chunk(s) (${Math.round(chunks.length/MAX_CHUNKS*100)}% of capacity)`);
   }catch(e){console.warn('Sync to sheet failed:',e)}
   _syncPending=false;
 }
@@ -976,7 +1043,7 @@ async function loadSharedDataFromSheet(){
   try{
     const r=await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId:S.sheetId,
-      range:`'${SHARED_TAB}'!A2:A500`
+      range:`'${SHARED_TAB}'!A2:A10000`
     });
     const rows=r.result.values||[];
     if(!rows.length)return;
@@ -999,7 +1066,15 @@ async function loadSharedDataFromSheet(){
     
     if(!json)return;
     const data=JSON.parse(json);
-    if(data.reviewData)S.reviewData=data.reviewData;
+    if(data.reviewData){
+      S.reviewData=data.reviewData;
+      // Migrate: cap any deniedHistory that grew before the cap was added (reclaim space)
+      Object.values(S.reviewData).forEach(rv=>{
+        if(rv&&rv.deniedHistory&&rv.deniedHistory.length>5){
+          rv.deniedHistory=rv.deniedHistory.slice(-5);
+        }
+      });
+    }
     if(data.bookmarks_by_user){
       S._allBookmarks=data.bookmarks_by_user;
       const userKey=S.user?.email||S.user?.name||'default';
@@ -1046,7 +1121,17 @@ async function loadSharedDataFromSheet(){
         RULES.tagDesc.tightenExamples=DEFAULT_RULES.tagDesc.tightenExamples;
         console.log('Auto-upgraded audit rules to paired examples format');
       }
-      if(data.rules.consistency)RULES.consistency=data.rules.consistency;
+      if(data.rules.consistency){
+        RULES.consistency=data.rules.consistency;
+        // Migration: detect old Ashkenazi-style transliteration list and replace with Sephardic defaults
+        // Signal: old list had "Mezuzos", "Shabbos", "Simchas Torah" as canonical. New has "Mezuzot", "Shabbat", "Simchat Torah".
+        const transList=RULES.consistency.transliteration||[];
+        const hasOldAshkenazi=transList.some(t=>t.correct==='Mezuzos'||t.correct==='Shabbos'||t.correct==='Simchas Torah'||t.correct==='Shlichus'||t.correct==='Chassidus'||t.correct==='Teshuvah'||t.correct==='Mitzvos');
+        if(hasOldAshkenazi){
+          RULES.consistency.transliteration=JSON.parse(JSON.stringify(DEFAULT_RULES.consistency.transliteration));
+          console.log('Auto-migrated transliteration list from Ashkenazi to Sephardic style');
+        }
+      }
       if(data.rules.segOrder)RULES.segOrder=data.rules.segOrder;
       if(data.rules.typeMap)RULES.typeMap=data.rules.typeMap;
       if(data.rules.sectionOrder)RULES.sectionOrder=data.rules.sectionOrder;
@@ -2857,10 +2942,6 @@ function render(force=true){
   h+=rSidebar();
   const isIdx=S.view==='index';
   h+=`<div class="main"><div class="main-content">`;
-  // Global floating back button (fixed top-left of main content)
-  if(S.viewHistory&&S.viewHistory.length){
-    h+=`<button class="global-back-btn" id="global-back" title="Go back to previous view">← Back</button>`;
-  }
   h+=`<div class="content${isIdx?' content-index':''}">`;
   if(S.view==='dashboard')h+=rDash();
   else if(S.view==='book')h+=rBook();
@@ -3141,6 +3222,26 @@ function updateAuditFloat(){
   render();
 }
 
+// Inline back button for page headers. Returns '' if no history, else the button HTML.
+// Includes a tooltip with the actual destination name.
+function rBackBtn(){
+  if(!S.viewHistory||!S.viewHistory.length)return '';
+  const prev=S.viewHistory[S.viewHistory.length-1];
+  let destLabel='previous view';
+  if(prev.view==='book'){
+    const scope=prev.bookScope||'all';
+    destLabel=scope==='all'?'Book View (Full Index)':`Book View (${scope})`;
+  }else if(prev.view==='dashboard')destLabel='Dashboard';
+  else if(prev.view==='index')destLabel='Index Preview';
+  else if(prev.view==='notes')destLabel='Notes';
+  else if(prev.view==='settings')destLabel='AI Audit Rules';
+  else if(prev.view==='auditor')destLabel='Auditor';
+  else if(prev.view==='review')destLabel='Review Queue';
+  else if(prev.view==='consistency')destLabel='Consistency Check';
+  else if(prev.view)destLabel=prev.view;
+  return `<button class="page-back-btn" id="page-back" title="Back to ${esc(destLabel)}">← Back</button>`;
+}
+
 function rSidebar(){
   let h='<div class="sidebar">';
   // Logo + title
@@ -3245,7 +3346,7 @@ function rBook(){
   const scope=S.bookScope||'all'; // 'all' or a specific section name
   const sections=scope==='all'?RULES.sectionOrder:[scope];
   const title=scope==='all'?'Full Index':scope;
-  let h=`<div class="page-hd"><h1>📖 ${esc(title)}</h1><p>Book View — read-only. Click ✎ on any entry to edit. Use "Download as PDF" to save or print.</p><div class="page-hd-actions"><button class="btn btn-sm" id="book-download-pdf" title="Open print dialog — choose 'Save as PDF'">📄 Download as PDF</button><button class="btn btn-gold" data-nav="dashboard">← Back to Dashboard</button></div></div>`;
+  let h=`<div class="page-hd">${rBackBtn()}<h1>📖 ${esc(title)}</h1><p>Book View — read-only. Click ✎ on any entry to edit. Use "Download as PDF" to save or print.</p><div class="page-hd-actions"><button class="btn btn-sm" id="book-download-pdf" title="Open print dialog — choose 'Save as PDF'">📄 Download as PDF</button></div></div>`;
   h+='<div class="book-view"><div class="book-page">';
 
   sections.forEach(section=>{
@@ -3308,7 +3409,7 @@ function rBook(){
 function rDash(){
   if(!S.indexData)return'<div class="pad" style="color:var(--tx-3)">Loading index data…</div>';
   const ix=S.indexData;
-  let h='<div class="page-hd"><h1>Dashboard</h1></div><div class="pad">';
+  let h='<div class="page-hd">'+rBackBtn()+'<h1>Dashboard</h1></div><div class="pad">';
   
   // Overview cards
   const pendingCount=Object.values(S.reviewData).filter(rv=>rv.status==='pending'&&rv.suggestion).length;
@@ -3470,6 +3571,9 @@ function rIndex(){
   let sectionsToShow=S.idxActiveSection==='all'?RULES.sectionOrder:[S.idxActiveSection];
 
   let h='<div class="idx-wrap">';
+  // Back button (only if history exists)
+  const backBtn=rBackBtn();
+  if(backBtn)h+='<div style="padding:8px 16px 0">'+backBtn+'</div>';
   // Clean toolbar
   h+='<div class="idx-toolbar">';
   // Search
@@ -3500,7 +3604,6 @@ function rIndex(){
   h+=`<div class="tb-layout-btn ${S.idxLayout==='two'?'active':''}" data-idxlayout="two" title="Two columns">❘❘</div>`;
   h+=`</div>`;
   // Sync button (combines sync + rebuild)
-  h+=`<button class="btn btn-sm btn-icon" id="nav-back" title="Go back" ${S.viewHistory.length?'':'disabled'} style="${S.viewHistory.length?'':'opacity:0.3'}">←</button>`;
   h+=`<button class="btn btn-sm btn-icon" id="idx-undo" title="Undo last action (Ctrl+Z)" ${S.undoStack.length?'':'disabled'} style="${S.undoStack.length?'':'opacity:0.3'}">↩</button>`;
   h+=`<button class="btn btn-sm btn-icon" id="idx-sync" title="Sync latest data">⟳</button>`;
   h+='</div>';
@@ -3758,7 +3861,7 @@ function rSheet(){
 function getProc(){let r=S.rows.map((d,i)=>({d,i}));if(S.search.trim()){const q=S.search.toLowerCase();r=r.filter(x=>x.d.some(c=>c&&c.toString().toLowerCase().includes(q)))}if(S.sortCol!==null){const c=S.sortCol,dir=S.sortDir;r.sort((a,b)=>{const va=(a.d[c]||'').toString(),vb=(b.d[c]||'').toString(),na=parseFloat(va),nb=parseFloat(vb);if(!isNaN(na)&&!isNaN(nb))return dir==='asc'?na-nb:nb-na;return dir==='asc'?va.localeCompare(vb):vb.localeCompare(va)})}return r}
 
 function rAuditor(){
-  let h='<div class="page-hd"><h1>AI Tag Description Auditor</h1><p>Check descriptions against your rules — results appear inline in Index Preview</p></div><div class="pad">';
+  let h='<div class="page-hd">'+rBackBtn()+'<h1>AI Tag Description Auditor</h1><p>Check descriptions against your rules — results appear inline in Index Preview</p></div><div class="pad">';
   if(!S.indexData)return h+'<p>Load data first.</p></div>';
   const ix=S.indexData;
   const pendingCount=Object.values(S.reviewData).filter(rv=>rv.status==='pending'&&rv.suggestion).length;
@@ -3814,7 +3917,7 @@ function rAuditor(){
 function rReview(){
   const pendingItems=Object.entries(S.reviewData).filter(([k,rv])=>rv.status==='pending'&&rv.suggestion).map(([k,rv])=>({key:k,...rv,parts:k.split('|')}));
   const deniedItems=Object.entries(S.reviewData).filter(([k,rv])=>rv.deniedHistory&&rv.deniedHistory.length>0).map(([k,rv])=>({key:k,...rv,parts:k.split('|')}));
-  let h=`<div class="page-hd"><h1>Review Queue</h1><p>${pendingItems.length} pending suggestions · Suggestions also appear inline in Index Preview</p><div class="page-hd-actions"><button class="btn btn-purple" data-nav="index" onclick="S.reviewFilter='pending';render()">View in Index Preview →</button></div></div><div class="pad">`;
+  let h=`<div class="page-hd">${rBackBtn()}<h1>Review Queue</h1><p>${pendingItems.length} pending suggestions · Suggestions also appear inline in Index Preview</p><div class="page-hd-actions"><button class="btn btn-purple" data-nav="index" onclick="S.reviewFilter='pending';render()">View in Index Preview →</button></div></div><div class="pad">`;
   if(!pendingItems.length){
     h+=`<div style="text-align:center;padding:50px;color:var(--tx-3)"><div style="font-size:40px;margin-bottom:10px">✓</div><div style="font-size:15px;font-weight:600;color:var(--tx-2)">All clear</div><button class="btn btn-purple" data-nav="auditor" style="margin-top:14px">Run Audit</button></div>`;
   }else{
@@ -3847,7 +3950,7 @@ function rReview(){
 }
 
 function rSettings(){
-  let h='<div class="page-hd"><h1>AI Audit Rules</h1><p>Configure how the AI audits tag descriptions. Changes are shared with all team members.</p></div><div class="pad">';
+  let h='<div class="page-hd">'+rBackBtn()+'<h1>AI Audit Rules</h1><p>Configure how the AI audits tag descriptions. Changes are shared with all team members.</p></div><div class="pad">';
 
   // Test Audit
   h+='<div class="card" style="margin-bottom:24px;border:2px solid var(--gold-bd)">';
@@ -4045,34 +4148,8 @@ function bindAll(){
     if(newView==='index'&&S.reviewFilter==='bookmarked'){S.reviewFilter='all'}
     render();
   });
-  // Back button — global + existing
-  function doBack(){
-    if(!S.viewHistory.length)return;
-    const prev=S.viewHistory.pop();
-    S.view=prev.view;
-    S.idxActiveSection=prev.section||'all';
-    S.idxPage=prev.page||0;
-    S.idxSearch=prev.search||'';
-    S.reviewFilter=prev.filter||'all';
-    S.bookScope=prev.bookScope||S.bookScope;
-    S.clipPanel=null;
-    S.notifOpen=false;
-    render();
-    // Restore scroll if we stored one
-    if(prev.scrollTop!=null){
-      setTimeout(()=>{
-        const mc=$('.main-content');
-        if(mc)mc.scrollTop=prev.scrollTop;
-        // Also restore highlight target if specified
-        if(prev.scrollToEntry){
-          const el=document.querySelector(`[data-entry="${CSS.escape(prev.scrollToEntry)}"]`);
-          if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('jump-highlight');setTimeout(()=>el.classList.remove('jump-highlight'),1500)}
-        }
-      },80);
-    }
-  }
-  on('#nav-back','click',doBack);
-  on('#global-back','click',doBack);
+  // Back button wiring
+  on('#page-back','click',doBack);
   // Book View — Download as PDF (uses browser print → Save as PDF)
   on('#book-download-pdf','click',()=>{
     // Set document title to a nice filename for the PDF
@@ -5206,7 +5283,36 @@ function handleKeyShortcut(e){
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
   // Ctrl+Z / Cmd+Z undo
   if(e.key==='z'&&(e.ctrlKey||e.metaKey)){e.preventDefault();doUndo();return}
+  // Ctrl+[ / Cmd+[ or Alt+← go back
+  if((e.key==='['&&(e.ctrlKey||e.metaKey))||(e.key==='ArrowLeft'&&e.altKey)){
+    if(S.viewHistory&&S.viewHistory.length){e.preventDefault();doBack();return}
+  }
   if(e.key==='r'&&!e.ctrlKey&&!e.metaKey){S.reviewMode=!S.reviewMode;render();return}
+}
+
+// Go back one step in view history. Restores view, section, page, search, filter, bookScope, and scroll/highlight.
+function doBack(){
+  if(!S.viewHistory||!S.viewHistory.length)return;
+  const prev=S.viewHistory.pop();
+  S.view=prev.view;
+  S.idxActiveSection=prev.section||'all';
+  S.idxPage=prev.page||0;
+  S.idxSearch=prev.search||'';
+  S.reviewFilter=prev.filter||'all';
+  S.bookScope=prev.bookScope||S.bookScope;
+  S.clipPanel=null;
+  S.notifOpen=false;
+  render();
+  if(prev.scrollTop!=null){
+    setTimeout(()=>{
+      const mc=$('.main-content');
+      if(mc)mc.scrollTop=prev.scrollTop;
+      if(prev.scrollToEntry){
+        const el=document.querySelector(`[data-entry="${CSS.escape(prev.scrollToEntry)}"]`);
+        if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('jump-highlight');setTimeout(()=>el.classList.remove('jump-highlight'),1500)}
+      }
+    },80);
+  }
 }
 
 // Audit a single description
@@ -5774,8 +5880,8 @@ ${batch.map((d,j)=>`[${j}] ${d.section} > "${d.entry}": "${d.desc}"`).join('\n')
 }
 
 function rNotes(){
-  let h='<div class="page-hd"><h1>💬 All Notes</h1><p>Comments across the index</p>';
-  h+='<div class="page-hd-actions"><button class="btn btn-gold" data-nav="index">← Back to Index</button></div></div><div class="pad">';
+  let h='<div class="page-hd">'+rBackBtn()+'<h1>💬 All Notes</h1><p>Comments across the index</p>';
+  h+='</div><div class="pad">';
   
   const noteKeys=Object.keys(S.descNotes||{}).filter(k=>{const n=S.descNotes[k];return n&&n.thread&&n.thread.length>0&&!n.resolved});
   const resolvedKeys=Object.keys(S.descNotes||{}).filter(k=>{const n=S.descNotes[k];return n&&n.thread&&n.thread.length>0&&n.resolved});
@@ -5866,10 +5972,9 @@ function rNotes(){
 }
 
 function rConsistency(){
-  let h='<div class="page-hd"><h1>Consistency Check Results</h1>';
+  let h='<div class="page-hd">'+rBackBtn()+'<h1>Consistency Check Results</h1>';
   h+=`<p>${(S.consistencyResults||[]).length} issues found across the index</p>`;
   h+='<div class="page-hd-actions">';
-  h+=`<button class="btn btn-gold" data-nav="index">← Back to Index</button>`;
   h+=`<button class="btn btn-purple" id="rerun-consistency">⟳ Run Again</button>`;
   h+='</div></div><div class="pad">';
   
