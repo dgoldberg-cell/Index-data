@@ -632,20 +632,19 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
   /* Hide everything that's chrome or UI */
   body > *{display:none !important}
   body > #app, body > div[id]{display:block !important}
-  .sidebar,.page-back-btn,.page-hd-actions,.book-entry-edit,.book-comment,#clip-panel-overlay,.notif-panel,.ai-fab,#ai-fab,.toast-stack,.confirm-overlay,.note-popup-overlay,.transcript-popup,.rename-input,.idx-rename-input,.idx-search-modes,#user-filter-clear,.book-section-pills,.focus-wrap{display:none !important}
+  .sidebar,.page-hd,.page-back-btn,.page-hd-actions,.book-entry-edit,.book-comment,#clip-panel-overlay,.notif-panel,.ai-fab,#ai-fab,.toast-stack,.toasts,.toast,.confirm-overlay,.note-popup-overlay,.transcript-popup,.rename-input,.idx-rename-input,.idx-search-modes,#user-filter-clear,.book-section-pills,.focus-wrap{display:none !important}
 
-  /* Page containers */
-  .main, .main-content, .content{display:block !important;overflow:visible !important;width:100% !important;max-width:none !important;padding:0 !important;margin:0 !important}
-  .book-view{box-shadow:none !important;max-width:none !important;margin:0 !important;padding:0 !important;border-radius:0 !important;background:#fff !important;display:block !important}
+  /* Page containers — must allow natural flow across pages */
+  html,body{height:auto !important;overflow:visible !important}
+  .main, .main-content, .content{display:block !important;overflow:visible !important;width:100% !important;max-width:none !important;padding:0 !important;margin:0 !important;height:auto !important}
+  .book-view{box-shadow:none !important;max-width:none !important;margin:0 !important;padding:0 !important;border-radius:0 !important;background:#fff !important;display:block !important;height:auto !important;overflow:visible !important}
   .page-hd{border:none !important;padding:0 0 8px !important;margin:0 0 4px !important;background:none !important;display:block !important}
   .page-hd h1{font-size:22px !important;text-align:center !important;font-weight:700;margin:0}
   .page-hd p,.page-hd>div>div:first-child p{display:none !important}
   .page-hd>div{display:block !important}
 
-  /* Two-column book layout with proper page-break control.
-     Using column-fill:balance gives predictable column behavior across pages.
-     NOTE: column-span:all with break-before:page causes issues in some browsers,
-     so we rely on natural page flow rather than forced page breaks on section headers. */
+  /* Two-column book layout that flows naturally across pages.
+     column-fill:auto fills column 1, then column 2, then page 2 col 1, etc. */
   .book-page{
     display:block !important;
     width:100% !important;
@@ -658,9 +657,12 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
     column-rule:1px solid #ccc !important;
     -webkit-column-rule:1px solid #ccc !important;
     -moz-column-rule:1px solid #ccc !important;
-    column-fill:balance !important;
-    -webkit-column-fill:balance !important;
-    -moz-column-fill:balance !important;
+    column-fill:auto !important;
+    -webkit-column-fill:auto !important;
+    -moz-column-fill:auto !important;
+    /* Critical: without explicit height, column-fill:auto with balance fallback
+       can cause single-page compression. Make it fill the page height. */
+    height:auto !important;
   }
 
   /* Section headings — full-width span at top of each section */
@@ -4922,10 +4924,9 @@ function bindAll(){
     const title=scope==='all'?'JEM Index - Full':('JEM Index - '+scope);
     const oldTitle=document.title;
     document.title=title;
-    toast('In the print dialog: set Margins to "Default" (not "None") for proper book margins','info');
-    setTimeout(()=>{window.print()},400);
+    window.print();
     // Restore title after print dialog closes
-    setTimeout(()=>{document.title=oldTitle},1500);
+    setTimeout(()=>{document.title=oldTitle},1000);
   });
   on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
   on('#ai-fab','click',()=>{S.aiOpen=true;render()});
