@@ -41,6 +41,11 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .nav-item:hover{background:var(--bg-1);color:var(--tx-2)}
 .nav-item.active{background:var(--gold-bg);color:var(--gold);border:1px solid rgba(140,122,80,.18);font-weight:600}
 .nav-item .badge{margin-left:auto;background:var(--purple-bg);color:var(--purple);font-size:10px;font-weight:600;padding:1px 7px;border-radius:10px}
+.ws-sub{margin:2px 0 6px 12px;padding-left:8px;border-left:1px solid var(--border)}
+.ws-sub-item{padding:5px 9px;font-size:11px;color:var(--tx-3);cursor:pointer;border-radius:4px;transition:all .1s;display:flex;justify-content:space-between;align-items:center}
+.ws-sub-item:hover{background:var(--bg-1);color:var(--tx-2)}
+.ws-sub-item.active{background:var(--gold-bg);color:var(--gold);font-weight:600}
+.nav-caret:hover{color:var(--gold) !important}
 .nav-item svg{width:16px;height:16px;flex-shrink:0;opacity:.6}
 .nav-item.active svg{opacity:1}
 .sidebar-tabs{padding:6px 8px;border-top:1px solid var(--border);max-height:140px;overflow-y:auto}
@@ -99,6 +104,9 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-search:focus-within{border-color:var(--gold)}
 .idx-search input{background:none;border:none;outline:none;color:var(--tx-1);font-size:12px;width:100%}
 .idx-search input::placeholder{color:var(--tx-4)}
+.idx-sm-pill{background:var(--bg-1);color:var(--tx-3);border:1px solid var(--border);border-radius:10px;padding:2px 8px;cursor:pointer;font-size:9px;font-weight:500;transition:all .1s;font-family:var(--font);white-space:nowrap}
+.idx-sm-pill:hover{background:var(--bg-0);color:var(--tx-2)}
+.idx-sm-pill.active{background:var(--gold);color:#fff;border-color:var(--gold)}
 /* Toolbar dropdown button */
 .tb-dd{position:relative}
 .tb-dd-btn{display:flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-white);color:var(--tx-2);font-size:11px;font-weight:500;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all .1s;height:28px}
@@ -215,6 +223,13 @@ body.clip-panel-open .idx-cols{gap:16px}
 .book-comment{opacity:0;background:none;border:none;cursor:pointer;font-size:10px;padding:0 2px;transition:opacity .1s}
 .book-row:hover .book-comment{opacity:0.6}
 .book-comment:hover{opacity:1}
+.book-edit-desc{color:#8a6d2e !important}
+.book-edit-desc:hover{color:var(--gold) !important}
+.book-pill{background:var(--bg-white);color:var(--tx-2);border:1px solid var(--border);border-radius:14px;padding:5px 11px;cursor:pointer;font-size:11px;font-weight:500;font-family:var(--font);transition:all .1s;display:inline-flex;align-items:center;gap:5px}
+.book-pill:hover{background:var(--bg-1);border-color:var(--tx-4)}
+.book-pill.active{background:var(--gold);color:#fff;border-color:var(--gold);font-weight:600}
+.book-pill-cnt{font-size:9px;opacity:.75;font-weight:400}
+.book-pill.active .book-pill-cnt{opacity:1}
 /* Relevance shading inside book */
 .book-row[data-rel="4"] .book-desc,.book-row[data-rel="4"] .book-ref{opacity:1}
 .book-row[data-rel="3"] .book-desc,.book-row[data-rel="3"] .book-ref{opacity:0.82}
@@ -552,25 +567,114 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 /* Print / Save-as-PDF styles — only shows Book View content, hides all chrome */
 @media print{
   /* Hide everything by default */
+/* Print / Save-as-PDF styles — only shows Book View content with proper page breaks */
+@media print{
+  /* Hide everything by default */
   body > *{display:none !important}
-  /* Keep only the main app + book content */
   body > #app, body > div[id]{display:block !important}
-  .sidebar,.page-back-btn,.page-hd-actions,.book-entry-edit,.book-comment,#clip-panel-overlay,.notif-panel,.ai-fab,#ai-fab,.toast-stack,.confirm-overlay,.note-popup-overlay,.transcript-popup,.rename-input,.idx-rename-input{display:none !important}
+  .sidebar,.page-back-btn,.page-hd-actions,.book-entry-edit,.book-comment,#clip-panel-overlay,.notif-panel,.ai-fab,#ai-fab,.toast-stack,.confirm-overlay,.note-popup-overlay,.transcript-popup,.rename-input,.idx-rename-input,.idx-search-modes,#user-filter-clear,.book-section-pills{display:none !important}
   /* Let book view fill the page without shadows or max-widths */
   .main, .main-content, .content{display:block !important;overflow:visible !important;width:100% !important;max-width:none !important;padding:0 !important;margin:0 !important}
-  .book-view{box-shadow:none !important;max-width:none !important;margin:0 !important;padding:18px 24px !important;border-radius:0 !important}
-  .page-hd{border:none !important;padding:0 0 8px !important;margin:0 !important;background:none !important}
-  .page-hd h1{font-size:22px !important;text-align:center !important}
+  .book-view{box-shadow:none !important;max-width:none !important;margin:0 !important;padding:0 !important;border-radius:0 !important;background:#fff !important}
+  .page-hd{border:none !important;padding:0 0 12px !important;margin:0 !important;background:none !important}
+  .page-hd h1{font-size:24px !important;text-align:center !important;font-weight:700;margin-bottom:4px}
   .page-hd p{display:none !important}
-  /* Keep the book's two-column flow */
-  .book-page{column-count:2 !important;column-gap:24px !important}
-  .book-section-hd{break-before:page;column-span:all}
-  .book-section-hd:first-child{break-before:avoid}
-  .book-entry{break-inside:avoid}
-  /* Turn hyperlinks into plain text on paper (or keep color — your choice) */
-  .book-ref{color:#1a1a1a !important;text-decoration:none !important}
-  /* Print page setup */
-  @page{size:letter;margin:0.6in 0.5in}
+
+  /* Two-column book layout with strict break control */
+  .book-page{
+    column-count:2 !important;
+    column-gap:28px !important;
+    column-rule:1px solid #ddd !important;
+    column-fill:auto !important;
+  }
+
+  /* Section headings — start on a new page, span both columns */
+  .book-section-hd{
+    break-before:page !important;
+    page-break-before:always !important;
+    column-span:all !important;
+    -webkit-column-span:all !important;
+    font-size:18px !important;
+    text-align:center !important;
+    padding:10px 0 14px !important;
+    margin:0 0 10px !important;
+    border-top:2px solid #1a1a1a !important;
+    border-bottom:1px solid #999 !important;
+    font-weight:700 !important;
+    background:#fff !important;
+  }
+  .book-section-hd:first-child{
+    break-before:avoid !important;
+    page-break-before:avoid !important;
+  }
+
+  /* Each entry stays together — never split mid-entry */
+  .book-entry{
+    break-inside:avoid !important;
+    page-break-inside:avoid !important;
+    -webkit-column-break-inside:avoid !important;
+    margin-bottom:10px !important;
+    display:block !important;
+  }
+  .book-entry-head{
+    break-after:avoid !important;
+    page-break-after:avoid !important;
+    margin-bottom:3px !important;
+  }
+  .book-entry-name{font-weight:700 !important;font-size:13px !important}
+  .book-seg{
+    break-inside:avoid !important;
+    page-break-inside:avoid !important;
+    margin:2px 0 2px 12px !important;
+  }
+  .book-seg-label{
+    break-after:avoid !important;
+    page-break-after:avoid !important;
+    font-style:italic !important;
+    color:#555 !important;
+    font-size:9.5px !important;
+    text-transform:uppercase !important;
+    letter-spacing:0.4px !important;
+    margin:2px 0 1px !important;
+  }
+  .book-row{
+    break-inside:avoid !important;
+    page-break-inside:avoid !important;
+    font-size:11.5px !important;
+    line-height:1.45 !important;
+    padding:0 0 0 12px !important;
+    display:flex !important;
+    align-items:baseline !important;
+    gap:5px !important;
+  }
+  .book-desc{flex:1 1 auto !important}
+  .book-rel{font-size:9px !important;color:#777 !important;font-style:italic !important;white-space:nowrap}
+  /* Reference codes — black text, no underline on paper */
+  .book-ref{color:#1a1a1a !important;text-decoration:none !important;font-size:10.5px !important;white-space:nowrap}
+
+  /* Page setup — letter size with reasonable margins, page numbers in footer */
+  @page{
+    size:letter;
+    margin:0.7in 0.5in 0.6in 0.5in;
+    @bottom-center{
+      content:counter(page);
+      font-family:Georgia,serif;
+      font-size:10px;
+      color:#666;
+    }
+  }
+  /* Repeating page title header */
+  @page{
+    @top-center{
+      content:"JEM Index";
+      font-family:Georgia,serif;
+      font-size:9px;
+      color:#999;
+      letter-spacing:0.5px;
+    }
+  }
+  /* Avoid orphans/widows */
+  p,div{orphans:2;widows:2}
 }
 </style>
 </head>
@@ -788,7 +892,9 @@ activeTab:0,headers:[],rows:[],loading:false,
 view:'index',aiOpen:false,
 // Index
 indexData:null,
-idxSearch:'',idxNavMode:'tabs',idxLayout:'single',idxActiveSection:'all',idxActiveEntry:null,idxPage:0,
+idxSearch:'',idxSearchMode:'both',idxNavMode:'tabs',idxLayout:'single',idxActiveSection:'all',idxActiveEntry:null,idxPage:0,
+userWorkFilter:'', // Admin only: when set, filter entries to show only those touched by this user (email)
+sidebarWorkspaceOpen:false, // Workspace section dropdown expand/collapse
 idxBookmarks:JSON.parse(localStorage.getItem('jw_bm')||'{}'),
 idxNotes:JSON.parse(localStorage.getItem('jw_notes')||'{}'),
 editingDesc:null,
@@ -820,7 +926,6 @@ toolsOpen:false, // Toggle: show Tools section in sidebar
 tabsOpen:false, // Toggle: show Sheet Tabs in sidebar
 testEntry:'',testDesc:'',testSection:'Topics',testResult:null, // Test audit
 consistencyResults:null,consistencyRunning:false,consistencyProgress:0,consistencyTotal:0, // Consistency check
-timerRunning:false,timerStart:null,timerElapsed:0,timerInterval:null, // Work timer
 auditSelected:new Set(), // Set of "entryName|segType|rowIdx" keys selected for audit
 // Audit scope
 auditScope:'all', // 'all','sections','entries','visible','selected'
@@ -2433,15 +2538,16 @@ function filmRefForResult(r){
     const words=mainTitle.split(/\s+/).filter(w=>w.length>0);
     shortName=words.find(w=>!skipWords.has(w.toLowerCase()))||words[0]||'Film';
   }
-  // Detect volume number (e.g., "Vol 1", "Volume 2", or trailing digit)
+  // Detect volume number (e.g., "Vol 1", "Volume 2")
   let volPart='';
   const volMatch=rawTitle.match(/Vol(?:ume)?\.?\s*(\d+)/i);
   if(volMatch)volPart=' '+volMatch[1];
-  // Detect chapter
-  let chPart='';
+  // Detect chapter — use detected number if present, else placeholder "?" (TODO: pull real chapter order from JEM.tv)
+  let chNum='?';
   const chMatch=rawTitle.match(/Ch(?:apter)?\.?\s*(\d+)/i);
-  if(chMatch)chPart=' · Ch'+chMatch[1];
-  return shortName+volPart+chPart;
+  if(chMatch)chNum=chMatch[1];
+  // Always show Ch — placeholder reminds us the data needs to be filled in
+  return shortName+volPart+' · Ch'+chNum;
 }
 
 // Cache for tab maps to avoid re-reading on every action
@@ -2952,6 +3058,8 @@ function render(force=true){
   else if(S.view==='settings')h+=rSettings();
   else if(S.view==='consistency')h+=rConsistency();
   else if(S.view==='notes')h+=rNotes();
+  else if(S.view==='tools')h+=rTools();
+  else if(S.view==='team')h+=rTeam();
   h+='</div>';
   if(S.aiOpen)h+=rAI();
   h+='</div></div>';
@@ -3248,20 +3356,52 @@ function rSidebar(){
   h+=`<div class="sidebar-logo" style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 14px 6px"><img src="${JEM_LOGO}" alt="JEM" style="height:36px;width:auto;border-radius:4px"><div style="text-align:center">JEM Index<span>Workstation</span></div></div>`;
   h+=`<div class="sidebar-sheet">${esc(S.sheetMeta?.title||S.sheetId)}</div>`;
   h+='<div class="sidebar-nav">';
-  // Main views
-  [{id:'index',ic:IC.idx,l:'Index Preview'},{id:'dashboard',ic:IC.dash,l:'Dashboard'}].forEach(n=>{
-    h+=`<div class="nav-item ${S.view===n.id?'active':''}" data-nav="${n.id}">${n.ic}<span>${n.l}</span></div>`;
-  });
 
-  // Notes — nav item with count
+  const isAdminUser=ADMIN_EMAILS.includes(S.user?.email?.toLowerCase());
+
+  // ── Workspace (was: Index Preview) — with section dropdown ──
+  const isWorkspace=S.view==='index';
+  const workspaceOpen=isWorkspace||S.sidebarWorkspaceOpen;
+  h+=`<div class="nav-item ${isWorkspace?'active':''}" data-nav="index">${IC.idx}<span>Workspace</span><span class="nav-caret" data-toggle-workspace style="margin-left:auto;font-size:10px;color:var(--tx-4);cursor:pointer;padding:0 4px" title="Toggle sections">${workspaceOpen?'▾':'▸'}</span></div>`;
+  if(workspaceOpen&&S.indexData){
+    h+=`<div class="ws-sub" style="margin-bottom:6px">`;
+    const allActive=isWorkspace&&S.idxActiveSection==='all';
+    h+=`<div class="ws-sub-item ${allActive?'active':''}" data-idxsec-nav="all">All Sections</div>`;
+    RULES.sectionOrder.forEach(sec=>{
+      const cnt=(S.indexData.sections[sec]||[]).length;
+      if(!cnt)return;
+      const active=isWorkspace&&S.idxActiveSection===sec;
+      h+=`<div class="ws-sub-item ${active?'active':''}" data-idxsec-nav="${esc(sec)}">${esc(sec)} <span style="color:var(--tx-4);font-size:9px;font-weight:400">${cnt}</span></div>`;
+    });
+    h+=`</div>`;
+  }
+
+  // ── Dashboard ──
+  h+=`<div class="nav-item ${S.view==='dashboard'?'active':''}" data-nav="dashboard">${IC.dash}<span>Dashboard</span></div>`;
+
+  // ── Book View ──
+  h+=`<div class="nav-item ${S.view==='book'?'active':''}" data-nav="book"><span style="font-size:14px">📖</span><span>Book View</span></div>`;
+
+  // ── Tools (Audit + Consistency + Index Tabs) ──
+  h+=`<div class="nav-item ${S.view==='tools'?'active':''}" data-nav="tools"><span style="font-size:14px">🛠️</span><span>Tools</span></div>`;
+
+  // ── Notes ──
   const noteKeys=Object.keys(S.descNotes||{}).filter(k=>{const n=S.descNotes[k];return n&&n.thread&&n.thread.length>0&&!n.resolved});
   if(noteKeys.length){
     h+=`<div class="nav-item ${S.view==='notes'?'active':''}" data-nav="notes"><span style="color:var(--amber)">💬</span><span>Notes</span><span class="badge" style="background:var(--amber);color:#fff">${noteKeys.length}</span></div>`;
+  }else{
+    h+=`<div class="nav-item ${S.view==='notes'?'active':''}" data-nav="notes"><span style="color:var(--tx-4)">💬</span><span>Notes</span></div>`;
   }
 
+  // ── Team (admin only) ──
+  if(isAdminUser){
+    h+=`<div class="nav-item ${S.view==='team'?'active':''}" data-nav="team"><span style="font-size:14px">👥</span><span>Team</span></div>`;
+  }
+
+  // ── AI Audit Rules ──
   h+=`<div class="nav-item ${S.view==='settings'?'active':''}" data-nav="settings">${IC.settings}<span>AI Audit Rules</span></div>`;
 
-  // Bookmarks
+  // ── Bookmarks ──
   const bmNames=Object.keys(S.idxBookmarks).filter(k=>S.idxBookmarks[k]);
   if(bmNames.length){
     h+=`<div class="nav-sec" style="margin-top:14px;cursor:pointer" id="bm-showall">Bookmarks <span style="font-size:8px;font-weight:400;letter-spacing:0">(${bmNames.length})</span></div>`;
@@ -3271,7 +3411,7 @@ function rSidebar(){
     if(bmNames.length>20)h+=`<div style="padding:2px 11px;font-size:9px;color:var(--tx-4)">+${bmNames.length-20} more</div>`;
   }
 
-  // Sheet tabs — collapsible dropdown
+  // ── Sheet tabs (collapsible) ──
   if(S.sheetMeta?.tabs?.length){
     h+=`<div class="nav-sec" style="margin-top:14px;cursor:pointer" id="tabs-toggle">Sheet Tabs <span style="font-size:8px;color:var(--tx-4)">${S.tabsOpen?'▾':'▸'}</span></div>`;
     if(S.tabsOpen){
@@ -3281,15 +3421,6 @@ function rSidebar(){
     }
   }
 
-  h+='</div>';
-  // Timer widget
-  h+='<div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px">';
-  if(S.timerRunning){
-    h+=`<span id="timer-display" style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)">${formatTimer(S.timerElapsed)}</span>`;
-    h+=`<button class="btn btn-sm btn-red" id="timer-stop" style="font-size:10px;padding:2px 8px">Stop</button>`;
-  }else{
-    h+=`<button class="btn btn-sm btn-green" id="timer-start" style="font-size:10px;padding:2px 8px">⏱ Clock In</button>`;
-  }
   h+='</div>';
   if(S.user){
     const unread=getUnreadCount();
@@ -3308,6 +3439,7 @@ function rSidebar(){
 // ═══════════════════════════════════════════════════════════════
 
 // Relationship label defaults per segment type. Hide label if it matches the default; show [label] if it differs.
+// Section-agnostic fallback defaults (used when section-specific defaults aren't configured)
 const REL_DEFAULTS={
   'Addresses':'spoken about',
   'Timeless Moments':'seen in',
@@ -3317,19 +3449,30 @@ const REL_DEFAULTS={
   'Films':'interviewee'
 };
 
+// Normalizes underscore to space for comparison (data may use "spoken_about" or "spoken about")
+function normalizeRel(s){return(s||'').toString().trim().toLowerCase().replace(/_/g,' ')}
+
+// Look up the default relationship for a (section, segType) pair.
+// Tries section-specific defaults first (RULES.relDefaults[section][segType]), falls back to global.
+function getRelDefault(section,segType){
+  // Section-specific override
+  const sectionDefaults=RULES?.relDefaults?.[section];
+  if(sectionDefaults&&sectionDefaults[segType])return normalizeRel(sectionDefaults[segType]);
+  // Global fallback
+  return normalizeRel(REL_DEFAULTS[segType]);
+}
+
 // Should the relationship label be shown for this result?
 // Rules:
 //   - Nigunim section: show ONLY if rel is "spoken about"; otherwise hide
-//   - All other sections: show if rel differs from segment default
-// Normalizes underscore to space for comparison (data may use "spoken_about" or "spoken about")
-function normalizeRel(s){return(s||'').toString().trim().toLowerCase().replace(/_/g,' ')}
+//   - All other sections: hide if rel matches the section+segType default; show otherwise
 function shouldShowRel(r,section){
   const rel=normalizeRel(r.rel);
   if(!rel)return false;
   if(section==='Nigunim'){
     return rel==='spoken about';
   }
-  const def=normalizeRel(REL_DEFAULTS[r.segType]);
+  const def=getRelDefault(section,r.segType);
   return rel!==def;
 }
 
@@ -3346,7 +3489,29 @@ function rBook(){
   const scope=S.bookScope||'all'; // 'all' or a specific section name
   const sections=scope==='all'?RULES.sectionOrder:[scope];
   const title=scope==='all'?'Full Index':scope;
-  let h=`<div class="page-hd">${rBackBtn()}<h1>📖 ${esc(title)}</h1><p>Book View — read-only. Click ✎ on any entry to edit. Use "Download as PDF" to save or print.</p><div class="page-hd-actions"><button class="btn btn-sm" id="book-download-pdf" title="Open print dialog — choose 'Save as PDF'">📄 Download as PDF</button></div></div>`;
+
+  // Header bar with section pills + export buttons
+  let h=`<div class="page-hd" style="padding-bottom:10px">`;
+  h+=rBackBtn();
+  h+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">`;
+  h+=`<div style="flex:1;min-width:200px"><h1 style="margin-bottom:2px">📖 Book View</h1><p style="margin:0">Read the index as it will appear in print. Click ✎ on any entry or sub-entry to jump to the editor.</p></div>`;
+  h+=`<div style="display:flex;gap:6px;flex-shrink:0">`;
+  h+=`<button class="btn btn-sm" id="book-download-pdf" title="Open print dialog — choose 'Save as PDF'">📄 Download as PDF</button>`;
+  h+=`<button class="btn btn-sm" id="export-index" title="Export full index as standalone HTML" style="border-color:var(--green);color:var(--green)">📥 Export HTML</button>`;
+  h+=`</div>`;
+  h+=`</div>`;
+  // Section selector pills
+  h+=`<div class="book-section-pills" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:12px">`;
+  const totalCnt=Object.values(ix.sections).reduce((a,s)=>a+s.length,0);
+  h+=`<button class="book-pill ${scope==='all'?'active':''}" data-bookscope="all">Full Index <span class="book-pill-cnt">${totalCnt}</span></button>`;
+  RULES.sectionOrder.forEach(sec=>{
+    const cnt=(ix.sections[sec]||[]).length;
+    if(!cnt)return;
+    h+=`<button class="book-pill ${scope===sec?'active':''}" data-bookscope="${esc(sec)}">${esc(sec)} <span class="book-pill-cnt">${cnt}</span></button>`;
+  });
+  h+=`</div>`;
+  h+=`</div>`;
+  // Reader area
   h+='<div class="book-view"><div class="book-page">';
 
   sections.forEach(section=>{
@@ -3392,7 +3557,9 @@ function rBook(){
           if(refText){
             h+=`<a class="book-ref" href="${vidUrl}" target="_blank" title="${esc(r.clipName||'')}">${esc(refText)}</a>`;
           }
-          // Comment bounce — click to jump to editor at this exact spot
+          // Edit description — jump to editor and open inline editor
+          h+=`<button class="book-comment book-edit-desc" data-bookdescedit="${esc(e.name)}|${esc(r.segType)}|${r.rowIdx}" title="Edit this description">✎</button>`;
+          // Comment bounce — click to jump to editor and open note popup
           h+=`<button class="book-comment" data-bookjump="${esc(e.name)}|${esc(r.segType)}|${r.rowIdx}" title="Jump to editor to add a note">💬</button>`;
           h+=`</div>`;
         });
@@ -3438,69 +3605,6 @@ function rDash(){
   h+=`<div style="border-top:1px solid var(--border);padding-top:5px;margin-top:5px;display:flex;justify-content:space-between;font-size:11px;font-weight:600"><span>Total</span><span>${grandReviewed}/${grandTotal} (${grandPct}%)</span></div>`;
   h+='</div>';
   
-  // AI Tools
-  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">AI Tools</h4>';
-  h+='<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">';
-  h+='<span style="font-size:11px;color:var(--tx-3)">Audit section:</span>';
-  h+=`<select id="audit-sec-select" style="border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px;font-family:var(--font);background:var(--bg-white)">`;
-  RULES.sectionOrder.forEach(sec=>{h+=`<option value="${sec}">${sec}</option>`});
-  h+=`</select>`;
-  h+=`<button class="btn btn-sm btn-purple" id="audit-sec-run" style="font-size:10px">${IC.audit} Run Audit</button>`;
-  h+='</div>';
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
-  h+=`<button class="btn btn-sm" id="run-consistency" style="font-size:10px;border-color:var(--blue);color:var(--blue)">🔍 Consistency Check</button>`;
-  h+=`<button class="btn btn-sm" data-nav="settings" style="font-size:10px">Test a Description →</button>`;
-  h+='</div></div>';
-
-  // Book View (read-only reader's view styled like the printed book)
-  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">📖 Book View</h4>';
-  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Read the index as it will appear in print. Read-only; click ✎ on any entry to jump to the editor.</p>';
-  h+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
-  h+=`<button class="btn btn-sm btn-gold" data-bookview="all" style="font-size:10px">Full Index</button>`;
-  RULES.sectionOrder.forEach(sec=>{
-    const cnt=(ix.sections[sec]||[]).length;
-    if(cnt>0)h+=`<button class="btn btn-sm" data-bookview="${esc(sec)}" style="font-size:10px">${esc(sec)} <span style="color:var(--tx-4)">(${cnt})</span></button>`;
-  });
-  h+='</div></div>';
-  
-  // Index Tabs
-  const existingTabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
-  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">Index Tabs</h4>';
-  h+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">';
-  RULES.sectionOrder.forEach(sec=>{
-    const tabName='Index - '+sec;
-    const exists=existingTabs.includes(tabName);
-    const cnt=(ix.sections[sec]||[]).length;
-    if(exists){
-      h+=`<button class="btn btn-sm" data-gentab="${sec}" style="font-size:9px;opacity:.7">${sec} ✓</button>`;
-    }else{
-      h+=`<button class="btn btn-sm btn-gold" data-gentab="${sec}" style="font-size:9px">${sec} (${cnt})</button>`;
-    }
-  });
-  h+='</div>';
-  const indexTabs=existingTabs.filter(t=>t.startsWith('Index - '));
-  if(indexTabs.length){
-    h+='<div style="display:flex;gap:5px;flex-wrap:wrap">';
-    h+=`<button class="btn btn-sm" data-togglerev="show" style="font-size:9px">Show Review Cols</button>`;
-    h+=`<button class="btn btn-sm" data-togglerev="hide" style="font-size:9px">Hide Review Cols</button>`;
-    h+=`<button class="btn btn-sm" data-toggleorig="show" style="font-size:9px">Show Original</button>`;
-    h+=`<button class="btn btn-sm" data-toggleorig="hide" style="font-size:9px">Hide Original</button>`;
-    h+=`<button class="btn btn-sm" id="btn-fullsync" style="font-size:9px">⟳ Sync Review Data</button>`;
-    h+='</div>';
-  }
-  h+='</div>';
-  
-  // Export
-  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">Export</h4>';
-  h+=`<button class="btn btn-sm" id="export-index" style="border-color:var(--green);color:var(--green)">📄 Export Index as HTML</button>`;
-  h+='</div>';
-  
-  // Time Tracking
-  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">⏱ Time Tracking</h4>';
-  h+='<div id="time-log-area" style="font-size:11px;color:var(--tx-3)">Loading…</div>';
-  h+=`<button class="btn btn-sm" id="load-time-log" style="margin-top:6px;font-size:9px">Refresh</button>`;
-  h+='</div>';
-  
   // Activity Log
   h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">📋 Activity Log</h4>';
   const isAdmin=ADMIN_EMAILS.includes(S.user?.email?.toLowerCase());
@@ -3530,36 +3634,130 @@ function rDash(){
     h+='<div style="font-size:11px;color:var(--tx-3)">No activity yet.</div>';
   }
   h+='</div>';
-  
-  // Admin panel — only for admins
-  if(ADMIN_EMAILS.includes(S.user?.email?.toLowerCase())){
-    h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">👥 Team Management</h4>';
-    // Current team members
-    h+='<div style="margin-bottom:10px">';
-    if(S.teamMembers.length){
-      h+='<div style="font-size:10px;color:var(--tx-4);margin-bottom:4px">Team members (auto-registered on login):</div>';
-      S.teamMembers.forEach(tm=>{
-        const lastSeen=tm.lastSeen?new Date(tm.lastSeen).toLocaleDateString():'Never';
-        h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:11px;border-bottom:1px solid var(--bg-1)">`;
-        h+=`<span><strong>${esc(tm.name)}</strong> <span style="color:var(--tx-4)">${esc(tm.email)}</span></span>`;
-        h+=`<span style="font-size:9px;color:var(--tx-4)">Last: ${lastSeen}</span>`;
-        h+=`</div>`;
-      });
+
+  return h+'</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOOLS — AI Audit, Consistency, Index Tabs
+// ═══════════════════════════════════════════════════════════════
+function rTools(){
+  if(!S.indexData)return'<div class="pad" style="color:var(--tx-3)">Loading index data…</div>';
+  const ix=S.indexData;
+  let h='<div class="page-hd">'+rBackBtn()+'<h1>🛠️ Tools</h1><p>AI Audit, Consistency Check, and Index Tab generation</p></div><div class="pad">';
+
+  // ── AI Audit ──
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">🤖 AI Audit</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Run AI audit on a section. Suggestions appear inline in the Workspace.</p>';
+  h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+  h+='<span style="font-size:11px;color:var(--tx-3)">Audit section:</span>';
+  h+=`<select id="audit-sec-select" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;font-family:var(--font);background:var(--bg-white)">`;
+  RULES.sectionOrder.forEach(sec=>{h+=`<option value="${sec}">${sec}</option>`});
+  h+=`</select>`;
+  h+=`<button class="btn btn-sm btn-purple" id="audit-sec-run" style="font-size:11px">${IC.audit} Run Audit</button>`;
+  h+='</div></div>';
+
+  // ── Consistency Check ──
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">🔍 Consistency Check</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Scan all entries for inconsistent phrasing, word order, transliteration, capitalization, and style.</p>';
+  h+=`<button class="btn btn-sm" id="run-consistency" style="font-size:11px;border-color:var(--blue);color:var(--blue)">🔍 Run Consistency Check</button>`;
+  h+='</div>';
+
+  // ── Index Tabs ──
+  const existingTabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">📋 Index Tabs</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Generate per-section tabs in your Google Sheet. Click a section to create or update its tab.</p>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">';
+  RULES.sectionOrder.forEach(sec=>{
+    const tabName='Index - '+sec;
+    const exists=existingTabs.includes(tabName);
+    const cnt=(ix.sections[sec]||[]).length;
+    if(exists){
+      h+=`<button class="btn btn-sm" data-gentab="${sec}" style="font-size:10px;opacity:.7">${sec} ✓</button>`;
     }else{
-      h+='<div style="font-size:11px;color:var(--tx-3)">No team members yet. They appear here after signing in.</div>';
+      h+=`<button class="btn btn-sm btn-gold" data-gentab="${sec}" style="font-size:10px">${sec} (${cnt})</button>`;
     }
-    h+='</div>';
-    // Invite new member
-    h+='<div style="border-top:1px solid var(--border);padding-top:8px">';
-    h+='<div style="font-size:11px;font-weight:500;margin-bottom:4px">Invite new team member</div>';
-    h+='<div style="display:flex;gap:6px;margin-bottom:6px">';
-    h+=`<input class="s-input" id="invite-email" placeholder="Email address…" style="margin:0;flex:1;font-size:11px">`;
-    h+=`<button class="btn btn-sm btn-gold" id="invite-copy" style="font-size:10px">Copy Invite</button>`;
-    h+='</div>';
-    h+='<div style="font-size:9px;color:var(--tx-4)">This copies a message with the workspace link. Send it to them via email, WhatsApp, or Slack. Then add their email to <a href="https://console.cloud.google.com/auth/audience?project=index-data-491316" target="_blank" style="color:var(--blue)">Google Cloud Console</a> test users.</div>';
+  });
+  h+='</div>';
+  const indexTabs=existingTabs.filter(t=>t.startsWith('Index - '));
+  if(indexTabs.length){
+    h+='<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px">';
+    h+='<div style="font-size:10px;color:var(--tx-4);margin-bottom:5px">Tab options</div>';
+    h+='<div style="display:flex;gap:5px;flex-wrap:wrap">';
+    h+=`<button class="btn btn-sm" data-togglerev="show" style="font-size:10px">Show Review Cols</button>`;
+    h+=`<button class="btn btn-sm" data-togglerev="hide" style="font-size:10px">Hide Review Cols</button>`;
+    h+=`<button class="btn btn-sm" data-toggleorig="show" style="font-size:10px">Show Original</button>`;
+    h+=`<button class="btn btn-sm" data-toggleorig="hide" style="font-size:10px">Hide Original</button>`;
+    h+=`<button class="btn btn-sm" id="btn-fullsync" style="font-size:10px">⟳ Sync Review Data</button>`;
     h+='</div></div>';
   }
-  
+  h+='</div>';
+
+  return h+'</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TEAM — admin-only: user-work filter, team list, invitations
+// ═══════════════════════════════════════════════════════════════
+function rTeam(){
+  const isAdminUser=ADMIN_EMAILS.includes(S.user?.email?.toLowerCase());
+  if(!isAdminUser){
+    return '<div class="page-hd">'+rBackBtn()+'<h1>👥 Team</h1></div><div class="pad"><div class="card">Admin only.</div></div>';
+  }
+  let h='<div class="page-hd">'+rBackBtn()+'<h1>👥 Team</h1><p>Filter the Workspace by user, manage team members, and send invitations</p></div><div class="pad">';
+
+  // ── User Work Filter ──
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">🔍 Filter Workspace by User</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Select a user to see only entries they have edited, accepted, denied, or customized.</p>';
+  const activeUserFilter=S.userWorkFilter||'';
+  h+=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">`;
+  h+=`<select id="user-work-filter" style="border:1px solid var(--border);border-radius:5px;padding:6px 10px;font-size:12px;color:var(--tx-2);font-family:var(--font);cursor:pointer;min-width:220px">`;
+  h+=`<option value="">— All users (no filter) —</option>`;
+  [...(S.teamMembers||[])].sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(m=>{
+    if(!m||!m.email)return;
+    const sel=activeUserFilter===m.email?'selected':'';
+    h+=`<option value="${esc(m.email)}" ${sel}>${esc(m.name||m.email)}</option>`;
+  });
+  h+=`</select>`;
+  if(activeUserFilter){
+    h+=`<button class="btn btn-sm" id="user-filter-clear" style="font-size:11px">Clear filter</button>`;
+    h+=`<button class="btn btn-sm btn-gold" data-nav="index" style="font-size:11px">Go to Workspace →</button>`;
+  }
+  h+=`</div>`;
+  if(activeUserFilter){
+    const member=(S.teamMembers||[]).find(m=>m.email===activeUserFilter);
+    h+=`<div style="margin-top:8px;font-size:11px;color:var(--gold);font-weight:500">Filter active: showing entries touched by ${esc(member?.name||activeUserFilter)}</div>`;
+  }
+  h+='</div>';
+
+  // ── Team Members ──
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">👥 Team Members</h4>';
+  if(S.teamMembers&&S.teamMembers.length){
+    h+='<div style="font-size:11px;color:var(--tx-4);margin-bottom:6px">Auto-registered when team members sign in.</div>';
+    [...S.teamMembers].sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(tm=>{
+      if(!tm||!tm.email)return;
+      const lastSeen=tm.lastSeen?new Date(tm.lastSeen).toLocaleDateString():'Never';
+      const lastSeenAgo=tm.lastSeen?Math.round((Date.now()-tm.lastSeen)/(1000*60*60*24)):null;
+      const ago=lastSeenAgo!=null?(lastSeenAgo===0?'today':lastSeenAgo===1?'yesterday':lastSeenAgo+' days ago'):'';
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:12px;border-bottom:1px solid var(--bg-1)">`;
+      h+=`<span><strong>${esc(tm.name||'(no name)')}</strong> <span style="color:var(--tx-4);font-size:11px">${esc(tm.email)}</span></span>`;
+      h+=`<span style="font-size:10px;color:var(--tx-4)">Last seen: ${esc(ago||lastSeen)}</span>`;
+      h+=`</div>`;
+    });
+  }else{
+    h+='<div style="font-size:11px;color:var(--tx-3)">No team members yet. They appear here after signing in.</div>';
+  }
+  h+='</div>';
+
+  // ── Invite ──
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">✉️ Invite a Member</h4>';
+  h+='<div style="display:flex;gap:6px;margin-bottom:6px">';
+  h+=`<input class="s-input" id="invite-email" placeholder="email@example.com" style="margin:0;flex:1;font-size:12px;padding:6px 10px">`;
+  h+=`<button class="btn btn-sm btn-gold" id="invite-copy" style="font-size:11px">Copy Invite Message</button>`;
+  h+='</div>';
+  h+='<div style="font-size:10px;color:var(--tx-4);line-height:1.5">This copies a message with the workspace link. Send via email, WhatsApp, or Slack. Then add their email to <a href="https://console.cloud.google.com/auth/audience?project=index-data-491316" target="_blank" style="color:var(--blue)">Google Cloud Console</a> test users.</div>';
+  h+='</div>';
+
   return h+'</div>';
 }
 
@@ -3574,21 +3772,25 @@ function rIndex(){
   // Back button (only if history exists)
   const backBtn=rBackBtn();
   if(backBtn)h+='<div style="padding:8px 16px 0">'+backBtn+'</div>';
+  // User work filter banner (admin only, when active)
+  if(S.userWorkFilter){
+    const member=(S.teamMembers||[]).find(m=>m&&m.email===S.userWorkFilter);
+    const userName=member?.name||S.userWorkFilter;
+    h+=`<div style="padding:8px 16px 0"><div style="background:rgba(212,175,55,0.12);border:1px solid var(--gold);border-radius:6px;padding:7px 12px;display:flex;align-items:center;gap:10px;font-size:12px"><span style="font-weight:600;color:var(--gold)">👤 Showing work by:</span><span style="font-weight:500;color:var(--tx-1)">${esc(userName)}</span><button id="user-filter-clear" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--tx-3);font-size:14px;padding:0 6px" title="Clear filter">×</button></div></div>`;
+  }
   // Clean toolbar
   h+='<div class="idx-toolbar">';
-  // Search
+  // Search (with mode pills)
+  h+='<div style="display:flex;flex-direction:column;gap:4px;flex:1;max-width:260px">';
   h+=`<div class="idx-search">${IC.search}<input id="idx-search" placeholder="Search entries…" value="${esc(S.idxSearch)}"></div>`;
-  // Section dropdown
-  const secLabel=S.idxActiveSection==='all'?'All Sections':S.idxActiveSection;
-  const secCount=S.idxActiveSection==='all'?Object.values(ix.sections).reduce((a,s)=>a+s.length,0):(ix.sections[S.idxActiveSection]||[]).length;
-  h+=`<div class="tb-dd" data-tbdd="section"><div class="tb-dd-btn">📂 <span class="tb-dd-val">${secLabel}</span> <span style="font-size:9px;color:var(--tx-4)">${secCount}</span></div><div class="tb-dd-panel">`;
-  h+=`<div class="tb-dd-item ${S.idxActiveSection==='all'?'active':''}" data-idxsec="all">All Sections</div>`;
-  RULES.sectionOrder.forEach(sec=>{
-    const cnt=(ix.sections[sec]||[]).length;
-    const done=isSectionReviewed(sec);
-    h+=`<div class="tb-dd-item ${S.idxActiveSection===sec?'active':''}" data-idxsec="${sec}">${done?'✓ ':''}${sec}<span class="tb-dd-cnt">${cnt}</span></div>`;
-  });
-  h+=`</div></div>`;
+  const sm=S.idxSearchMode||'both';
+  h+=`<div class="idx-search-modes" style="display:flex;gap:3px;font-size:9px;font-weight:500">`;
+  h+=`<button class="idx-sm-pill ${sm==='both'?'active':''}" data-searchmode="both" title="Search entry names AND descriptions">Both</button>`;
+  h+=`<button class="idx-sm-pill ${sm==='name'?'active':''}" data-searchmode="name" title="Search only entry names (e.g. 'Tefillin')">Entry name</button>`;
+  h+=`<button class="idx-sm-pill ${sm==='desc'?'active':''}" data-searchmode="desc" title="Search only descriptions (e.g. 'donning prior to')">Description</button>`;
+  h+=`</div>`;
+  h+='</div>';
+  // Section dropdown removed — section navigation is now in the sidebar Workspace dropdown
   // Filter dropdown
   const filterLabels={all:'Everything',unreviewed:'Needs Review',pending:'Has Suggestions',reviewed:'Reviewed'};
   h+=`<div class="tb-dd" data-tbdd="filter"><div class="tb-dd-btn">Show: <span class="tb-dd-val">${S.reviewFilter==='bookmarked'?'🔖 Bookmarked':(filterLabels[S.reviewFilter]||'Everything')}</span></div><div class="tb-dd-panel">`;
@@ -3617,7 +3819,12 @@ function rIndex(){
   let entryCount=0;
   sectionsToShow.forEach(sec=>{
     let entries=(ix.sections[sec]||[]);
-    if(q)entries=entries.filter(e=>e.name.toLowerCase().includes(q)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+    if(q){
+      const mode=S.idxSearchMode||'both';
+      if(mode==='name')entries=entries.filter(e=>e.name.toLowerCase().includes(q));
+      else if(mode==='desc')entries=entries.filter(e=>e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+      else entries=entries.filter(e=>e.name.toLowerCase().includes(q)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+    }
     if(!entries.length)return;
     // Apply review filter
     entries=applyReviewFilter(entries);
@@ -3722,16 +3929,8 @@ function rIndex(){
           eh+=`<span class="idx-result-meta">`;
           // Relationship label (hide when matching segment default; Nigunim exception)
           if(shouldShowRel(r,e.section))eh+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
-          // Reference code — book-style for all segments
-          if(r.clipType==='Film Chapter'||r.clipType==='Film'){
-            const filmRef=filmRefForResult(r);
-            eh+=`<span class="idx-result-ref"><a href="${vidUrl}" target="_blank" title="${esc(r.clipName||r.pvName||'')}">${esc(filmRef)}</a></span>`;
-          }else{
-            const code=refCodeForResult(r);
-            if(code){
-              eh+=`<span class="idx-result-ref"><a href="${vidUrl}" target="_blank" title="${esc(r.clipName||'')}">${esc(code)}</a></span>`;
-            }
-          }
+          // Reference codes (A123/C457/etc + film refs) are shown ONLY in Book View, not in Workspace.
+          // The clip info button (ⓘ) below opens the panel which shows full clip details.
           // Description-level notes/comments (threaded)
           const descNoteKey=e.name+'|'+seg+'|'+r.rowIdx;
           const descNote=S.descNotes?.[descNoteKey];
@@ -3821,7 +4020,28 @@ function rIndex(){
 }
 
 // Apply review filter to entries
+// Check if a given user (by email) has done any "work" on this entry.
+// Work = manual edits, accepts, denies, or custom edits — anything where editedBy was recorded.
+function userTouchedEntry(entry,userEmail){
+  if(!userEmail||!entry||!entry.results)return false;
+  // Look up the user's name from teamMembers (editedBy stores name OR email)
+  const member=(S.teamMembers||[]).find(m=>m&&m.email===userEmail);
+  const name=member?.name;
+  for(const r of entry.results){
+    const k=rvKey(entry.name,r.segType,r.rowIdx);
+    const rv=S.reviewData?.[k];
+    if(!rv)continue;
+    if(rv.editedBy===userEmail||(name&&rv.editedBy===name))return true;
+  }
+  return false;
+}
+
 function applyReviewFilter(entries){
+  // First, apply admin user-work filter if active
+  const userFilter=S.userWorkFilter||'';
+  if(userFilter){
+    entries=entries.filter(e=>userTouchedEntry(e,userFilter));
+  }
   const f=S.reviewFilter;
   if(f==='all'&&!S.reviewMode)return entries;
   return entries.filter(e=>{
@@ -4140,12 +4360,41 @@ function bindAll(){
   $$('[data-nav]').forEach(el=>el.onclick=()=>{
     const newView=el.dataset.nav;
     if(S.view!==newView){
-      S.viewHistory.push({view:S.view,section:S.idxActiveSection,page:S.idxPage,search:S.idxSearch,filter:S.reviewFilter});
+      S.viewHistory.push({view:S.view,section:S.idxActiveSection,page:S.idxPage,search:S.idxSearch,filter:S.reviewFilter,bookScope:S.bookScope});
       if(S.viewHistory.length>20)S.viewHistory=S.viewHistory.slice(-20);
     }
     S.view=newView;
-    S.clipPanel=null; // Close clip panel when navigating
-    if(newView==='index'&&S.reviewFilter==='bookmarked'){S.reviewFilter='all'}
+    S.clipPanel=null;
+    // When clicking Workspace in sidebar (without using dropdown), open dropdown + reset to all sections
+    if(newView==='index'){
+      S.sidebarWorkspaceOpen=true;
+      S.idxActiveSection='all';
+      S.idxPage=0;
+      if(S.reviewFilter==='bookmarked')S.reviewFilter='all';
+    }
+    // When clicking Book View in sidebar, default to 'all' if not set
+    if(newView==='book'&&!S.bookScope)S.bookScope='all';
+    render();
+  });
+  // Workspace dropdown toggle (the chevron next to "Workspace")
+  $$('[data-toggle-workspace]').forEach(el=>el.onclick=(ev)=>{
+    ev.stopPropagation();
+    S.sidebarWorkspaceOpen=!S.sidebarWorkspaceOpen;
+    render();
+  });
+  // Workspace section nav (sidebar dropdown items)
+  $$('[data-idxsec-nav]').forEach(el=>el.onclick=()=>{
+    const sec=el.dataset.idxsecNav;
+    if(S.view!=='index'){
+      S.viewHistory.push({view:S.view,section:S.idxActiveSection,page:S.idxPage,search:S.idxSearch,filter:S.reviewFilter,bookScope:S.bookScope});
+      if(S.viewHistory.length>20)S.viewHistory=S.viewHistory.slice(-20);
+    }
+    S.view='index';
+    S.idxActiveSection=sec;
+    S.idxPage=0;
+    S.clipPanel=null;
+    S.sidebarWorkspaceOpen=true;
+    if(S.reviewFilter==='bookmarked')S.reviewFilter='all';
     render();
   });
   // Back button wiring
@@ -4164,74 +4413,74 @@ function bindAll(){
   on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
   on('#ai-fab','click',()=>{S.aiOpen=true;render()});
 
-  // Book View — open full/section
+  // Book View — open full/section (legacy, from old Dashboard — may still be used elsewhere)
   $$('[data-bookview]').forEach(el=>el.onclick=()=>{
-    S.viewHistory.push({view:S.view,section:S.idxActiveSection,page:S.idxPage,search:S.idxSearch,filter:S.reviewFilter});
+    S.viewHistory.push({view:S.view,section:S.idxActiveSection,page:S.idxPage,search:S.idxSearch,filter:S.reviewFilter,bookScope:S.bookScope});
     S.bookScope=el.dataset.bookview;
     S.view='book';
     S.clipPanel=null;
     render();
   });
-  // Book View — edit button on entry: jump to editor, scroll to entry, open rename
+  // Book View — section pill switcher (on the Book View page itself)
+  $$('[data-bookscope]').forEach(el=>el.onclick=()=>{
+    S.bookScope=el.dataset.bookscope;
+    render();
+    // Scroll reader back to top after switching
+    setTimeout(()=>{const bv=document.querySelector('.book-view');if(bv)bv.scrollIntoView({behavior:'smooth',block:'start'})},50);
+  });
+  // Book View — edit tag NAME button on entry: jump to editor, then open inline rename
   $$('[data-bookedit]').forEach(el=>el.onclick=()=>{
     const entryName=el.dataset.bookedit;
-    // Push current Book View state so back returns here
-    S.viewHistory.push({view:S.view,bookScope:S.bookScope,section:S.idxActiveSection,page:S.idxPage,search:S.idxSearch,filter:S.reviewFilter});
-    S.view='index';
-    S.idxActiveSection='all'; // Ensure entry is visible regardless of current filter
-    S.clipPanel=null;
-    // Start inline rename on this entry
-    S.renamingEntry={name:entryName,inputValue:entryName};
-    render();
-    // Scroll to the entry and highlight
+    jumpToEntry(entryName,'entry|'+entryName);
+    // After jump, start inline rename on this entry
     setTimeout(()=>{
-      const el=document.querySelector(`[data-entry="${CSS.escape(entryName)}"]`);
-      if(el){
-        el.scrollIntoView({behavior:'smooth',block:'center'});
-        const entryCard=el.closest('.idx-entry')||el;
-        entryCard.classList.add('jump-highlight');
-        setTimeout(()=>entryCard.classList.remove('jump-highlight'),1500);
-        // Focus rename input
+      S.renamingEntry={name:entryName,inputValue:entryName};
+      render();
+      setTimeout(()=>{
         const inp=$('#rename-input');
         if(inp){inp.focus();inp.select()}
-      }else{
-        // Entry not on current page — fall back to search
-        S.idxSearch=entryName;
-        S.idxPage=0;
-        render();
-      }
-    },120);
+      },80);
+    },300);
   });
   // Book View — comment bounce: jump to editor at specific sub-entry, open note popup
   $$('[data-bookjump]').forEach(el=>el.onclick=()=>{
     const[entryName,segType,rowIdx]=el.dataset.bookjump.split('|');
-    // Push current Book View state
-    S.viewHistory.push({view:S.view,bookScope:S.bookScope,section:S.idxActiveSection,page:S.idxPage,search:S.idxSearch,filter:S.reviewFilter});
-    S.view='index';
-    S.idxActiveSection='all';
-    S.clipPanel=null;
-    render();
+    const k=entryName+'|'+segType+'|'+rowIdx;
+    jumpToEntry(entryName,k);
+    // After jump, open the note popup for this sub-entry
     setTimeout(()=>{
-      // Scroll to entry
-      const el=document.querySelector(`[data-entry="${CSS.escape(entryName)}"]`);
-      if(el){
-        el.scrollIntoView({behavior:'smooth',block:'center'});
-        const entryCard=el.closest('.idx-entry')||el;
-        entryCard.classList.add('jump-highlight');
-        setTimeout(()=>entryCard.classList.remove('jump-highlight'),1500);
-      }else{
-        // Entry not on current page — fall back to search
-        S.idxSearch=entryName;
-        S.idxPage=0;
-        render();
+      S.notePopup={key:k,entryName,segType,rowIdx:+rowIdx};
+      render();
+      setTimeout(()=>{const i=$('#note-input');if(i)i.focus()},80);
+    },350);
+  });
+  // Book View — edit DESCRIPTION button: jump to sub-entry, open inline description editor
+  $$('[data-bookdescedit]').forEach(el=>el.onclick=()=>{
+    const[entryName,segType,rowIdx]=el.dataset.bookdescedit.split('|');
+    const k=entryName+'|'+segType+'|'+rowIdx;
+    jumpToEntry(entryName,k);
+    // After jump, simulate double-click on the matching description to open inline editor
+    setTimeout(()=>{
+      const descEls=document.querySelectorAll(`[data-editdesc^="${CSS.escape(entryName)}|${CSS.escape(segType)}|"]`);
+      // Find the one matching this rowIdx — but data-editdesc uses "ri" (sub-index within seg group), not rowIdx.
+      // So fall back to scrolling the row containing this rowIdx and double-clicking the desc.
+      const allRows=document.querySelectorAll('.idx-result');
+      for(const row of allRows){
+        const editBtn=row.querySelector(`[data-clippanel="${CSS.escape(k)}"]`);
+        if(editBtn){
+          row.scrollIntoView({behavior:'smooth',block:'center'});
+          row.classList.add('jump-highlight');
+          setTimeout(()=>row.classList.remove('jump-highlight'),1500);
+          // Double-click the description to enter edit mode
+          const descEl=row.querySelector('.idx-result-desc.editable, .idx-result-desc.empty-desc');
+          if(descEl){
+            const evt=new MouseEvent('dblclick',{bubbles:true,cancelable:true});
+            descEl.dispatchEvent(evt);
+          }
+          break;
+        }
       }
-      // Then open the note popup for this sub-entry
-      setTimeout(()=>{
-        const k=entryName+'|'+segType+'|'+rowIdx;
-        S.notePopup={key:k,entryName,segType,rowIdx:+rowIdx};
-        render();
-      },200);
-    },120);
+    },350);
   });
 
   on('#tabs-toggle','click',()=>{S.tabsOpen=!S.tabsOpen;render()});
@@ -4256,57 +4505,9 @@ function bindAll(){
   });
 
   // Timer
-  on('#timer-start','click',()=>startTimer());
-  on('#timer-stop','click',()=>stopTimer());
-  
-  // Time log on dashboard
+  // Activity log toggle (admin)
   on('#activity-mine','click',()=>{const sc=$('.content')?.scrollTop;S.showAllActivity=false;render();requestAnimationFrame(()=>{const c=$('.content');if(c&&sc)c.scrollTop=sc})});
   on('#activity-all','click',()=>{const sc=$('.content')?.scrollTop;S.showAllActivity=true;render();requestAnimationFrame(()=>{const c=$('.content');if(c&&sc)c.scrollTop=sc})});
-  on('#load-time-log','click',async()=>{
-    const area=$('#time-log-area');
-    if(area)area.innerHTML='Loading…';
-    const log=await loadTimeLog();
-    const area2=$('#time-log-area');
-    if(!area2)return;
-    if(!log.length){area2.innerHTML='No time entries yet.';return}
-    const isAdmin=ADMIN_EMAILS.includes(S.user?.email?.toLowerCase());
-    const myName=S.user?.name||'Unknown';
-    // Non-admin sees only their own time entries
-    const filtered=isAdmin?log:log.filter(e=>e.user===myName);
-    if(!filtered.length){area2.innerHTML='No time entries yet.';return}
-    const byUser={};
-    filtered.forEach(e=>{if(!byUser[e.user])byUser[e.user]=[];byUser[e.user].push(e)});
-    let html='';
-    Object.keys(byUser).sort().forEach(user=>{
-      const entries=byUser[user];
-      const totalMin=entries.reduce((s,e)=>s+e.duration,0);
-      const totalH=Math.floor(totalMin/60);
-      const remM=totalMin%60;
-      html+=`<div style="margin-bottom:12px">`;
-      html+=`<div style="font-weight:600;font-size:13px;margin-bottom:4px">${esc(user)} <span style="font-weight:400;color:var(--tx-3)">— ${totalH}h ${remM}m total</span></div>`;
-      html+=`<table style="width:100%;font-size:11px;border-collapse:collapse">`;
-      html+=`<tr style="color:var(--tx-4);border-bottom:1px solid var(--border)"><td style="padding:3px 6px">Date</td><td>In</td><td>Out</td><td>Min</td><td>Section</td></tr>`;
-      entries.slice(-20).reverse().forEach(e=>{
-        html+=`<tr style="border-bottom:1px solid var(--bg-1)"><td style="padding:3px 6px">${esc(e.date)}</td><td>${esc(e.clockIn)}</td><td>${esc(e.clockOut)}</td><td>${e.duration}</td><td>${esc(e.section)}</td></tr>`;
-      });
-      html+=`</table></div>`;
-    });
-    area2.innerHTML=html;
-  });
-  // Auto-load time log when on dashboard (only once)
-  if(S.view==='dashboard'&&!S._timeLogLoaded){
-    S._timeLogLoaded=true;
-    setTimeout(async()=>{
-      const area=$('#time-log-area');
-      if(!area)return;
-      const log=await loadTimeLog();
-      const area2=$('#time-log-area');
-      if(!area2)return;
-      if(!log.length){area2.innerHTML='No time entries yet.';return}
-      $('#load-time-log')?.click();
-    },500);
-  }
-  if(S.view!=='dashboard')S._timeLogLoaded=false;
   on('#rerun-consistency','click',()=>runConsistencyCheck());
   if(!S.consistencyDismissed)S.consistencyDismissed={};
   $$('[data-dismiss-issue]').forEach(el=>el.onclick=()=>{
@@ -4319,6 +4520,27 @@ function bindAll(){
 
   // Index
   let _searchTimer=null;
+  // Search mode pill toggle
+  $$('[data-searchmode]').forEach(el=>el.onclick=()=>{
+    S.idxSearchMode=el.dataset.searchmode;
+    S.idxPage=0;
+    render();
+  });
+  // Admin: user work filter dropdown
+  on('#user-work-filter','change',()=>{
+    const sel=$('#user-work-filter');
+    if(!sel)return;
+    S.userWorkFilter=sel.value||'';
+    S.idxPage=0;
+    if(S.view!=='index'){S.view='index';S.idxActiveSection='all'}
+    render();
+  });
+  // Admin: clear user filter banner
+  on('#user-filter-clear','click',()=>{
+    S.userWorkFilter='';
+    S.idxPage=0;
+    render();
+  });
   on('#idx-search','input',()=>{
     if(_searchTimer)clearTimeout(_searchTimer);
     _searchTimer=setTimeout(()=>{
@@ -5374,8 +5596,8 @@ function findEntry(name){if(!S.indexData)return null;for(const sec of Object.val
 function jumpToEntry(entryName,noteKey){
   const entry=findEntry(entryName);
   if(!entry){toast('Entry "'+entryName+'" not found','error');return}
-  // Save current view to history
-  S.viewHistory.push({view:S.view,section:S.idxActiveSection,page:S.idxPage,search:S.idxSearch,filter:S.reviewFilter});
+  // Save current view to history (include bookScope so we return to the right Book View page)
+  S.viewHistory.push({view:S.view,bookScope:S.bookScope,section:S.idxActiveSection,page:S.idxPage,search:S.idxSearch,filter:S.reviewFilter});
   if(S.viewHistory.length>20)S.viewHistory=S.viewHistory.slice(-20);
   S.view='index';
   S.idxSearch='';
@@ -5512,171 +5734,8 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
 // ═══════════════════════════════════════════════════════════════
 // CONSISTENCY CHECK
 // ═══════════════════════════════════════════════════════════════
+// (Time-tracking removed)
 // ═══════════════════════════════════════════════════════════════
-// WORK TIMER
-// ═══════════════════════════════════════════════════════════════
-const TIME_TAB='_TimeTracking';
-
-async function ensureTimeTab(){
-  const tabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
-  if(tabs.includes(TIME_TAB))return;
-  try{
-    await gapi.client.sheets.spreadsheets.batchUpdate({
-      spreadsheetId:S.sheetId,
-      resource:{requests:[{addSheet:{properties:{title:TIME_TAB}}}]}
-    });
-    const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
-    S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
-  }catch(e){console.warn('ensureTimeTab error:',e)}
-}
-
-// Find or create a user's column section in the time tracking sheet
-// Layout: each user gets 5 columns (Date, Clock In, Clock Out, Duration, Section) + 1 empty spacer
-// Row 1: user names as headers spanning their columns
-// Row 2: column headers (Date, In, Out, Min, Section)
-// Row 3+: data
-async function getUserTimeColumns(userName){
-  await ensureTimeTab();
-  try{
-    // Read row 1 to find existing user sections
-    const r=await gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId:S.sheetId,
-      range:`'${TIME_TAB}'!1:2`
-    });
-    const row1=r.result.values?.[0]||[];
-    const row2=r.result.values?.[1]||[];
-    
-    // Find this user's starting column
-    for(let i=0;i<row1.length;i++){
-      if(row1[i]===userName)return{startCol:i};
-    }
-    
-    // User not found — create new section after the last used column
-    let nextCol=0;
-    for(let i=row1.length-1;i>=0;i--){
-      if(row1[i]){nextCol=i+6;break} // 5 data cols + 1 spacer
-    }
-    
-    // Write user header and column headers
-    await gapi.client.sheets.spreadsheets.values.update({
-      spreadsheetId:S.sheetId,
-      range:`'${TIME_TAB}'!${cl(nextCol)}1:${cl(nextCol+4)}2`,
-      valueInputOption:'RAW',
-      resource:{values:[
-        [userName,'','','',''],
-        ['Date','Clock In','Clock Out','Duration (min)','Section']
-      ]}
-    });
-    
-    // Bold the user name by merging cells (optional — just makes it cleaner)
-    return{startCol:nextCol};
-  }catch(e){console.warn('getUserTimeColumns error:',e);return{startCol:0}}
-}
-
-function startTimer(){
-  if(S.timerRunning)return;
-  S.timerRunning=true;
-  S.timerStart=Date.now();
-  S.timerElapsed=0;
-  S.timerInterval=setInterval(()=>{
-    S.timerElapsed=Math.floor((Date.now()-S.timerStart)/1000);
-    const el=$('#timer-display');
-    if(el)el.textContent=formatTimer(S.timerElapsed);
-  },1000);
-  toast('Timer started','success');
-  render();
-}
-
-async function stopTimer(){
-  if(!S.timerRunning)return;
-  clearInterval(S.timerInterval);
-  S.timerRunning=false;
-  const durationMin=Math.round(S.timerElapsed/60);
-  const now=new Date();
-  const startTime=new Date(S.timerStart);
-  const section=S.idxActiveSection==='all'?'All Sections':S.idxActiveSection;
-  const user=S.user?.name||S.user?.email||'Unknown';
-  
-  try{
-    const cols=await getUserTimeColumns(user);
-    const sc=cols.startCol;
-    
-    // Find next empty row for this user (read their date column)
-    const r=await gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId:S.sheetId,
-      range:`'${TIME_TAB}'!${cl(sc)}3:${cl(sc)}500`
-    });
-    const nextRow=(r.result.values?.length||0)+3; // +3 because data starts at row 3
-    
-    await gapi.client.sheets.spreadsheets.values.update({
-      spreadsheetId:S.sheetId,
-      range:`'${TIME_TAB}'!${cl(sc)}${nextRow}:${cl(sc+4)}${nextRow}`,
-      valueInputOption:'RAW',
-      resource:{values:[[
-        now.toLocaleDateString(),
-        startTime.toLocaleTimeString(),
-        now.toLocaleTimeString(),
-        durationMin,
-        section
-      ]]}
-    });
-    toast(`Saved ${durationMin} min to timesheet`,'success');
-  }catch(e){
-    toast('Failed to save time: '+(e?.result?.error?.message||e?.message||''),'error');
-    console.error('Timer save error:',e);
-  }
-  
-  S.timerElapsed=0;S.timerStart=null;
-  render();
-}
-
-function formatTimer(secs){
-  const h=Math.floor(secs/3600);
-  const m=Math.floor((secs%3600)/60);
-  const s=secs%60;
-  return(h>0?h+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
-}
-
-async function loadTimeLog(){
-  if(!S.connected)return[];
-  try{
-    const tabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
-    if(!tabs.includes(TIME_TAB))return[];
-    // Read all data
-    const r=await gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId:S.sheetId,
-      range:`'${TIME_TAB}'!1:500`
-    });
-    const rows=r.result.values||[];
-    if(rows.length<2)return[];
-    const row1=rows[0]||[];
-    
-    // Find all user sections
-    const users=[];
-    for(let i=0;i<row1.length;i++){
-      if(row1[i]&&row1[i].trim())users.push({name:row1[i],col:i});
-    }
-    
-    // Collect entries per user
-    const allEntries=[];
-    users.forEach(u=>{
-      for(let r=2;r<rows.length;r++){
-        const row=rows[r]||[];
-        const date=row[u.col]||'';
-        if(!date)continue;
-        allEntries.push({
-          user:u.name,
-          date,
-          clockIn:row[u.col+1]||'',
-          clockOut:row[u.col+2]||'',
-          duration:+(row[u.col+3])||0,
-          section:row[u.col+4]||''
-        });
-      }
-    });
-    return allEntries;
-  }catch(e){return[]}
-}
 
 // Bulk audit an entire section
 async function bulkAuditSection(sectionName){
