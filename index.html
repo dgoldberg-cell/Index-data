@@ -472,6 +472,43 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .idx-sug-arrow{color:var(--tx-4);font-size:11px;flex-shrink:0}
 .idx-sug-new{color:var(--green);font-weight:600;font-size:12.5px}
 .idx-sug-reason{position:relative;font-size:9px;color:var(--purple);background:var(--purple-bg);padding:1px 6px;border-radius:8px;cursor:help;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.idx-rule-chip{display:inline-flex;align-items:center;font-family:var(--mono,monospace);font-size:9px;color:var(--gold);background:rgba(140,122,80,.08);border:1px solid rgba(140,122,80,.22);padding:1px 6px;border-radius:4px;margin-left:3px;white-space:nowrap;font-weight:500;letter-spacing:.2px;cursor:help}
+.idx-rule-chip:hover{background:rgba(140,122,80,.16);color:var(--tx-1)}
+
+/* Focus Mode — keyboard reading view */
+.focus-wrap{position:fixed;inset:0;background:var(--bg-0);z-index:1000;display:flex;flex-direction:column;align-items:center;padding:0;overflow:hidden}
+.focus-topbar{width:100%;max-width:780px;display:flex;justify-content:space-between;align-items:center;padding:18px 28px 8px}
+.focus-exit-btn,.focus-help-btn{background:var(--bg-white);border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-size:12px;font-weight:500;color:var(--tx-2);cursor:pointer;font-family:var(--font)}
+.focus-exit-btn:hover,.focus-help-btn:hover{border-color:var(--gold);color:var(--gold)}
+.focus-help-btn{min-width:32px;padding:6px 10px;font-weight:700;text-align:center}
+.focus-progress-text{font-family:var(--mono,monospace);font-size:11px;color:var(--tx-3);font-weight:500;letter-spacing:.3px;text-transform:uppercase}
+.focus-card{flex:1;width:100%;max-width:780px;background:var(--bg-white);border:1px solid var(--border);border-radius:12px;margin:8px 28px;padding:48px 56px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;overflow-y:auto;box-shadow:0 2px 24px rgba(0,0,0,.04)}
+.focus-tag-line{font-family:var(--mono,monospace);font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx-4);margin-bottom:12px}
+.focus-tag-name{font-family:var(--serif,Georgia,serif);font-size:36px;font-weight:700;letter-spacing:-.5px;color:var(--tx-1);margin:0 0 32px;line-height:1.1}
+.focus-original-label,.focus-suggestion-label{font-family:var(--mono,monospace);font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--tx-4);margin-bottom:8px;font-weight:600}
+.focus-suggestion-label{color:var(--gold)}
+.focus-original{font-family:var(--serif,Georgia,serif);font-size:17px;font-style:italic;color:var(--tx-3);background:var(--bg-0);border:1px solid var(--border);border-radius:8px;padding:12px 20px;margin-bottom:0;max-width:600px;line-height:1.5}
+.focus-arrow{font-size:18px;color:var(--tx-4);margin:14px 0;font-weight:300}
+.focus-suggestion{font-family:var(--serif,Georgia,serif);font-size:22px;font-style:italic;color:var(--gold);background:rgba(140,122,80,.06);border:1px solid rgba(140,122,80,.2);border-radius:8px;padding:16px 24px;margin-bottom:14px;max-width:600px;line-height:1.45;font-weight:500}
+.focus-reason{font-size:12px;color:var(--tx-3);font-style:italic;margin-bottom:10px;max-width:520px}
+.focus-rules{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:4px;margin-bottom:12px;max-width:600px}
+.focus-rules .idx-rule-chip{margin-left:0;font-size:10px;padding:2px 8px}
+.focus-empty-badge{font-family:var(--serif,Georgia,serif);font-size:18px;font-style:italic;color:var(--red);background:var(--red-bg,rgba(176,80,80,.08));border:1px solid var(--red-bd,rgba(176,80,80,.2));border-radius:8px;padding:14px 22px;margin-bottom:14px}
+.focus-hint{font-size:12px;color:var(--tx-3);font-style:italic;margin-top:6px;max-width:520px;line-height:1.5}
+.focus-clip-info{margin-top:28px;font-size:11px;color:var(--tx-4);font-style:italic;max-width:560px;padding-top:18px;border-top:1px solid var(--border)}
+.focus-keybar{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;padding:12px 28px;font-size:11.5px;color:var(--tx-3)}
+.focus-keybar span{display:inline-flex;align-items:center;gap:6px}
+.focus-key{display:inline-block;font-family:var(--mono,monospace);font-size:10px;background:var(--bg-1);border:1px solid var(--border);border-bottom-width:2px;padding:2px 7px;border-radius:4px;color:var(--tx-2);font-weight:500;min-width:20px;text-align:center}
+.focus-progressbar{width:100%;max-width:780px;margin:0 28px 18px;height:4px;background:var(--bg-1);border-radius:2px;overflow:hidden}
+.focus-progress-fill{height:100%;background:linear-gradient(to right,var(--gold),var(--amber,var(--gold)));transition:width .2s ease}
+.focus-help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.focus-help-panel{background:var(--bg-white);border:1px solid var(--border);border-radius:12px;padding:30px 40px;max-width:480px;width:calc(100% - 40px);box-shadow:0 16px 48px rgba(0,0,0,.2)}
+.focus-help-panel h3{font-family:var(--serif,Georgia,serif);font-size:20px;margin:0 0 18px;font-weight:700}
+.focus-help-panel table{width:100%;border-collapse:collapse;font-size:13px}
+.focus-help-panel td{padding:8px 4px;vertical-align:middle}
+.focus-help-panel td:first-child{white-space:nowrap;padding-right:18px;width:40%}
+.focus-help-panel tr{border-bottom:1px solid var(--bg-1)}
+.focus-help-panel tr:last-child{border-bottom:none}
 .idx-sug-reason:hover{overflow:visible;max-width:none;z-index:20}
 .idx-sug-reason:hover::after{content:attr(data-reason);position:absolute;left:0;top:100%;margin-top:4px;background:var(--tx-1);color:#fff;padding:6px 10px;border-radius:6px;font-size:11px;line-height:1.4;white-space:normal;width:280px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.15);pointer-events:none}
 .idx-sug-actions{display:flex;gap:2px;flex-shrink:0}
@@ -693,55 +730,46 @@ function sectionFromPath(p){if(p.startsWith('People/'))return'People';if(p.inclu
 
 const DEFAULT_RULES={tagDesc:{minWords:2,maxWords:6,absMax:8,
 checks:[
-{id:'length',name:'Rule 1 — Length: 2–6 words, max 8 absolute. Most should be 3–5 words.',on:true},
-{id:'no_repeat',name:'Rule 2 — Never repeat the entry name (or its root) in the sub-entry. The entry heading is already visible; restating it wastes space.',on:true},
-{id:'no_articles',name:'Rule 3 — Drop leading articles: no "the," "a," "an" at the start. Start with the first meaningful word.',on:true},
-{id:'keep_short',name:'Rule 4 — Keep sub-entries to the shortest clear phrase. Aim for 2–5 words. If it reads like a sentence, it\'s too long.',on:true},
-{id:'lowercase',name:'Rule 5 — Lowercase unless a proper noun demands capitals. Only names, places, and titles get capitals.',on:true},
-{id:'keep_preps',name:'Rule 6 — Keep structural prepositions. "In," "at," "during" at the start establish location or context — don\'t drop them.',on:true},
-{id:'noun_phrases',name:'Rule 7 — Noun phrases only, not full sentences. No verbs like "is," "was," "discusses." Just the noun phrase.',on:true},
-{id:'word_choice',name:'Rule 8 — Choose precise, elevated language. Write like a professional index editor. Replace casual/generic phrasing with refined, concise alternatives. "Fought cancer" not "dealing with cancer." Every word should be the most vivid and precise option.',on:true},
-{id:'spelling',name:'Rule 9 — Fix spelling: G-d not God, G-dly not Godly, G-dliness not Godliness. Fix common typos.',on:true},
-{id:'generate_empty',name:'Rule 10 — If description is blank, generate one based on transcript and entry context.',on:true},
-{id:'leave_good',name:'Rule 11 — If description already follows all rules, leave it alone. Do not change for the sake of changing.',on:true},
-{id:'transcript_check',name:'Rule 12 — CRITICAL: Descriptions describe the portion of the clip connected to THIS SPECIFIC TAG/TOPIC, NOT the main point of the clip. Most tags reference small details within a clip, not its central theme — that is why tags are ranked by relevancy 1-4 (a tag can be relevancy 1, meaning a minor mention, and still have a legitimate description). When verifying: look for ANY connection between the description and this specific tag within the clip content. Do NOT flag as mismatch just because the description is not the main topic of the clip. Only flag if the description has zero connection to this tag/topic whatsoever.',on:true},
-{id:'english_pref',name:'Rule 13 — Default to English. Use common English words over Hebrew/Yiddish when a clear English equivalent exists. "Charity" not "Tzedakah", "Repentance" not "Teshuva", "Sabbath" not "Shabbat". Exception: terms that have no precise English equivalent or are proper names (Farbrengen, Chassidut, Chabad) stay as-is.',on:true},
-{id:'trailing_links',name:'Rule 14 — Preserve trailing linking words. Words like "of", "in", "at", "to", "for" at the end of a description connect it forward to the clip reference. Do NOT remove them. "Significance of" is correct. "Foundation of world" — the "of" connects. Only remove if they dangle with no clear forward link.',on:true},
-{id:'semicolon_format',name:'Rule 15 — Semicolons mean dual points. When a description has a semicolon (;), the clip covers two distinct points. Keep both as separate sub-entries joined by semicolon. Edit each side independently but preserve the two-point structure. Check transcript to verify both points are covered.',on:true}
+{id:'focus',tier:'critical',name:'Rule 1 — FOCUS ON THIS TAG: Describe what connects THIS SPECIFIC TAG to the clip — not the clip\'s overall topic. Tags are ranked by relevancy 1-4; even a rank-1 tag (brief mention) is a legitimate index entry. Never describe the clip\'s main theme if the tag isn\'t that theme. For brief mentions, say so: "passing reference", "brief mention", "aside about".',on:true},
+{id:'length',tier:'strong',name:'Rule 2 — LENGTH: 3–6 words (max 8). Count every word. Descriptions are short index entries, not sentences.',on:true},
+{id:'no_repeat',tier:'strong',name:'Rule 3 — NO TAG REPEAT: Drop the tag name from the description. The tag is already the heading. If dropping breaks the phrase, use first-letter abbreviation (M., C., R.) — rare, only when truly needed. Also catches bilingual repeats (e.g. "phylacteries" when tag is Tefillin) and same-root variants.',on:true},
+{id:'no_articles',tier:'strong',name:'Rule 4 — NO ARTICLES: Strip "a", "an", "the" unless removing them makes the phrase ungrammatical or breaks a proper name (e.g. "on the eve of", "during the Six-Day War").',on:true},
+{id:'no_speech_verbs',tier:'strong',name:'Rule 5 — NO SPEECH VERBS: Don\'t use "discusses", "mentions", "speaks about", "talks about", "refers to", "addresses". The speaking is already implied by the section. Exceptions that name events (not acts of speech): "response to", "reply to", "letter about", "answer to", "message to".',on:true},
+{id:'fragment_style',tier:'strong',name:'Rule 6 — FRAGMENT STYLE: Prefer noun phrases and gerunds (-ing forms acting as nouns). NEVER subject pronouns (he/she/they/we/it/you). NEVER be-verbs as main verb (is/was/are/were/will be/has been). Full verbs acceptable only when noun form is genuinely awkward.',on:true},
+{id:'trailing_prep',tier:'soft',name:'Rule 7 — TRAILING PREPOSITION when it fits: "response to", "belief in", "first night of", "conversation with" read naturally when the tag completes the phrase. TEST EVERY TIME: mentally read "tag name + description" — must form a natural phrase. "antisemitism + response to" = "response to antisemitism" ✓. "shlichus + response to" = "response to shlichus" ✗ nonsense. Match prepositions to tag type: reactions take "response to"; practices take "approach to"; events take "first night of"; people take "conversation with"; beliefs take "belief in"; texts take "daily study of".',on:true},
+{id:'specific',tier:'soft',name:'Rule 8 — SPECIFIC OVER GENERIC: Name concrete details (who, when, where, what) when they fit the 3–6 word budget. Avoid filler: "various topics", "general discussion", "historical context", "educational theme", "seasonal content", "holiday event". If specifics won\'t fit, use a clean general phrase (e.g. "Rosh Hashanah emphasis") — but never filler.',on:true},
+{id:'gd_convention',tier:'critical',name:'Rule 9 — G-D CONVENTION: Always "G-d", "G-dly", "G-dliness" with hyphen. Never "God", "Godly", "Godliness". Hebrew names (Hashem, Elokim, Shechinah) stay unhyphenated.',on:true},
+{id:'english_pref',tier:'soft',name:'Rule 10 — ENGLISH OVER HEBREW/YIDDISH: Default to English when a clean equivalent exists — Charity (not Tzedakah), Repentance (not Teshuva), Sabbath (not Shabbat), Joy (not Simcha), Faith (not Emunah), Trust in G-d (not Bitachon), Love for fellow Jew (not Ahavas Yisrael), Blessing (not Bracha), Soul (not Neshama), Prayer (not Tefilah), Peace (not Shalom). KEEP Hebrew/Yiddish ONLY for proper names (Chabad, Rebbe, Rambam, Tanya, Torah) and uniquely Jewish practices/events with no English version (Farbrengen, Shlichus, Yechidus, Chassidus, Niggun, Mitzvah, Chanukah, Pesach, Tashlich, Yom Kippur, Rosh Hashanah, Shabbat, Bar Mitzvah, Brit Milah, Chinuch, Kashrus, Mivtzoim, Hiskashrus). If the tag is English, match that in the description.',on:true},
+{id:'sephardic',tier:'critical',name:'Rule 11 — SEPHARDIC TRANSLITERATION when Hebrew is kept: Shabbat (not Shabbos), Mezuzot (not Mezuzos), Simchat Torah (not Simchas Torah), Brit (not Bris), Teshuva (not Teshuvah), Mitzvot (not Mitzvos), Tzitzit (not Tzitzis), Chanukah (not Hanukkah/Hanukah), Chassidut (not Chassidus — but "Chassidus" also acceptable in Chabad texts), Shlichut (not Shlichus). Chabad terms stay canonical: Chabad, Lubavitch, Rebbe, Rebbetzin, Rambam, Tanya, Farbrengen, Niggun, Tzivos Hashem.',on:true},
+{id:'semicolon',tier:'strong',name:'Rule 12 — SEMICOLONS mark two distinct points. A semicolon (;) in a description indicates the clip covers two separate but tag-related points. Each side of the semicolon is its own mini-description and must independently pass all rules (length, no tag repeat, no articles, fragment style, etc.). When editing, preserve the two-point structure — don\'t collapse it to one side or merge with "and." When auditing, verify both points exist in the transcript; flag any half that doesn\'t. PROACTIVELY SUGGEST semicolon style when you see a description trying to cram two genuinely distinct points into one long phrase. Triple-point semicolons (A; B; C) are rare but acceptable when three distinct points are present.',on:true}
 ],
 pairedExamples:[
-{tag:'Tefillin',rule:'Rule 1 — length',good:'donning prior to Bar Mitzvah',goodNote:'5 words, concise',bad:'donning prior to Bar Mitzvah celebration event in the synagogue',badNote:'10 words, way too long'},
-{tag:'Torah',rule:'Rule 1 — length',good:'daily study of',goodNote:'3 words, tight',bad:'importance and value of regularly studying on a daily basis',badNote:'10 words — a sentence crammed into a sub-entry'},
-{tag:'Tefillin',rule:'Rule 2 — no repeat',good:'donning prior to Bar Mitzvah',goodNote:'no repetition of entry name',bad:'donning tefillin prior to Bar Mitzvah',badNote:'repeats "tefillin"'},
-{tag:'Jewish Education',rule:'Rule 2 — no repeat',good:'in public schools',goodNote:'adds context without repeating',bad:'Jewish education in schools',badNote:'repeats both words of entry name'},
-{tag:'Mezuzah',rule:'Rule 2 — no repeat',good:'on doorpost of study',goodNote:'specific, no repeat',bad:'Mezuzah on the door',badNote:'repeats "Mezuzah" + has article'},
-{tag:'Siddur',rule:'Rule 3 — drop articles',good:'printing of Siddur Tehillat Hashem',goodNote:'starts with meaningful word',bad:'the printing of Siddur Tehillat Hashem',badNote:'leading "the"'},
-{tag:'Charity',rule:'Rules 2 & 3',good:'generosity in adversity',goodNote:'elevated, no repeat, no article',bad:'the importance of giving charity',badNote:'leading "the" + repeats "charity"'},
-{tag:'Simchat Torah',rule:'Rule 4 — keep it short',good:'dancing on',goodNote:'2 words, tight',bad:'dancing and celebrating joyfully on this special occasion',badNote:'8 words, sentence-like'},
-{tag:'Healing',rule:'Rules 4 & 8',good:'miraculous recovery',goodNote:'2 precise words',bad:'getting better in a surprising way',badNote:'six weak words vs two precise ones'},
-{tag:'Library',rule:'Rule 5 — lowercase',good:'of R. Levi Yitzchak',goodNote:'proper names capitalized, descriptor lowercase',bad:'Of R. Levi Yitzchak',badNote:'"Of" incorrectly capitalized'},
-{tag:'Kosher Food',rule:'Rule 5 — lowercase',good:'impact on wellbeing',goodNote:'all lowercase, concise',bad:'Impact On Wellbeing',badNote:'title case where lowercase belongs'},
-{tag:'Tashlich',rule:'Rule 6 — keep prepositions',good:'in Nikolayev',goodNote:'preposition establishes location',bad:'Nikolayev',badNote:'drops "in," loses locative structure'},
-{tag:'Terror',rule:'Rule 6 — keep prepositions',good:'following Ma\'alot Massacre',goodNote:'preposition links to event',bad:'Ma\'alot Massacre',badNote:'drops "following," loses cause-response context'},
-{tag:'Solar Eclipse',rule:'Rule 7 — noun phrases',good:'in R.\'s writings',goodNote:'clean noun phrase',bad:'R. discusses it in his writings',badNote:'full sentence with verb "discusses"'},
-{tag:'Shabbos',rule:'Rules 2, 3, 7',good:'candle lighting time',goodNote:'noun phrase, no repeat',bad:'The Rebbe speaks about Shabbos observance',badNote:'repeats entry, has article, full sentence with verb'},
-{tag:'Cancer',rule:'Rule 8 — word choice',good:'fought cancer',goodNote:'"fought" is vivid and precise',bad:'dealing with cancer',badNote:'"dealing with" is vague and casual'},
-{tag:'Shlichus',rule:'Rule 8 — word choice',good:'unexpected journey to',goodNote:'paints a picture',bad:'going on',badNote:'"going on" is flat and childish'},
-{tag:'Faith',rule:'Rules 4 & 8',good:'unwavering commitment',goodNote:'refined, 2 words',bad:'really strong belief in it',badNote:'playground talk, 5 words'},
-{tag:'Antisemitism',rule:'Rules 4, 7, 8',good:'confronting persecution',goodNote:'professional index language',bad:'dealing with people being mean to Jews',badNote:'casual, sentence-like, childish'},
-{tag:'Tanya',rule:'Rules 4, 7, 8',good:'printing during upheaval',goodNote:'noun phrase, "upheaval" is precise',bad:'when they printed it during hard times',badNote:'full sentence; "hard times" is vague'},
-{tag:'Ahavat Yisrael',rule:'Rules 4 & 8',good:'unifying communities',goodNote:'one word replaces five',bad:'bringing different groups of people together',badNote:'6 words, casual phrasing'},
-{tag:'Prayer',rule:'Rules 7 & 8',good:'power of concentration',goodNote:'noun phrase, elevated',bad:'trying to focus when you pray',badNote:'full sentence with "you"'},
-{tag:'Farbrengen',rule:'Rules 7 & 8',good:'broadcast at',goodNote:'"broadcast" = one precise word',bad:'it was shown on TV at',badNote:'full sentence, "shown on TV" = 3 words for 1'},
-{tag:'Mivtza Chanukah',rule:'Rules 4 & 8',good:'spreading light worldwide',goodNote:'poetic and tight',bad:'getting people all over to light candles',badNote:'clumsy, wordy, casual'},
-{tag:'Charity',rule:'Rules 4 & 8',good:'generosity in adversity',goodNote:'elevated, concise, professional',bad:'giving money even when times are tough',badNote:'casual rambling, 7 words'}
+{tag:'Moshiach',rule:'Rule 1 — focus',good:'passing reference',goodNote:'describes the tag\'s brief appearance, not clip\'s Chanukah theme',bad:'Chanukah insights',badNote:'describes the clip\'s main topic, not what Moshiach represents in this clip'},
+{tag:'Tefillin',rule:'Rule 1 — focus',good:'as educational model',goodNote:'says tefillin appears HERE as an example/analogy for education',bad:'educational approach',badNote:'describes clip\'s theme (education), not the tag\'s connection'},
+{tag:'Tefillin',rule:'Rules 2, 3, 6',good:'donning before Bar Mitzvah',goodNote:'4 words, gerund, no tag repeat, no articles',bad:'he dons tefillin before the Bar Mitzvah',badNote:'subject pronoun "he", repeats tag, article "the"'},
+{tag:'Antisemitism',rule:'Rule 7 — trailing prep',good:'response to',goodNote:'test: "response to antisemitism" reads naturally',bad:'Rebbe\'s response to the rise of antisemitism in society',badNote:'over word budget, repeats tag, has articles'},
+{tag:'Shlichus',rule:'Rule 7 — test failure',good:'approach to',goodNote:'test: "approach to shlichus" ✓ works (shlichus is a practice)',bad:'response to',badNote:'test: "response to shlichus" ✗ nonsense — shlichus isn\'t responded to'},
+{tag:'Solar Eclipse',rule:'Rule 5 — no speech verbs',good:'in R.\'s writings',goodNote:'3 words; "writings" is the output, not act of speaking',bad:'R. discusses it in his writings',badNote:'speech verb "discusses"; subject pronoun "it"'},
+{tag:'Charity',rule:'Rule 10 — English',good:'importance of giving',goodNote:'plain English, trailing prep works with tag',bad:'importance of tzedakah',badNote:'unnecessary Hebrew when tag is already "Charity" in English'},
+{tag:'Joy',rule:'Rule 10 — English',good:'at wedding celebration',goodNote:'matches English tag',bad:'simcha at wedding',badNote:'reintroduces Hebrew when tag is English'},
+{tag:'Shabbat',rule:'Rule 11 — Sephardic',good:'candle-lighting time',goodNote:'tag spelled Sephardic; description drops tag name',bad:'shabbos candle-lighting time',badNote:'Ashkenazi "shabbos"; repeats tag'},
+{tag:'Simchat Torah',rule:'Rules 3, 11',good:'hakafot with children',goodNote:'Sephardic "hakafot"; tag dropped',bad:'simchas torah hakafos with children',badNote:'Ashkenazi throughout; repeats tag; lowercase proper name'},
+{tag:'Chanukah',rule:'Rules 3, 11',good:'military base visit',goodNote:'specific occasion; Sephardic spelling of tag',bad:'Hanukkah holiday event',badNote:'wrong spelling; vague filler "holiday event"'},
+{tag:'Farbrengen',rule:'Rules 3, 8, 10',good:'with yeshiva students',goodNote:'specific audience; Farbrengen kept (no English); tag dropped',bad:'gathering with various students',badNote:'forced English for Farbrengen; vague "various"'},
+{tag:'Rambam',rule:'Rules 3, 6',good:'daily study of',goodNote:'trailing prep completes with tag: "daily study of Rambam"',bad:'he studies Rambam daily',badNote:'subject pronoun, repeats tag'},
+{tag:'Faith',rule:'Rules 8, 10',good:'strengthening in difficult times',goodNote:'English tag, specific context, gerund',bad:'emunah in hard times',badNote:'Hebrew when English tag; "hard times" is casual'},
+{tag:'Cancer',rule:'Rule 9 — G-d convention + word choice',good:'reliance on G-d',goodNote:'G-d hyphenated; specific emotional emphasis',bad:'having faith in God through illness',badNote:'"God" not "G-d"; tag dropped but still wordy and generic'},
+{tag:'Rosh Hashanah',rule:'Rules 1, 8',good:'tashlich at river',goodNote:'specific ritual on that holiday',bad:'seasonal content',badNote:'pure filler, says nothing'},
+{tag:'Chinuch',rule:'Rule 10 — Hebrew kept',good:'girls\' school address',goodNote:'specific; Chinuch kept (Jewish education has no clean English)',bad:'Jewish education theme',badNote:'forced English for Chinuch; vague "theme"'},
+{tag:'Children',rule:'Rules 6, 7, 8',good:'post-rally blessing',goodNote:'specific; noun phrase; tag dropped',bad:'general blessing for the children at the rally',badNote:'filler "general"; article "the"; repeats tag; over budget'},
+{tag:'Moshiach',rule:'Rule 12 — semicolons',good:'signs of coming; urgency to hasten',goodNote:'two distinct points in the clip; each half passes all rules independently. Test: "Moshiach: signs of coming" ✓ and "Moshiach: urgency to hasten" ✓',bad:'signs of coming and urgency to hasten',badNote:'uses "and" to merge two distinct points — should be semicolon'},
+{tag:'Moshiach',rule:'Rule 12 — each half must pass rules',good:'signs of coming; urgency to hasten',goodNote:'both halves clean',bad:'the signs of coming; urgent action needed',badNote:'first half has article "the" (Rule 4 violation); second half is sentence-like'}
 ],
 good:[],bad:[],
 tightenExamples:[
 {before:'The power of prayer',after:'power of prayer'},
 {before:'A lesson in faith',after:'lesson in faith'},
 {before:'The importance of unity',after:'importance of unity'},
-{before:'Speaking about the future',after:'speaking about future'},
 {before:'In the time of exile',after:'in time of exile'},
 {before:'With a sense of urgency',after:'with urgency'},
 {before:'The role that it plays in',after:'role in'},
@@ -749,7 +777,12 @@ tightenExamples:[
 {before:'During the period of',after:'during'},
 {before:'Is able to overcome',after:'overcoming'},
 {before:'The need to be involved in',after:'involvement in'},
-{before:'A discussion on the topic of',after:'discussion on'}
+{before:'A discussion on the topic of',after:'discussion on'},
+{before:'Speaking about Shabbos observance',after:'observance emphasis'},
+{before:'The Rebbe discusses it',after:'in R.\'s teaching'},
+{before:'He dons tefillin daily',after:'daily donning'},
+{before:'Tzedakah is important',after:'importance of giving'},
+{before:'On Shabbos candle lighting',after:'candle-lighting time'}
 ],
 spelling:[{wrong:'prier',right:'prior'},{wrong:'preformed',right:'performed'},{wrong:'begining',right:'beginning'},{wrong:'Godliness',right:'G-dliness'},{wrong:'Godly',right:'G-dly'},{wrong:'God',right:'G-d'},{wrong:"Farbrengen's",right:'Farbrengens'}]},
 consistency:{
@@ -851,7 +884,18 @@ function loadRules(){
     const saved=localStorage.getItem('jw_rules');
     if(saved){
       const p=JSON.parse(saved);
-      if(p.tagDesc)rules.tagDesc=p.tagDesc;
+      if(p.tagDesc){
+        rules.tagDesc=p.tagDesc;
+        // Migration: if old rules (no 'focus' rule, no tier field), replace with new 11-rule set
+        const hasFocus=(rules.tagDesc.checks||[]).some(c=>c.id==='focus');
+        const hasTiers=(rules.tagDesc.checks||[]).some(c=>c.tier);
+        const hasSemicolon=(rules.tagDesc.checks||[]).some(c=>c.id==='semicolon');
+        if(!hasFocus||!hasTiers||!hasSemicolon){
+          rules.tagDesc.checks=JSON.parse(JSON.stringify(DEFAULT_RULES.tagDesc.checks));
+          rules.tagDesc.pairedExamples=JSON.parse(JSON.stringify(DEFAULT_RULES.tagDesc.pairedExamples));
+          rules.tagDesc.tightenExamples=JSON.parse(JSON.stringify(DEFAULT_RULES.tagDesc.tightenExamples));
+        }
+      }
       if(!rules.tagDesc.spelling)rules.tagDesc.spelling=DEFAULT_RULES.tagDesc.spelling;
       if(p.consistency){
         rules.consistency=p.consistency;
@@ -895,6 +939,10 @@ indexData:null,
 idxSearch:'',idxSearchMode:'both',idxNavMode:'tabs',idxLayout:'single',idxActiveSection:'all',idxActiveEntry:null,idxPage:0,
 userWorkFilter:'', // Admin only: when set, filter entries to show only those touched by this user (email)
 sidebarWorkspaceOpen:false, // Workspace section dropdown expand/collapse
+focusMode:false, // Keyboard reading mode — one-card-at-a-time focus view
+focusIndex:0, // Current item in focus queue
+focusQueue:[], // Cached queue — built when entering focus mode
+focusShowHelp:false, // ? key toggles help overlay
 idxBookmarks:JSON.parse(localStorage.getItem('jw_bm')||'{}'),
 idxNotes:JSON.parse(localStorage.getItem('jw_notes')||'{}'),
 editingDesc:null,
@@ -1225,6 +1273,16 @@ async function loadSharedDataFromSheet(){
         RULES.tagDesc.bad=DEFAULT_RULES.tagDesc.bad;
         RULES.tagDesc.tightenExamples=DEFAULT_RULES.tagDesc.tightenExamples;
         console.log('Auto-upgraded audit rules to paired examples format');
+      }
+      // Auto-upgrade: if saved rules don't have the new 11-rule structure with tier field, replace
+      const hasTiers=(RULES.tagDesc.checks||[]).some(c=>c.tier);
+      const hasFocusRule=(RULES.tagDesc.checks||[]).some(c=>c.id==='focus');
+      const hasSemicolonRule=(RULES.tagDesc.checks||[]).some(c=>c.id==='semicolon');
+      if(!hasTiers||!hasFocusRule||!hasSemicolonRule){
+        RULES.tagDesc.checks=DEFAULT_RULES.tagDesc.checks;
+        RULES.tagDesc.pairedExamples=DEFAULT_RULES.tagDesc.pairedExamples;
+        RULES.tagDesc.tightenExamples=DEFAULT_RULES.tagDesc.tightenExamples;
+        console.log('Auto-migrated audit rules to new 11-rule structure with priority tiers');
       }
       if(data.rules.consistency){
         RULES.consistency=data.rules.consistency;
@@ -1783,7 +1841,7 @@ async function acceptSuggestion(entryName,segType,rowIdx){
   pushUndo('accept',{key:k,suggestion:rv.suggestion,oldDesc,rowIdx,entryName},`"${entryName}": "${oldDesc}" → "${rv.suggestion}"`);
   const ok=await updateTagDesc(rowIdx,entryName,rv.suggestion);
   if(!ok)return;
-  rv.status='accepted';rv.reviewed=true;rv.editedBy=S.user?.name||S.user?.email||'Unknown';rv.editedAt=Date.now();setRV(k,rv);
+  rv.status='accepted';rv.reviewed=true;rv.ruleViolations=[];rv.editedBy=S.user?.name||S.user?.email||'Unknown';rv.editedAt=Date.now();setRV(k,rv);
   if(r){
     syncToIndexTab(entryName,r,'accepted','').catch(()=>{});
     syncDescToIndexTab(entryName,r,rv.suggestion).catch(()=>{});
@@ -1800,7 +1858,7 @@ function denySuggestion(entryName,segType,rowIdx){
   if(!rv.deniedHistory)rv.deniedHistory=[];
   rv.deniedHistory.push({suggestion:rv.suggestion,reason:rv.reason,time:Date.now()});
   if(rv.deniedHistory.length>5)rv.deniedHistory=rv.deniedHistory.slice(-5);
-  rv.suggestion='';rv.reason='';rv.status='denied';
+  rv.suggestion='';rv.reason='';rv.ruleViolations=[];rv.status='denied';
   setRV(k,rv);
   const entry=findEntry(entryName);
   const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
@@ -1818,7 +1876,7 @@ async function applyCustomDesc(entryName,segType,rowIdx,customText){
   const ok=await updateTagDesc(rowIdx,entryName,customText);
   if(!ok)return;
   const rv=getRV(k)||{};
-  rv.status='custom';rv.reviewed=true;rv.customApplied=customText;rv.editedBy=S.user?.name||S.user?.email||'Unknown';rv.editedAt=Date.now();setRV(k,rv);
+  rv.status='custom';rv.reviewed=true;rv.ruleViolations=[];rv.customApplied=customText;rv.editedBy=S.user?.name||S.user?.email||'Unknown';rv.editedAt=Date.now();setRV(k,rv);
   if(r){
     syncToIndexTab(entryName,r,'custom','').catch(()=>{});
     syncDescToIndexTab(entryName,r,customText).catch(()=>{});
@@ -2191,33 +2249,60 @@ function scrollAI(){setTimeout(()=>{const el=$('.ai-msgs');if(el)el.scrollTop=el
 
 // Build the full audit rules text for AI prompts
 function buildAuditRulesText(){
-  let t='INDEX ENTRY STYLE GUIDE\n\n';
+  let t='INDEX ENTRY STYLE GUIDE — JEM Video Index\n\n';
+  t+='Descriptions are SHORT INDEX ENTRIES, not sentences. They complete the tag: reading "[tag]: [description]" should form a natural phrase.\n\n';
   const activeRules=RULES.tagDesc.checks.filter(c=>c.on);
-  t+='THE RULES (these are the ONLY rules to enforce — any rules not listed here are intentionally disabled and must not be applied):\n';
-  activeRules.forEach((c,i)=>{t+=`${i+1}. ${c.name}\n`});
+  // Group by tier if tier field exists; otherwise flat list
+  const hasTiers=activeRules.some(r=>r.tier);
+  if(hasTiers){
+    const crit=activeRules.filter(r=>r.tier==='critical');
+    const strong=activeRules.filter(r=>r.tier==='strong');
+    const soft=activeRules.filter(r=>r.tier==='soft');
+    const none=activeRules.filter(r=>!r.tier);
+    if(crit.length){
+      t+='╔══ CRITICAL RULES (violation = always fix) ══╗\n';
+      crit.forEach(c=>{t+=c.name+'\n\n'});
+    }
+    if(strong.length){
+      t+='╔══ STRONG RULES (violation = fix unless stylistically justified) ══╗\n';
+      strong.forEach(c=>{t+=c.name+'\n\n'});
+    }
+    if(soft.length){
+      t+='╔══ SOFT PREFERENCES (suggest alternative, don\'t force on already-fine descriptions) ══╗\n';
+      soft.forEach(c=>{t+=c.name+'\n\n'});
+    }
+    if(none.length){
+      t+='╔══ OTHER ACTIVE RULES ══╗\n';
+      none.forEach(c=>{t+=c.name+'\n\n'});
+    }
+  }else{
+    t+='ACTIVE RULES (any rules not listed here are intentionally disabled and must not be applied):\n';
+    activeRules.forEach((c,i)=>{t+=`${i+1}. ${c.name}\n`});
+  }
+  t+='\nEvery suggestion must pass ALL active rules simultaneously. Before outputting, run the "tag + description" test: read them together as one phrase and verify it reads naturally.\n';
   if(RULES.tagDesc.pairedExamples&&RULES.tagDesc.pairedExamples.length){
-    t+='\nPAIRED EXAMPLES (good vs bad for same entry):\n';
+    t+='\nPAIRED EXAMPLES (each passes ALL rules):\n';
     RULES.tagDesc.pairedExamples.forEach(e=>{
-      t+=`\n  Entry: "${e.tag}" (${e.rule})\n`;
-      t+=`  ✅ "${e.good}" — ${e.goodNote}\n`;
-      t+=`  ❌ "${e.bad}" — ${e.badNote}\n`;
+      t+=`\n  Tag: "${e.tag}" [${e.rule}]\n`;
+      t+=`  ✓ "${e.good}" — ${e.goodNote}\n`;
+      t+=`  ✗ "${e.bad}" — ${e.badNote}\n`;
     });
   }
   // Fallback for old format
   if(RULES.tagDesc.good&&RULES.tagDesc.good.length){
     t+='\nGOOD EXAMPLES:\n';
-    RULES.tagDesc.good.forEach(e=>{t+=`  Entry: "${e.tag}" → "${e.desc}"${e.note?' ('+e.note+')':''}\n`});
+    RULES.tagDesc.good.forEach(e=>{t+=`  Tag: "${e.tag}" → "${e.desc}"${e.note?' ('+e.note+')':''}\n`});
   }
   if(RULES.tagDesc.bad&&RULES.tagDesc.bad.length){
     t+='\nBAD EXAMPLES (DO NOT PRODUCE THESE):\n';
-    RULES.tagDesc.bad.forEach(e=>{t+=`  Entry: "${e.tag}" → "${e.desc}"${e.note?' — '+e.note:''}\n`});
+    RULES.tagDesc.bad.forEach(e=>{t+=`  Tag: "${e.tag}" → "${e.desc}"${e.note?' — '+e.note:''}\n`});
   }
   if(RULES.tagDesc.tightenExamples&&RULES.tagDesc.tightenExamples.length){
-    t+='\nTIGHTENING EXAMPLES:\n';
+    t+='\nTIGHTENING EXAMPLES (verbose → concise):\n';
     RULES.tagDesc.tightenExamples.forEach(e=>{t+=`  "${e.before}" → "${e.after}"\n`});
   }
   if(RULES.tagDesc.spelling&&RULES.tagDesc.spelling.length){
-    t+='\nSPELLING CORRECTIONS:\n';
+    t+='\nSPELLING AUTO-CORRECTIONS:\n';
     RULES.tagDesc.spelling.forEach(e=>{t+=`  "${e.wrong}" → "${e.right}"\n`});
   }
   return t;
@@ -2726,48 +2811,61 @@ async function runAudit(){
   const fullRules=buildAuditRulesText();
   const antiPatterns=`
 COMMON MISTAKES YOU MUST NOT MAKE:
+- Do NOT flag a description just because the clip's overall topic differs from the description. Rule 1 (FOCUS) requires that descriptions reflect THIS TAG's role in the clip, not the clip's main theme.
+- Do NOT rewrite soft-preference items (Rules 7, 8, 10) when the existing description already reads well. Only suggest alternatives for soft rules when clearly better.
 - Do NOT just lowercase the first letter and call it fixed. Restructure if needed.
 - Do NOT leave the description essentially unchanged. If you flag it as "fix", your suggestion MUST be meaningfully different.
-- Your suggestion must ALSO follow all rules. Check your own suggestion before submitting.`;
+- Your suggestion must ALSO pass ALL active rules. Before outputting, run the "tag + description" test: read them together and verify the phrase is natural.`;
 
-  const ruleChecklist=RULES.tagDesc.checks.filter(c=>c.on).map((c,i)=>`${i+1}. ${c.name}`).join('\n');
+  // Build per-tier checklist for the system prompt
+  const activeRules=RULES.tagDesc.checks.filter(c=>c.on);
+  const critical=activeRules.filter(r=>r.tier==='critical');
+  const strong=activeRules.filter(r=>r.tier==='strong');
+  const soft=activeRules.filter(r=>r.tier==='soft');
+  const ruleChecklist=[
+    critical.length?'CRITICAL (always fix):\n'+critical.map(c=>'  • '+c.name.split(':')[0]).join('\n'):'',
+    strong.length?'\nSTRONG (fix unless stylistically justified):\n'+strong.map(c=>'  • '+c.name.split(':')[0]).join('\n'):'',
+    soft.length?'\nSOFT (suggest only when clearly better):\n'+soft.map(c=>'  • '+c.name.split(':')[0]).join('\n'):''
+  ].filter(Boolean).join('\n');
 
   for(let i=0;i<allEntries.length;i+=bs){
     const batch=allEntries.slice(i,i+bs);
     const batchNum=Math.floor(i/bs)+1;
     const totalBatches=Math.ceil(allEntries.length/bs);
     S.auditLog.push(`Batch ${batchNum}/${totalBatches} — Pass 1: analyzing ${batch.length} descriptions…`);
-    S.auditProgress=i; // Update progress before the batch
+    S.auditProgress=i;
     render();
-    await new Promise(r=>setTimeout(r,50)); // Yield to browser to paint
+    await new Promise(r=>setTimeout(r,50));
     try{
-      // ── PASS 1: Initial audit ──
       const prompt1=`Audit these tag descriptions for a printed book index.
 
 ${fullRules}
 ${antiPatterns}
 
-CRITICAL CONTEXT — READ CAREFULLY:
-Each description describes the portion of the clip connected to the SPECIFIC TAG, NOT the main topic of the clip. Tags are ranked by relevancy 1-4 — a tag can be relevancy 1 (a brief mention, minor detail) and still have a legitimate description. When checking transcripts, look for the connection between THIS SPECIFIC TAG and the transcript content. Do NOT flag a description just because it is not the main theme of the clip. A good description captures the tag-relevant moment, however small.
+RULE 1 IS PARAMOUNT (FOCUS):
+Each description describes the portion of the clip connected to THIS SPECIFIC TAG — NOT the main topic of the clip. Tags are ranked by relevancy 1-4. Even relevancy-1 tags (brief mentions) are legitimate; their descriptions should capture the tag-specific moment, however small. When checking transcripts: look for ANY connection between THIS TAG and the transcript content. A description that accurately describes a brief mention is CORRECT and should not be flagged.
 
-For EACH description:
-1. Walk through every rule one by one
-2. If ANY rule is violated, provide a PROPERLY RESTRUCTURED suggestion (not just a surface tweak)
-3. Your suggestion must be a SHORT NOUN PHRASE (2-5 words), not a sentence
+FOR EACH DESCRIPTION — walk through the rules IN ORDER (by tier):
+1. First: verify Rule 1 (focus) — is the description about THIS tag, or is it just describing the clip's main theme? If it's describing the clip's main theme and the tag is minor, this fails Rule 1.
+2. Then: check each CRITICAL rule (G-d convention, Sephardic spelling)
+3. Then: check each STRONG rule (length, no tag repeat, no articles, no speech verbs, fragment style)
+4. Soft rules: only flag if the description is CLEARLY improvable — not if it's acceptable
+5. If ANY rule is violated, provide a restructured suggestion that passes ALL active rules
+6. Run the "tag + description" test before submitting
 
 Respond with JSON array. Each item:
 {
   "idx": 0,
   "original": "the original text",
   "status": "ok"|"fix"|"generate",
-  "rule_violations": ["Rule 2 — repeats entry name"],
+  "rule_violations": ["Rule 3 — repeats tag name"],
   "suggestion": "your fixed version",
-  "verification": "brief check"
+  "verification": "brief check that suggestion passes all rules"
 }
 
 ${batch.map((e,j)=>`[${j}] Entry(TAG):"${e.entryName}" Sec:${e.section} Rel:${e.rel} Relevancy:${e.relevancy||'?'}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,800)}"`).join('\n\n')}`;
 
-      const sys1=`You are a professional index editor auditing descriptions for a printed book index.\n\nKEY RULE: Each description describes the part of the clip connected to THIS SPECIFIC TAG. Tags are often minor details in the clip, not the main topic. Don't flag descriptions just because they aren't the central theme. The relevancy score (1-4) indicates how prominent the tag is; even relevancy 1 tags are legitimate and their descriptions should capture the tag-specific moment, however brief.\n\nRules to enforce:\n${ruleChecklist}\n\nJSON array only.`;
+      const sys1=`You are a professional index editor auditing descriptions for a printed book index.\n\nRULE 1 (FOCUS) IS PARAMOUNT: Each description reflects THIS SPECIFIC TAG's role in the clip — not the clip's main topic. Tags ranked 1-4 by relevancy; even rank-1 (brief mention) tags are legitimate and their descriptions should capture the tag-specific moment. Don't flag a description just because it isn't the clip's central theme.\n\nRule priority tiers:\n${ruleChecklist}\n\nJSON array only. No preamble.`;
 
       const resp1=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:sys1,messages:[{role:'user',content:prompt1}]})});
       if(!resp1.ok)throw new Error('API '+resp1.status);
@@ -2892,7 +2990,9 @@ Answer with JSON only: {"matches": true/false, "reason": "brief explanation focu
           const k=rvKey(e.entryName,e.segType,e.rowIdx);
           const existing=getRV(k);
           if(!existing||(!existing.reviewed&&existing.status!=='pending')){
-            setRV(k,{suggestion:sug,reason:p.reason||'',status:'pending',reviewed:false,deniedHistory:(existing?.deniedHistory||[])});
+            // Normalize rule_violations into an array of short labels
+            const violations=Array.isArray(p.rule_violations)?p.rule_violations.filter(Boolean):[];
+            setRV(k,{suggestion:sug,reason:p.reason||'',ruleViolations:violations,status:'pending',reviewed:false,deniedHistory:(existing?.deniedHistory||[])});
             syncQueue.push({entryName:e.entryName,segType:e.segType,rowIdx:e.rowIdx,status:'pending',suggestion:sug});
           }
           fx++;
@@ -3044,6 +3144,12 @@ function render(force=true){
   const app=$('#app');
   if(!S.connected){rSetup(app);return}
   if(S.loading&&!S.headers.length){app.innerHTML='<div class="loading-state"><div class="spinner"></div>Loading…</div>';return}
+  // Focus mode takes over the full screen
+  if(S.focusMode){
+    app.innerHTML=rFocus();
+    wireFocusModeHandlers();
+    return;
+  }
   let h='';
   h+=rSidebar();
   const isIdx=S.view==='index';
@@ -3657,6 +3763,13 @@ function rTools(){
   h+=`<button class="btn btn-sm btn-purple" id="audit-sec-run" style="font-size:11px">${IC.audit} Run Audit</button>`;
   h+='</div></div>';
 
+  // ── Focus Mode ──
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">🎯 Focus Mode</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">One-card-at-a-time keyboard review. Goes through pending suggestions + empty descriptions in the current filter. Press <span style="font-family:var(--mono);background:var(--bg-1);padding:1px 6px;border-radius:3px;border:1px solid var(--border)">F</span> anywhere in Workspace to start, or click below.</p>';
+  h+=`<button class="btn btn-sm btn-gold" id="enter-focus-mode" style="font-size:11px">🎯 Enter Focus Mode</button>`;
+  h+=`<div style="margin-top:8px;font-size:10px;color:var(--tx-4);line-height:1.5">Keys: <b>A</b> accept · <b>D</b> deny · <b>E</b> edit · <b>J/K</b> next/prev · <b>U</b> undo · <b>?</b> help · <b>Esc</b> exit</div>`;
+  h+='</div>';
+
   // ── Consistency Check ──
   h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">🔍 Consistency Check</h4>';
   h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Scan all entries for inconsistent phrasing, word order, transliteration, capitalization, and style.</p>';
@@ -3759,6 +3872,363 @@ function rTeam(){
   h+='</div>';
 
   return h+'</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FOCUS MODE — one-card-at-a-time keyboard reading view (F key)
+// ═══════════════════════════════════════════════════════════════
+
+// Build the queue of items to review in focus mode.
+// Respects the current filters (section, search, user-work, reviewFilter).
+// Includes entries with pending AI suggestions AND entries with empty/unreviewed descriptions.
+function buildFocusQueue(){
+  if(!S.indexData)return[];
+  const q=S.idxSearch.toLowerCase();
+  const searchMode=S.idxSearchMode||'both';
+  const userFilter=S.userWorkFilter||'';
+  // Determine which sections to include
+  const sectionsToShow=S.idxActiveSection==='all'?RULES.sectionOrder:[S.idxActiveSection];
+  const queue=[];
+  sectionsToShow.forEach(sec=>{
+    let entries=(S.indexData.sections[sec]||[]);
+    // Apply search filter
+    if(q){
+      if(searchMode==='name')entries=entries.filter(e=>e.name.toLowerCase().includes(q));
+      else if(searchMode==='desc')entries=entries.filter(e=>e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+      else entries=entries.filter(e=>e.name.toLowerCase().includes(q)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+    }
+    // Apply admin user-work filter
+    if(userFilter){
+      entries=entries.filter(e=>userTouchedEntry(e,userFilter));
+    }
+    // Apply review filter (same logic as applyReviewFilter, but without the reviewMode side-effect)
+    const f=S.reviewFilter;
+    if(f==='reviewed')entries=entries.filter(e=>isEntryReviewed(e));
+    else if(f==='unreviewed')entries=entries.filter(e=>!isEntryReviewed(e));
+    else if(f==='pending')entries=entries.filter(e=>e.results.some(r=>hasPendingSuggestion(e.name,r.segType,r.rowIdx)));
+    else if(f==='bookmarked')entries=entries.filter(e=>S.idxBookmarks[e.name]);
+    // Flatten to (entry, result) pairs
+    entries.forEach(e=>{
+      e.results.forEach(r=>{
+        const k=rvKey(e.name,r.segType,r.rowIdx);
+        const rv=S.reviewData?.[k]||{};
+        const hasPending=rv.suggestion&&rv.status==='pending';
+        const isEmpty=!r.desc||!r.desc.trim();
+        const isReviewed=rv.status==='accepted'||rv.status==='denied'||rv.status==='custom'||rv.status==='ok'||rv.reviewed;
+        // Always include: pending suggestions (priority), empty descriptions, and unreviewed non-empty ones.
+        // Skip: already-reviewed items that have no pending (those are done).
+        if(hasPending){
+          queue.push({entry:e,result:r,section:sec,type:'pending',key:k});
+        }else if(isEmpty&&!isReviewed){
+          queue.push({entry:e,result:r,section:sec,type:'empty',key:k});
+        }else if(!isReviewed){
+          queue.push({entry:e,result:r,section:sec,type:'unreviewed',key:k});
+        }
+      });
+    });
+  });
+  // Sort: pending first, then empties, then unreviewed
+  const order={pending:0,empty:1,unreviewed:2};
+  queue.sort((a,b)=>(order[a.type]||9)-(order[b.type]||9));
+  return queue;
+}
+
+function enterFocusMode(){
+  const queue=buildFocusQueue();
+  if(!queue.length){
+    toast('No items to review in the current filter','info');
+    return;
+  }
+  // Soft warning for very large queues
+  if(queue.length>500){
+    customConfirm(`This queue has ${queue.length} items. That's a lot to go through — consider narrowing your filter first. Continue anyway?`).then(ok=>{
+      if(!ok)return;
+      S.focusQueue=queue;
+      S.focusIndex=0;
+      S.focusMode=true;
+      render();
+    });
+    return;
+  }
+  S.focusQueue=queue;
+  S.focusIndex=0;
+  S.focusMode=true;
+  render();
+}
+
+function exitFocusMode(){
+  S.focusMode=false;
+  S.focusShowHelp=false;
+  render();
+}
+
+function rFocus(){
+  if(!S.focusQueue||!S.focusQueue.length){
+    return `<div class="focus-wrap"><div class="focus-card"><div style="text-align:center;padding:40px"><h2>No items in queue</h2><p style="color:var(--tx-3);margin:16px 0">Adjust your filters and try again.</p><button class="btn" id="focus-exit">← Exit focus mode</button></div></div></div>`;
+  }
+  // Clamp index
+  if(S.focusIndex<0)S.focusIndex=0;
+  if(S.focusIndex>=S.focusQueue.length)S.focusIndex=S.focusQueue.length-1;
+  const item=S.focusQueue[S.focusIndex];
+  const{entry:e,result:r,section,type,key}=item;
+  const rv=S.reviewData?.[key]||{};
+  const hasPending=rv.suggestion&&rv.status==='pending';
+  const descEmpty=!r.desc||!r.desc.trim();
+  const progress=Math.round(((S.focusIndex+1)/S.focusQueue.length)*100);
+
+  let h=`<div class="focus-wrap">`;
+  // Top bar — exit button + progress + section/tag info
+  h+=`<div class="focus-topbar">`;
+  h+=`<button class="focus-exit-btn" id="focus-exit" title="Exit focus mode (Esc or F)">← Exit</button>`;
+  h+=`<div class="focus-progress-text">${S.focusIndex+1} / ${S.focusQueue.length} · ${esc(section)}</div>`;
+  h+=`<button class="focus-help-btn" id="focus-help" title="Keyboard shortcuts (?)">?</button>`;
+  h+=`</div>`;
+
+  // Main card — book-page style
+  h+=`<div class="focus-card">`;
+  h+=`<div class="focus-tag-line">${esc(section)} · ${esc(r.segType||'')}</div>`;
+  h+=`<h1 class="focus-tag-name">${esc(e.name)}</h1>`;
+
+  // Type-specific content
+  if(hasPending){
+    h+=`<div class="focus-original-label">Original</div>`;
+    h+=`<div class="focus-original">${descEmpty?'<span style="color:var(--tx-4);font-style:italic">[empty]</span>':esc(r.desc)}</div>`;
+    h+=`<div class="focus-arrow">↓</div>`;
+    h+=`<div class="focus-suggestion-label">AI Suggestion</div>`;
+    h+=`<div class="focus-suggestion">${esc(rv.suggestion)}</div>`;
+    if(rv.reason){
+      h+=`<div class="focus-reason">${esc(rv.reason)}</div>`;
+    }
+    if(Array.isArray(rv.ruleViolations)&&rv.ruleViolations.length){
+      h+=`<div class="focus-rules">`;
+      rv.ruleViolations.forEach(v=>{
+        const m=String(v).match(/Rule\s*(\d+)\s*[—-]?\s*(.*)/i);
+        const lbl=m?`R${m[1]}${m[2]?' · '+m[2]:''}`:v;
+        h+=`<span class="idx-rule-chip" title="${esc(v)}">${esc(lbl.length>40?lbl.slice(0,40)+'…':lbl)}</span>`;
+      });
+      h+=`</div>`;
+    }
+  }else if(descEmpty){
+    h+=`<div class="focus-original-label">Description</div>`;
+    h+=`<div class="focus-empty-badge">[empty — needs description]</div>`;
+    h+=`<div class="focus-hint">Press E to write one, or D to mark as reviewed with no description</div>`;
+  }else{
+    h+=`<div class="focus-original-label">Current Description</div>`;
+    h+=`<div class="focus-suggestion">${esc(r.desc)}</div>`;
+    h+=`<div class="focus-hint">Press A to mark reviewed (no change), E to edit, D to remove</div>`;
+  }
+
+  // Clip context (small, subtle)
+  if(r.clipName){
+    h+=`<div class="focus-clip-info">Clip: ${esc(r.clipName)}${r.pvName&&r.pvName!==r.clipName?' · '+esc(r.pvName):''}</div>`;
+  }
+
+  h+=`</div>`;
+
+  // Keyboard hint bar
+  h+=`<div class="focus-keybar">`;
+  if(hasPending){
+    h+=`<span><span class="focus-key">A</span> accept</span>`;
+    h+=`<span><span class="focus-key">E</span> edit</span>`;
+    h+=`<span><span class="focus-key">D</span> deny</span>`;
+  }else if(descEmpty){
+    h+=`<span><span class="focus-key">E</span> write description</span>`;
+    h+=`<span><span class="focus-key">D</span> skip / mark reviewed</span>`;
+  }else{
+    h+=`<span><span class="focus-key">A</span> mark reviewed</span>`;
+    h+=`<span><span class="focus-key">E</span> edit</span>`;
+    h+=`<span><span class="focus-key">D</span> remove</span>`;
+  }
+  h+=`<span><span class="focus-key">J</span> next</span>`;
+  h+=`<span><span class="focus-key">K</span> prev</span>`;
+  h+=`<span><span class="focus-key">?</span> help</span>`;
+  h+=`</div>`;
+
+  // Progress bar at bottom
+  h+=`<div class="focus-progressbar"><div class="focus-progress-fill" style="width:${progress}%"></div></div>`;
+
+  // Help overlay
+  if(S.focusShowHelp){
+    h+=`<div class="focus-help-overlay" id="focus-help-close-backdrop">`;
+    h+=`<div class="focus-help-panel">`;
+    h+=`<h3>Keyboard shortcuts</h3>`;
+    h+=`<table>`;
+    h+=`<tr><td><span class="focus-key">A</span> / <span class="focus-key">Enter</span></td><td>Accept suggestion (or mark reviewed if no suggestion)</td></tr>`;
+    h+=`<tr><td><span class="focus-key">D</span></td><td>Deny / skip</td></tr>`;
+    h+=`<tr><td><span class="focus-key">E</span></td><td>Edit inline (returns to Workspace at this row)</td></tr>`;
+    h+=`<tr><td><span class="focus-key">J</span> / <span class="focus-key">↓</span></td><td>Next item</td></tr>`;
+    h+=`<tr><td><span class="focus-key">K</span> / <span class="focus-key">↑</span></td><td>Previous item</td></tr>`;
+    h+=`<tr><td><span class="focus-key">U</span> / <span class="focus-key">⌘Z</span></td><td>Undo last action</td></tr>`;
+    h+=`<tr><td><span class="focus-key">?</span></td><td>Toggle this help</td></tr>`;
+    h+=`<tr><td><span class="focus-key">F</span> / <span class="focus-key">Esc</span></td><td>Exit focus mode</td></tr>`;
+    h+=`</table>`;
+    h+=`<div style="text-align:center;margin-top:20px;font-size:11px;color:var(--tx-4)">Click anywhere outside or press ? to close</div>`;
+    h+=`</div></div>`;
+  }
+
+  h+=`</div>`; // .focus-wrap
+  return h;
+}
+
+// Wire up focus mode event handlers (keyboard + buttons).
+// Called after render() when S.focusMode is true.
+function wireFocusModeHandlers(){
+  // Button wiring
+  const exitBtn=$('#focus-exit');
+  if(exitBtn)exitBtn.onclick=exitFocusMode;
+  const helpBtn=$('#focus-help');
+  if(helpBtn)helpBtn.onclick=()=>{S.focusShowHelp=!S.focusShowHelp;render()};
+  const backdrop=$('#focus-help-close-backdrop');
+  if(backdrop)backdrop.onclick=(e)=>{if(e.target===backdrop){S.focusShowHelp=false;render()}};
+  // Keyboard handler — replaces the normal handler while focus mode is active
+  document.onkeydown=handleFocusKey;
+}
+
+function handleFocusKey(e){
+  // If typing in an input (shouldn't happen in focus mode, but safety)
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  // Help overlay open? ? and Escape close it
+  if(S.focusShowHelp){
+    if(e.key==='?'||e.key==='Escape'){e.preventDefault();S.focusShowHelp=false;render()}
+    return;
+  }
+  const item=S.focusQueue[S.focusIndex];
+  if(!item){return}
+  const{entry:entryObj,result:r,key}=item;
+  const rv=S.reviewData?.[key]||{};
+  const hasPending=rv.suggestion&&rv.status==='pending';
+  const descEmpty=!r.desc||!r.desc.trim();
+
+  // Exit: F or Escape
+  if(e.key==='f'||e.key==='F'||e.key==='Escape'){
+    e.preventDefault();exitFocusMode();return;
+  }
+  // Help: ?
+  if(e.key==='?'){e.preventDefault();S.focusShowHelp=true;render();return}
+  // Undo: U or Ctrl+Z/Cmd+Z
+  if(e.key==='u'||e.key==='U'||(e.key==='z'&&(e.ctrlKey||e.metaKey))){
+    e.preventDefault();doUndo();
+    // Rebuild queue in case the undone action affected it
+    S.focusQueue=buildFocusQueue();
+    if(S.focusIndex>=S.focusQueue.length)S.focusIndex=Math.max(0,S.focusQueue.length-1);
+    render();
+    return;
+  }
+  // Next: J or ArrowDown or ArrowRight
+  if(e.key==='j'||e.key==='J'||e.key==='ArrowDown'||e.key==='ArrowRight'){
+    e.preventDefault();
+    if(S.focusIndex<S.focusQueue.length-1){S.focusIndex++;render()}
+    else{toast('End of queue','info')}
+    return;
+  }
+  // Previous: K or ArrowUp or ArrowLeft
+  if(e.key==='k'||e.key==='K'||e.key==='ArrowUp'||e.key==='ArrowLeft'){
+    e.preventDefault();
+    if(S.focusIndex>0){S.focusIndex--;render()}
+    else{toast('Start of queue','info')}
+    return;
+  }
+  // Accept: A or Enter
+  if(e.key==='a'||e.key==='A'||e.key==='Enter'){
+    e.preventDefault();
+    if(hasPending){
+      // Accept AI suggestion
+      acceptSuggestion(entryObj.name,r.segType,r.rowIdx).then(()=>{
+        advanceAfterAction();
+      });
+    }else if(descEmpty){
+      toast('Nothing to accept — press E to write a description','info');
+    }else{
+      // Mark as reviewed without changing
+      const rvExisting=getRV(key)||{};
+      rvExisting.status='ok';rvExisting.reviewed=true;
+      rvExisting.editedBy=S.user?.name||S.user?.email||'Unknown';
+      rvExisting.editedAt=Date.now();
+      setRV(key,rvExisting);
+      toast('Marked reviewed','success');
+      advanceAfterAction();
+    }
+    return;
+  }
+  // Deny: D
+  if(e.key==='d'||e.key==='D'){
+    e.preventDefault();
+    if(hasPending){
+      denySuggestion(entryObj.name,r.segType,r.rowIdx);
+      advanceAfterAction();
+    }else if(descEmpty){
+      // Mark empty as reviewed with no description
+      const rvExisting=getRV(key)||{};
+      rvExisting.status='ok';rvExisting.reviewed=true;
+      rvExisting.editedBy=S.user?.name||S.user?.email||'Unknown';
+      rvExisting.editedAt=Date.now();
+      setRV(key,rvExisting);
+      toast('Skipped — marked reviewed','success');
+      advanceAfterAction();
+    }else{
+      // Remove existing description — confirm first
+      customConfirm(`Remove description "${r.desc}" for ${entryObj.name}?`).then(async(ok)=>{
+        if(!ok)return;
+        await updateTagDesc(r.rowIdx,entryObj.name,'');
+        const rvExisting=getRV(key)||{};
+        rvExisting.status='ok';rvExisting.reviewed=true;
+        rvExisting.editedBy=S.user?.name||S.user?.email||'Unknown';
+        rvExisting.editedAt=Date.now();
+        setRV(key,rvExisting);
+        buildIndex();
+        advanceAfterAction();
+      });
+    }
+    return;
+  }
+  // Edit: E — exit focus mode and jump to the entry for inline editing
+  if(e.key==='e'||e.key==='E'){
+    e.preventDefault();
+    const entryName=entryObj.name;
+    exitFocusMode();
+    // Then jump to the entry in workspace and trigger inline edit
+    setTimeout(()=>{
+      jumpToEntry(entryName,key);
+      setTimeout(()=>{
+        // Find the row and dispatch a double-click to open the inline editor
+        const allRows=document.querySelectorAll('.idx-result');
+        for(const row of allRows){
+          const editBtn=row.querySelector(`[data-clippanel="${CSS.escape(key)}"]`);
+          if(editBtn){
+            row.scrollIntoView({behavior:'smooth',block:'center'});
+            const descEl=row.querySelector('.idx-result-desc.editable, .idx-result-desc.empty-desc');
+            if(descEl){
+              const evt=new MouseEvent('dblclick',{bubbles:true,cancelable:true});
+              descEl.dispatchEvent(evt);
+            }
+            break;
+          }
+        }
+      },350);
+    },50);
+    return;
+  }
+}
+
+// After an accept/deny action, rebuild the queue and advance the pointer.
+function advanceAfterAction(){
+  // Rebuild queue (the item we just acted on should drop out)
+  const oldKey=S.focusQueue[S.focusIndex]?.key;
+  S.focusQueue=buildFocusQueue();
+  // Find where we are now — keep roughly the same position
+  if(!S.focusQueue.length){
+    toast('All done! No more items in this filter.','success');
+    exitFocusMode();
+    return;
+  }
+  // If the old item is gone, the index stays pointing at the next item naturally
+  // If it's still there (e.g. deny that didn't remove), skip past it
+  if(S.focusQueue[S.focusIndex]?.key===oldKey){
+    S.focusIndex++;
+  }
+  if(S.focusIndex>=S.focusQueue.length)S.focusIndex=S.focusQueue.length-1;
+  if(S.focusIndex<0)S.focusIndex=0;
+  render();
 }
 
 function rIndex(){
@@ -3911,6 +4381,16 @@ function rIndex(){
             eh+=`<span class="idx-sug-arrow">→</span>`;
             eh+=`<span class="idx-sug-new">${esc(rv.suggestion)}</span>`;
             if(rv.reason)eh+=`<span class="idx-sug-reason" data-reason="${esc(rv.reason)}">${esc(rv.reason.length>18?rv.reason.slice(0,18)+'…':rv.reason)}</span>`;
+            // Rule violation chips — show which rules were violated by the original
+            if(Array.isArray(rv.ruleViolations)&&rv.ruleViolations.length){
+              rv.ruleViolations.forEach(v=>{
+                // Extract rule number + short label (e.g. "Rule 3 — repeats tag name" → "R3 · repeats tag name")
+                const m=String(v).match(/Rule\s*(\d+)\s*[—-]?\s*(.*)/i);
+                const lbl=m?`R${m[1]}${m[2]?' · '+m[2]:''}`:v;
+                const short=lbl.length>30?lbl.slice(0,30)+'…':lbl;
+                eh+=`<span class="idx-rule-chip" title="${esc(v)}">${esc(short)}</span>`;
+              });
+            }
             eh+=`<span class="idx-sug-actions">`;
             eh+=`<span class="idx-sug-btn accept" data-sugaccept="${esc(e.name)}|${seg}|${r.rowIdx}" title="Accept">${IC.check}</span>`;
             eh+=`<span class="idx-sug-btn deny" data-sugdeny="${esc(e.name)}|${seg}|${r.rowIdx}" title="Deny">${IC.x}</span>`;
@@ -4489,6 +4969,8 @@ function bindAll(){
     const sec=$('#audit-sec-select')?.value;
     if(sec)bulkAuditSection(sec);
   });
+  // Focus Mode entry button (Tools page)
+  on('#enter-focus-mode','click',()=>enterFocusMode());
   // Admin — copy invite
   on('#invite-copy','click',()=>{
     const email=$('#invite-email')?.value?.trim();
@@ -5510,6 +5992,12 @@ function handleKeyShortcut(e){
     if(S.viewHistory&&S.viewHistory.length){e.preventDefault();doBack();return}
   }
   if(e.key==='r'&&!e.ctrlKey&&!e.metaKey){S.reviewMode=!S.reviewMode;render();return}
+  // F key — enter focus mode (keyboard reading view)
+  if((e.key==='f'||e.key==='F')&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
+    e.preventDefault();
+    enterFocusMode();
+    return;
+  }
 }
 
 // Go back one step in view history. Restores view, section, page, search, filter, bookScope, and scroll/highlight.
