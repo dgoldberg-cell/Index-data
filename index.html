@@ -18,7 +18,7 @@
 --green:#4a8a5a;--green-bg:rgba(74,138,90,.07);--green-bd:rgba(74,138,90,.22);
 --amber:#9a7a30;--amber-bg:rgba(154,122,48,.07);
 --gold:#8c7a50;--gold-bg:rgba(140,122,80,.06);
---sidebar-w:210px;
+--sidebar-w:260px;
 --font:'DM Sans',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;--serif:'Source Serif 4',Georgia,serif;
 --radius:7px;--radius-lg:11px;
 }
@@ -173,10 +173,12 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 /* Meta container: reference + relationship + buttons group together, wrap as one unit to line 2 */
 .idx-result-meta{display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
 /* Relevance shading — 4 levels. 4 = highest (darkest/full color), 1 = lowest (lightest/grayest) */
-.idx-result[data-rel="4"] .idx-result-desc,.idx-result[data-rel="4"] .idx-result-ref{opacity:1}
-.idx-result[data-rel="3"] .idx-result-desc,.idx-result[data-rel="3"] .idx-result-ref{opacity:0.82}
-.idx-result[data-rel="2"] .idx-result-desc,.idx-result[data-rel="2"] .idx-result-ref{opacity:0.62}
-.idx-result[data-rel="1"] .idx-result-desc,.idx-result[data-rel="1"] .idx-result-ref{opacity:0.42}
+/* Relevancy formatting — applied to reference codes only, not descriptions.
+   Rank 4 = bold, Rank 3 = underline, Rank 2 = italic, Rank 1 = regular. */
+.idx-result[data-rel="4"] .idx-result-ref{font-weight:700}
+.idx-result[data-rel="3"] .idx-result-ref{text-decoration:underline}
+.idx-result[data-rel="2"] .idx-result-ref{font-style:italic}
+.idx-result[data-rel="1"] .idx-result-ref{}
 
 /* Single column — bigger text, more spread out */
 .idx-body:not(.two-col-mode) .idx-entry{margin-bottom:20px}
@@ -191,6 +193,8 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-orig-inline{display:inline-flex;align-items:baseline;gap:4px;flex-shrink:0}
 .idx-orig-text{color:var(--tx-4);text-decoration:line-through;font-size:11px;cursor:pointer;padding:0 3px;border-radius:3px;transition:all .1s}
 .idx-orig-text:hover{background:var(--amber-bg);color:var(--amber);text-decoration:line-through}
+.idx-orig-text.empty{font-style:italic;text-decoration:none;font-size:10px;opacity:0.7}
+.idx-orig-text.empty:hover{text-decoration:none;opacity:1}
 .idx-orig-revert{font-size:9px;color:var(--amber);cursor:pointer;padding:1px 5px;border:1px solid rgba(154,122,48,.3);border-radius:8px;background:var(--bg-white);white-space:nowrap;transition:all .1s;font-family:var(--font)}
 .idx-orig-revert:hover{background:var(--amber-bg);border-color:var(--amber)}
 .idx-orig-sep{color:var(--tx-4);font-size:10px}
@@ -219,7 +223,7 @@ body.clip-panel-open .idx-cols{gap:16px}
 .book-desc-empty{color:#c00;font-style:italic}
 .book-rel{font-size:10px;color:#888;font-style:italic;white-space:nowrap}
 .book-ref{font-family:Georgia,serif;color:#8a6d2e;text-decoration:none;font-size:12px;white-space:nowrap;font-weight:500}
-.book-ref:hover{text-decoration:underline}
+.book-ref:hover{color:var(--gold)}
 .book-comment{opacity:0;background:none;border:none;cursor:pointer;font-size:10px;padding:0 2px;transition:opacity .1s}
 .book-row:hover .book-comment{opacity:0.6}
 .book-comment:hover{opacity:1}
@@ -231,10 +235,11 @@ body.clip-panel-open .idx-cols{gap:16px}
 .book-pill-cnt{font-size:9px;opacity:.75;font-weight:400}
 .book-pill.active .book-pill-cnt{opacity:1}
 /* Relevance shading inside book */
-.book-row[data-rel="4"] .book-desc,.book-row[data-rel="4"] .book-ref{opacity:1}
-.book-row[data-rel="3"] .book-desc,.book-row[data-rel="3"] .book-ref{opacity:0.82}
-.book-row[data-rel="2"] .book-desc,.book-row[data-rel="2"] .book-ref{opacity:0.62}
-.book-row[data-rel="1"] .book-desc,.book-row[data-rel="1"] .book-ref{opacity:0.44}
+/* Book View: same relevancy formatting applied to ref codes only */
+.book-row[data-rel="4"] .book-ref{font-weight:700 !important}
+.book-row[data-rel="3"] .book-ref{text-decoration:underline !important}
+.book-row[data-rel="2"] .book-ref{font-style:italic !important}
+.book-row[data-rel="1"] .book-ref{}
 
 /* Note popup — chat style like transcript popup */
 .note-popup-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:300;display:flex;align-items:center;justify-content:center}
@@ -244,7 +249,8 @@ body.clip-panel-open .idx-cols{gap:16px}
 .sug-chat-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:300;display:flex;align-items:center;justify-content:center}
 
 /* Clip details side panel */
-.clip-panel-overlay{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:90vw;background:var(--bg-white);border-left:2px solid var(--gold);box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:250;display:flex;flex-direction:column;animation:slideInRight .2s ease-out}
+.clip-panel-overlay{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:90vw;background:var(--bg-white);border-left:2px solid var(--gold);box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:250;display:flex;flex-direction:column}
+.clip-panel-overlay.animate-in{animation:slideInRight .2s ease-out}
 .idx-result.panel-source{background:rgba(212,175,55,0.15);border-left:3px solid var(--gold);padding-left:6px;border-radius:4px}
 .clip-panel-chips{display:flex;gap:6px;padding:8px 18px;border-bottom:1px solid var(--border);background:var(--bg-0);overflow-x:auto;flex-shrink:0}
 .clip-chip{background:var(--bg-1);color:var(--tx-2);border:1px solid var(--border);border-radius:16px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all .15s}
@@ -265,6 +271,7 @@ body.clip-panel-open .idx-cols{gap:16px}
 .clip-panel-section{margin-bottom:14px}
 .clip-panel-label{font-size:10px;font-weight:600;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
 .clip-panel-text{font-size:12px;line-height:1.5;color:var(--tx-1)}
+.transcript-highlight{background:rgba(212,175,55,0.35);color:var(--tx-1);padding:1px 2px;border-radius:3px;font-weight:500;box-shadow:0 0 0 1px rgba(140,122,80,0.25)}
 .clip-panel-text.scrollable{max-height:400px;overflow-y:auto;background:var(--bg-1);padding:12px;border-radius:6px;font-size:14px;line-height:1.6;color:var(--tx-1)}
 .clip-panel-actions{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;background:var(--bg-0)}
 .clip-panel-actions .btn{flex:1}
@@ -496,9 +503,19 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .focus-empty-badge{font-family:var(--serif,Georgia,serif);font-size:18px;font-style:italic;color:var(--red);background:var(--red-bg,rgba(176,80,80,.08));border:1px solid var(--red-bd,rgba(176,80,80,.2));border-radius:8px;padding:14px 22px;margin-bottom:14px}
 .focus-hint{font-size:12px;color:var(--tx-3);font-style:italic;margin-top:6px;max-width:520px;line-height:1.5}
 .focus-clip-info{margin-top:28px;font-size:11px;color:var(--tx-4);font-style:italic;max-width:560px;padding-top:18px;border-top:1px solid var(--border)}
-.focus-keybar{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;padding:12px 28px;font-size:11.5px;color:var(--tx-3)}
-.focus-keybar span{display:inline-flex;align-items:center;gap:6px}
-.focus-key{display:inline-block;font-family:var(--mono,monospace);font-size:10px;background:var(--bg-1);border:1px solid var(--border);border-bottom-width:2px;padding:2px 7px;border-radius:4px;color:var(--tx-2);font-weight:500;min-width:20px;text-align:center}
+.focus-actionbar{display:flex;justify-content:center;gap:10px;padding:14px 28px 6px;flex-wrap:wrap}
+.focus-action{background:var(--bg-white);border:1px solid var(--border);border-radius:8px;padding:10px 22px;font-size:13px;font-weight:500;color:var(--tx-2);cursor:pointer;font-family:var(--font);transition:all .1s}
+.focus-action:hover{border-color:var(--gold);color:var(--gold);background:var(--bg-0)}
+.focus-action.accept{background:var(--green);color:#fff;border-color:var(--green)}
+.focus-action.accept:hover{filter:brightness(1.1);color:#fff}
+.focus-action.deny{color:var(--red);border-color:rgba(176,80,80,.3)}
+.focus-action.deny:hover{background:var(--red-bg);color:var(--red);border-color:var(--red)}
+.focus-action.edit{color:var(--gold);border-color:rgba(140,122,80,.3)}
+.focus-action.edit:hover{background:var(--gold-bg);color:var(--gold);border-color:var(--gold)}
+.focus-navbar{display:flex;justify-content:space-between;padding:0 28px 10px;gap:8px;max-width:780px;width:100%;margin:0 auto}
+.focus-nav{background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-size:12px;color:var(--tx-3);cursor:pointer;font-family:var(--font)}
+.focus-nav:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+.focus-nav:disabled{opacity:.4;cursor:not-allowed}
 .focus-progressbar{width:100%;max-width:780px;margin:0 28px 18px;height:4px;background:var(--bg-1);border-radius:2px;overflow:hidden}
 .focus-progress-fill{height:100%;background:linear-gradient(to right,var(--gold),var(--amber,var(--gold)));transition:width .2s ease}
 .focus-help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
@@ -601,107 +618,114 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .denied-item{display:flex;align-items:baseline;gap:6px;padding:3px 0;font-size:11px;color:var(--tx-3);border-bottom:1px solid var(--border)}
 .denied-item:last-child{border-bottom:none}
 
-/* Print / Save-as-PDF styles — only shows Book View content, hides all chrome */
-@media print{
-  /* Hide everything by default */
 /* Print / Save-as-PDF styles — only shows Book View content with proper page breaks */
 @media print{
-  /* Hide everything by default */
+  /* Hide everything that's chrome or UI */
   body > *{display:none !important}
   body > #app, body > div[id]{display:block !important}
-  .sidebar,.page-back-btn,.page-hd-actions,.book-entry-edit,.book-comment,#clip-panel-overlay,.notif-panel,.ai-fab,#ai-fab,.toast-stack,.confirm-overlay,.note-popup-overlay,.transcript-popup,.rename-input,.idx-rename-input,.idx-search-modes,#user-filter-clear,.book-section-pills{display:none !important}
-  /* Let book view fill the page without shadows or max-widths */
-  .main, .main-content, .content{display:block !important;overflow:visible !important;width:100% !important;max-width:none !important;padding:0 !important;margin:0 !important}
-  .book-view{box-shadow:none !important;max-width:none !important;margin:0 !important;padding:0 !important;border-radius:0 !important;background:#fff !important}
-  .page-hd{border:none !important;padding:0 0 12px !important;margin:0 !important;background:none !important}
-  .page-hd h1{font-size:24px !important;text-align:center !important;font-weight:700;margin-bottom:4px}
-  .page-hd p{display:none !important}
+  .sidebar,.page-back-btn,.page-hd-actions,.book-entry-edit,.book-comment,#clip-panel-overlay,.notif-panel,.ai-fab,#ai-fab,.toast-stack,.confirm-overlay,.note-popup-overlay,.transcript-popup,.rename-input,.idx-rename-input,.idx-search-modes,#user-filter-clear,.book-section-pills,.focus-wrap{display:none !important}
 
-  /* Two-column book layout with strict break control */
+  /* Page containers */
+  .main, .main-content, .content{display:block !important;overflow:visible !important;width:100% !important;max-width:none !important;padding:0 !important;margin:0 !important}
+  .book-view{box-shadow:none !important;max-width:none !important;margin:0 !important;padding:0 !important;border-radius:0 !important;background:#fff !important;display:block !important}
+  .page-hd{border:none !important;padding:0 0 8px !important;margin:0 0 4px !important;background:none !important;display:block !important}
+  .page-hd h1{font-size:22px !important;text-align:center !important;font-weight:700;margin:0}
+  .page-hd p,.page-hd>div>div:first-child p{display:none !important}
+  .page-hd>div{display:block !important}
+
+  /* Two-column book layout with proper page-break control.
+     Using column-count on the container with column-fill:auto lets content
+     flow naturally across both columns AND across pages. */
   .book-page{
+    display:block !important;
     column-count:2 !important;
-    column-gap:28px !important;
-    column-rule:1px solid #ddd !important;
+    -webkit-column-count:2 !important;
+    column-gap:24px !important;
+    -webkit-column-gap:24px !important;
+    column-rule:1px solid #ccc !important;
     column-fill:auto !important;
+    -webkit-column-fill:auto !important;
   }
 
-  /* Section headings — start on a new page, span both columns */
+  /* Section headings — full-page-width span, new page each */
   .book-section-hd{
+    -webkit-column-span:all !important;
+    column-span:all !important;
     break-before:page !important;
     page-break-before:always !important;
-    column-span:all !important;
-    -webkit-column-span:all !important;
     font-size:18px !important;
     text-align:center !important;
-    padding:10px 0 14px !important;
-    margin:0 0 10px !important;
+    padding:8px 0 12px !important;
+    margin:0 0 8px !important;
     border-top:2px solid #1a1a1a !important;
     border-bottom:1px solid #999 !important;
     font-weight:700 !important;
     background:#fff !important;
+    font-family:Georgia,serif !important;
+    letter-spacing:0.3px !important;
   }
   .book-section-hd:first-child{
     break-before:avoid !important;
     page-break-before:avoid !important;
   }
 
-  /* Each entry stays together — never split mid-entry */
+  /* Each entry stays whole — never split mid-entry, not across columns or pages */
   .book-entry{
     break-inside:avoid !important;
     page-break-inside:avoid !important;
     -webkit-column-break-inside:avoid !important;
-    margin-bottom:10px !important;
+    margin-bottom:8px !important;
     display:block !important;
   }
   .book-entry-head{
     break-after:avoid !important;
     page-break-after:avoid !important;
-    margin-bottom:3px !important;
+    margin-bottom:2px !important;
+    display:block !important;
   }
-  .book-entry-name{font-weight:700 !important;font-size:13px !important}
+  .book-entry-name{font-weight:700 !important;font-size:12.5px !important;font-family:Georgia,serif !important}
   .book-seg{
     break-inside:avoid !important;
     page-break-inside:avoid !important;
-    margin:2px 0 2px 12px !important;
+    -webkit-column-break-inside:avoid !important;
+    margin:1px 0 1px 10px !important;
   }
   .book-seg-label{
     break-after:avoid !important;
     page-break-after:avoid !important;
     font-style:italic !important;
     color:#555 !important;
-    font-size:9.5px !important;
+    font-size:9px !important;
     text-transform:uppercase !important;
     letter-spacing:0.4px !important;
     margin:2px 0 1px !important;
+    display:block !important;
   }
   .book-row{
     break-inside:avoid !important;
     page-break-inside:avoid !important;
-    font-size:11.5px !important;
-    line-height:1.45 !important;
-    padding:0 0 0 12px !important;
+    -webkit-column-break-inside:avoid !important;
+    font-size:11px !important;
+    line-height:1.4 !important;
+    padding:0 0 0 10px !important;
     display:flex !important;
     align-items:baseline !important;
     gap:5px !important;
+    margin-bottom:1px !important;
   }
-  .book-desc{flex:1 1 auto !important}
+  .book-desc{flex:1 1 auto !important;font-family:Georgia,serif !important}
   .book-rel{font-size:9px !important;color:#777 !important;font-style:italic !important;white-space:nowrap}
-  /* Reference codes — black text, no underline on paper */
-  .book-ref{color:#1a1a1a !important;text-decoration:none !important;font-size:10.5px !important;white-space:nowrap}
+  /* Reference codes — black on paper */
+  .book-ref{color:#1a1a1a !important;text-decoration:none !important;font-size:10px !important;white-space:nowrap;font-family:Georgia,serif !important}
+  /* Preserve relevancy formatting in print */
+  .book-row[data-rel="4"] .book-ref{font-weight:700 !important}
+  .book-row[data-rel="3"] .book-ref{text-decoration:underline !important}
+  .book-row[data-rel="2"] .book-ref{font-style:italic !important}
 
-  /* Page setup — letter size with reasonable margins, page numbers in footer */
+  /* Page setup: Letter size, tight margins, page numbers at bottom, title at top */
   @page{
     size:letter;
-    margin:0.7in 0.5in 0.6in 0.5in;
-    @bottom-center{
-      content:counter(page);
-      font-family:Georgia,serif;
-      font-size:10px;
-      color:#666;
-    }
-  }
-  /* Repeating page title header */
-  @page{
+    margin:0.6in 0.5in 0.5in 0.5in;
     @top-center{
       content:"JEM Index";
       font-family:Georgia,serif;
@@ -709,8 +733,15 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
       color:#999;
       letter-spacing:0.5px;
     }
+    @bottom-center{
+      content:counter(page);
+      font-family:Georgia,serif;
+      font-size:10px;
+      color:#666;
+    }
   }
-  /* Avoid orphans/widows */
+
+  /* Orphans/widows */
   p,div{orphans:2;widows:2}
 }
 </style>
@@ -938,11 +969,12 @@ view:'index',aiOpen:false,
 indexData:null,
 idxSearch:'',idxSearchMode:'both',idxNavMode:'tabs',idxLayout:'single',idxActiveSection:'all',idxActiveEntry:null,idxPage:0,
 userWorkFilter:'', // Admin only: when set, filter entries to show only those touched by this user (email)
-sidebarWorkspaceOpen:false, // Workspace section dropdown expand/collapse
+sidebarWorkspaceOpen:true, // Workspace section dropdown expand/collapse (user-controlled)
 focusMode:false, // Keyboard reading mode — one-card-at-a-time focus view
 focusIndex:0, // Current item in focus queue
 focusQueue:[], // Cached queue — built when entering focus mode
 focusShowHelp:false, // ? key toggles help overlay
+transcriptHighlights:{}, // Cache: {tag|clipId → {loading, phrases:[], noMatch:bool, error}}
 idxBookmarks:JSON.parse(localStorage.getItem('jw_bm')||'{}'),
 idxNotes:JSON.parse(localStorage.getItem('jw_notes')||'{}'),
 editingDesc:null,
@@ -1620,13 +1652,16 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
     const segType=RULES.typeMap[clipType]||'Addresses';
     const k=rvKey(entryName,segType,rowIdx);
     const rv=getRV(k)||{};
-    if(!rv.originalDesc&&oldDesc){
-      rv.originalDesc=oldDesc;
+    // Track original on first edit — include empty-string case so users can revert to empty
+    // Skip if _reverting flag set (we're restoring to original, don't re-track)
+    if(!rv._reverting&&(rv.originalDesc===undefined||rv.originalDesc===null)){
+      rv.originalDesc=oldDesc; // Could be '' — that's intentional, means originally empty
     }
     // Always track who edited and when
     rv.editedBy=S.user?.name||S.user?.email||'Unknown';
     rv.editedAt=Date.now();
     setRV(k,rv);
+    // Sync the original to the Index tab (only if there was actually content to preserve)
     if(rv.originalDesc){
       const entry=findEntry(entryName);
       const r=entry?.results.find(x=>x.rowIdx===rowIdx);
@@ -1739,26 +1774,29 @@ async function syncOriginalToIndexTab(entryName,result,originalDesc){
   }catch(e){console.warn('syncOriginalToIndexTab error:',e)}
 }
 
-// Revert a description back to its original
+// Revert a description back to its original (may be empty string if originally empty)
 async function revertToOriginal(entryName,segType,rowIdx){
   const k=rvKey(entryName,segType,rowIdx);
   const rv=getRV(k);
-  if(!rv||!rv.originalDesc){toast('No original to revert to','error');return}
-  const origDesc=rv.originalDesc; // Save before clearing
-  await updateTagDesc(rowIdx,entryName,origDesc);
-  // Clear the original since we're back to it
-  rv.originalDesc='';rv.status='';rv.suggestion='';rv.reviewed=false;
+  if(!rv||rv.originalDesc===undefined||rv.originalDesc===null){toast('No original to revert to','error');return}
+  const origDesc=rv.originalDesc; // Save before clearing (may be '')
+  // Flag so updateTagDesc doesn't re-track this as a new edit
+  rv._reverting=true;
   setRV(k,rv);
-  // Sync to Index tab — use saved origDesc, not the cleared rv.originalDesc
+  await updateTagDesc(rowIdx,entryName,origDesc);
+  // Clear the edit tracking — back to pristine state
+  const rv2=getRV(k)||{};
+  rv2.originalDesc=undefined;rv2.status='';rv2.suggestion='';rv2.reviewed=false;rv2._reverting=false;
+  setRV(k,rv2);
   const entry=findEntry(entryName);
   const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
   if(r){
     syncDescToIndexTab(entryName,r,origDesc).catch(()=>{});
     syncToIndexTab(entryName,r,'','').catch(()=>{});
   }
-  logActivity(`Reverted: "${entryName}" → "${origDesc}"`);
+  logActivity(`Reverted: "${entryName}" → ${origDesc?'"'+origDesc+'"':'(empty)'}`);
   buildIndex();render(true);
-  toast('Reverted to original','success');
+  toast(origDesc?'Reverted to original':'Reverted to empty','success');
 }
 
 // Review data key: entryName|segType|rowIdx
@@ -2589,15 +2627,15 @@ function clipLinkForResult(r){
   return cid?('https://videos.jem.tv/video-player?clip='+cid):'';
 }
 
-// Build book-style reference code: A345 / C457 / ME123 / TM456 / SF789 for non-films.
+// Build book-style reference code: A345 / C457 / M123 / T456 / S789 for non-films.
 // Films get their own shortened format (returns null here — caller handles Film specially).
 function refCodeForResult(r){
   const prefixMap={
     'Addresses':'A',
     'Conversations':'C',
-    'My Encounter':'ME',
-    'Timeless Moments':'TM',
-    'Short Films':'SF'
+    'My Encounter':'M',
+    'Timeless Moments':'T',
+    'Short Films':'S'
   };
   const prefix=prefixMap[r.segType];
   if(!prefix)return null; // Films or unknown segment — handle separately
@@ -3292,7 +3330,10 @@ function render(force=true){
           typing:false
         };
       }
-      h+=`<div class="clip-panel-overlay" id="clip-panel-overlay">`;
+      // Apply slide-in animation only on first render of this panel instance
+      const animClass=cp._animated?'':' animate-in';
+      cp._animated=true;
+      h+=`<div class="clip-panel-overlay${animClass}" id="clip-panel-overlay">`;
       // Header
       h+=`<div class="clip-panel-head">`;
       h+=`<div><h3>📺 Clip Workspace</h3><div style="font-size:12px;color:var(--tx-3);margin-top:2px">${esc(cp.entryName)}</div></div>`;
@@ -3328,8 +3369,31 @@ function render(force=true){
       // Transcript section
       if(r.transcript&&r.transcript!==r.summary){
         h+=`<div class="clip-panel-section" id="clip-section-transcript">`;
-        h+=`<div class="clip-panel-label">Transcript</div>`;
-        h+=`<div class="clip-panel-text scrollable">${esc(r.transcript)}</div>`;
+        h+=`<div class="clip-panel-label" style="display:flex;align-items:center;justify-content:space-between">`;
+        h+=`<span>Transcript</span>`;
+        // Highlight button — AI finds and marks tag-relevant passages
+        const tclipId=(r.objId||r.clipId||'').toString().replace(/^video_clip-/,'');
+        const thKey=transcriptHighlightKey(cp.entryName,tclipId);
+        const th=S.transcriptHighlights?.[thKey];
+        if(th&&th.loading){
+          h+=`<span style="font-size:11px;color:var(--tx-3);font-style:italic">🔍 Analyzing…</span>`;
+        }else if(th&&!th.error&&(th.phrases.length||th.noMatch)){
+          h+=`<button class="btn btn-sm" id="transcript-rehighlight" style="font-size:10px;padding:2px 8px" title="Re-analyze">↻ Re-analyze</button>`;
+        }else{
+          h+=`<button class="btn btn-sm btn-gold" id="transcript-highlight" style="font-size:10px;padding:2px 10px" title="AI: highlight passages connected to this tag">🔍 Highlight matches</button>`;
+        }
+        h+=`</div>`;
+        // Render transcript with highlights if we have them
+        const phrases=(th&&!th.error&&!th.loading)?th.phrases:[];
+        const transcriptHtml=phrases.length?applyTranscriptHighlights(r.transcript,phrases):esc(r.transcript);
+        h+=`<div class="clip-panel-text scrollable">${transcriptHtml}</div>`;
+        // No-match note
+        if(th&&th.noMatch&&!th.loading){
+          h+=`<div style="margin-top:6px;font-size:11px;color:var(--tx-4);font-style:italic">No direct mention found in transcript${th.note?' — '+esc(th.note):''}</div>`;
+        }
+        if(th&&th.error){
+          h+=`<div style="margin-top:6px;font-size:11px;color:var(--red)">Error: ${esc(th.error)}</div>`;
+        }
         h+=`</div>`;
       }
       // Sub-entry being worked on
@@ -3401,22 +3465,28 @@ function render(force=true){
   }
   // Toasts
   h+='<div class="toasts">';S.toasts.forEach(t=>{h+=`<div class="toast ${t.t}">${esc(t.m)}</div>`});h+='</div>';
-  // Save scroll positions before DOM replacement
+  // Save scroll positions before DOM replacement — catch all known scroll containers AND window
   const scrollSave={};
+  scrollSave.win=window.scrollY||document.documentElement.scrollTop||0;
   const idxBody=$('.idx-body');if(idxBody)scrollSave.idxBody=idxBody.scrollTop;
   const pad=$('.pad');if(pad)scrollSave.pad=pad.scrollTop;
   const mainContent=$('.main-content');if(mainContent)scrollSave.mainContent=mainContent.scrollTop;
   const content=$('.content');if(content)scrollSave.content=content.scrollTop;
   const clipBody=$('#clip-panel-body');if(clipBody)scrollSave.clipBody=clipBody.scrollTop;
+  const bookView=$('.book-view');if(bookView)scrollSave.bookView=bookView.scrollTop;
+  const sidebar=$('.sidebar');if(sidebar)scrollSave.sidebar=sidebar.scrollTop;
   app.innerHTML=h;bindAll();
   // Toggle body class for layout squeeze when panel is open
   document.body.classList.toggle('clip-panel-open',!!S.clipPanel);
-  // Restore scroll positions
+  // Restore scroll positions — synchronously before the browser paints to avoid visible jump
   const idxBody2=$('.idx-body');if(idxBody2&&scrollSave.idxBody)idxBody2.scrollTop=scrollSave.idxBody;
   const pad2=$('.pad');if(pad2&&scrollSave.pad)pad2.scrollTop=scrollSave.pad;
   const mainContent2=$('.main-content');if(mainContent2&&scrollSave.mainContent)mainContent2.scrollTop=scrollSave.mainContent;
   const content2=$('.content');if(content2&&scrollSave.content)content2.scrollTop=scrollSave.content;
   const clipBody2=$('#clip-panel-body');if(clipBody2&&scrollSave.clipBody)clipBody2.scrollTop=scrollSave.clipBody;
+  const bookView2=$('.book-view');if(bookView2&&scrollSave.bookView)bookView2.scrollTop=scrollSave.bookView;
+  const sidebar2=$('.sidebar');if(sidebar2&&scrollSave.sidebar)sidebar2.scrollTop=scrollSave.sidebar;
+  if(scrollSave.win)window.scrollTo(0,scrollSave.win);
   // Fix idx-body scroll height
   fixIdxScroll();
 }
@@ -3467,7 +3537,8 @@ function rSidebar(){
 
   // ── Workspace (was: Index Preview) — with section dropdown ──
   const isWorkspace=S.view==='index';
-  const workspaceOpen=isWorkspace||S.sidebarWorkspaceOpen;
+  // Respect user's explicit toggle state — don't force open based on view
+  const workspaceOpen=S.sidebarWorkspaceOpen;
   h+=`<div class="nav-item ${isWorkspace?'active':''}" data-nav="index">${IC.idx}<span>Workspace</span><span class="nav-caret" data-toggle-workspace style="margin-left:auto;font-size:10px;color:var(--tx-4);cursor:pointer;padding:0 4px" title="Toggle sections">${workspaceOpen?'▾':'▸'}</span></div>`;
   if(workspaceOpen&&S.indexData){
     h+=`<div class="ws-sub" style="margin-bottom:6px">`;
@@ -3765,9 +3836,8 @@ function rTools(){
 
   // ── Focus Mode ──
   h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">🎯 Focus Mode</h4>';
-  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">One-card-at-a-time keyboard review. Goes through pending suggestions + empty descriptions in the current filter. Press <span style="font-family:var(--mono);background:var(--bg-1);padding:1px 6px;border-radius:3px;border:1px solid var(--border)">F</span> anywhere in Workspace to start, or click below.</p>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">One-card-at-a-time review view. Goes through pending suggestions + empty descriptions in the current filter. Click buttons to accept, edit, deny, or navigate.</p>';
   h+=`<button class="btn btn-sm btn-gold" id="enter-focus-mode" style="font-size:11px">🎯 Enter Focus Mode</button>`;
-  h+=`<div style="margin-top:8px;font-size:10px;color:var(--tx-4);line-height:1.5">Keys: <b>A</b> accept · <b>D</b> deny · <b>E</b> edit · <b>J/K</b> next/prev · <b>U</b> undo · <b>?</b> help · <b>Esc</b> exit</div>`;
   h+='</div>';
 
   // ── Consistency Check ──
@@ -3979,9 +4049,9 @@ function rFocus(){
   let h=`<div class="focus-wrap">`;
   // Top bar — exit button + progress + section/tag info
   h+=`<div class="focus-topbar">`;
-  h+=`<button class="focus-exit-btn" id="focus-exit" title="Exit focus mode (Esc or F)">← Exit</button>`;
+  h+=`<button class="focus-exit-btn" id="focus-exit" title="Exit focus mode">← Exit</button>`;
   h+=`<div class="focus-progress-text">${S.focusIndex+1} / ${S.focusQueue.length} · ${esc(section)}</div>`;
-  h+=`<button class="focus-help-btn" id="focus-help" title="Keyboard shortcuts (?)">?</button>`;
+  h+=`<span style="min-width:60px"></span>`;
   h+=`</div>`;
 
   // Main card — book-page style
@@ -4025,121 +4095,51 @@ function rFocus(){
 
   h+=`</div>`;
 
-  // Keyboard hint bar
-  h+=`<div class="focus-keybar">`;
+  // Action button bar
+  h+=`<div class="focus-actionbar">`;
   if(hasPending){
-    h+=`<span><span class="focus-key">A</span> accept</span>`;
-    h+=`<span><span class="focus-key">E</span> edit</span>`;
-    h+=`<span><span class="focus-key">D</span> deny</span>`;
+    h+=`<button class="focus-action accept" id="focus-accept">✓ Accept</button>`;
+    h+=`<button class="focus-action edit" id="focus-edit">✎ Edit</button>`;
+    h+=`<button class="focus-action deny" id="focus-deny">✗ Deny</button>`;
   }else if(descEmpty){
-    h+=`<span><span class="focus-key">E</span> write description</span>`;
-    h+=`<span><span class="focus-key">D</span> skip / mark reviewed</span>`;
+    h+=`<button class="focus-action edit" id="focus-edit">✎ Write description</button>`;
+    h+=`<button class="focus-action" id="focus-deny">Skip / mark reviewed</button>`;
   }else{
-    h+=`<span><span class="focus-key">A</span> mark reviewed</span>`;
-    h+=`<span><span class="focus-key">E</span> edit</span>`;
-    h+=`<span><span class="focus-key">D</span> remove</span>`;
+    h+=`<button class="focus-action accept" id="focus-accept">✓ Mark reviewed</button>`;
+    h+=`<button class="focus-action edit" id="focus-edit">✎ Edit</button>`;
+    h+=`<button class="focus-action deny" id="focus-deny">Remove description</button>`;
   }
-  h+=`<span><span class="focus-key">J</span> next</span>`;
-  h+=`<span><span class="focus-key">K</span> prev</span>`;
-  h+=`<span><span class="focus-key">?</span> help</span>`;
+  h+=`</div>`;
+
+  // Navigation buttons
+  h+=`<div class="focus-navbar">`;
+  h+=`<button class="focus-nav" id="focus-prev" ${S.focusIndex<=0?'disabled':''}>← Previous</button>`;
+  h+=`<button class="focus-nav" id="focus-next" ${S.focusIndex>=S.focusQueue.length-1?'disabled':''}>Next →</button>`;
   h+=`</div>`;
 
   // Progress bar at bottom
   h+=`<div class="focus-progressbar"><div class="focus-progress-fill" style="width:${progress}%"></div></div>`;
 
-  // Help overlay
-  if(S.focusShowHelp){
-    h+=`<div class="focus-help-overlay" id="focus-help-close-backdrop">`;
-    h+=`<div class="focus-help-panel">`;
-    h+=`<h3>Keyboard shortcuts</h3>`;
-    h+=`<table>`;
-    h+=`<tr><td><span class="focus-key">A</span> / <span class="focus-key">Enter</span></td><td>Accept suggestion (or mark reviewed if no suggestion)</td></tr>`;
-    h+=`<tr><td><span class="focus-key">D</span></td><td>Deny / skip</td></tr>`;
-    h+=`<tr><td><span class="focus-key">E</span></td><td>Edit inline (returns to Workspace at this row)</td></tr>`;
-    h+=`<tr><td><span class="focus-key">J</span> / <span class="focus-key">↓</span></td><td>Next item</td></tr>`;
-    h+=`<tr><td><span class="focus-key">K</span> / <span class="focus-key">↑</span></td><td>Previous item</td></tr>`;
-    h+=`<tr><td><span class="focus-key">U</span> / <span class="focus-key">⌘Z</span></td><td>Undo last action</td></tr>`;
-    h+=`<tr><td><span class="focus-key">?</span></td><td>Toggle this help</td></tr>`;
-    h+=`<tr><td><span class="focus-key">F</span> / <span class="focus-key">Esc</span></td><td>Exit focus mode</td></tr>`;
-    h+=`</table>`;
-    h+=`<div style="text-align:center;margin-top:20px;font-size:11px;color:var(--tx-4)">Click anywhere outside or press ? to close</div>`;
-    h+=`</div></div>`;
-  }
-
   h+=`</div>`; // .focus-wrap
   return h;
 }
 
-// Wire up focus mode event handlers (keyboard + buttons).
-// Called after render() when S.focusMode is true.
+// Wire up focus mode event handlers (buttons only — no keyboard shortcuts)
 function wireFocusModeHandlers(){
-  // Button wiring
   const exitBtn=$('#focus-exit');
   if(exitBtn)exitBtn.onclick=exitFocusMode;
-  const helpBtn=$('#focus-help');
-  if(helpBtn)helpBtn.onclick=()=>{S.focusShowHelp=!S.focusShowHelp;render()};
-  const backdrop=$('#focus-help-close-backdrop');
-  if(backdrop)backdrop.onclick=(e)=>{if(e.target===backdrop){S.focusShowHelp=false;render()}};
-  // Keyboard handler — replaces the normal handler while focus mode is active
-  document.onkeydown=handleFocusKey;
-}
-
-function handleFocusKey(e){
-  // If typing in an input (shouldn't happen in focus mode, but safety)
-  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
-  // Help overlay open? ? and Escape close it
-  if(S.focusShowHelp){
-    if(e.key==='?'||e.key==='Escape'){e.preventDefault();S.focusShowHelp=false;render()}
-    return;
-  }
   const item=S.focusQueue[S.focusIndex];
-  if(!item){return}
+  if(!item)return;
   const{entry:entryObj,result:r,key}=item;
   const rv=S.reviewData?.[key]||{};
   const hasPending=rv.suggestion&&rv.status==='pending';
   const descEmpty=!r.desc||!r.desc.trim();
 
-  // Exit: F or Escape
-  if(e.key==='f'||e.key==='F'||e.key==='Escape'){
-    e.preventDefault();exitFocusMode();return;
-  }
-  // Help: ?
-  if(e.key==='?'){e.preventDefault();S.focusShowHelp=true;render();return}
-  // Undo: U or Ctrl+Z/Cmd+Z
-  if(e.key==='u'||e.key==='U'||(e.key==='z'&&(e.ctrlKey||e.metaKey))){
-    e.preventDefault();doUndo();
-    // Rebuild queue in case the undone action affected it
-    S.focusQueue=buildFocusQueue();
-    if(S.focusIndex>=S.focusQueue.length)S.focusIndex=Math.max(0,S.focusQueue.length-1);
-    render();
-    return;
-  }
-  // Next: J or ArrowDown or ArrowRight
-  if(e.key==='j'||e.key==='J'||e.key==='ArrowDown'||e.key==='ArrowRight'){
-    e.preventDefault();
-    if(S.focusIndex<S.focusQueue.length-1){S.focusIndex++;render()}
-    else{toast('End of queue','info')}
-    return;
-  }
-  // Previous: K or ArrowUp or ArrowLeft
-  if(e.key==='k'||e.key==='K'||e.key==='ArrowUp'||e.key==='ArrowLeft'){
-    e.preventDefault();
-    if(S.focusIndex>0){S.focusIndex--;render()}
-    else{toast('Start of queue','info')}
-    return;
-  }
-  // Accept: A or Enter
-  if(e.key==='a'||e.key==='A'||e.key==='Enter'){
-    e.preventDefault();
+  // Accept button
+  on('#focus-accept','click',()=>{
     if(hasPending){
-      // Accept AI suggestion
-      acceptSuggestion(entryObj.name,r.segType,r.rowIdx).then(()=>{
-        advanceAfterAction();
-      });
-    }else if(descEmpty){
-      toast('Nothing to accept — press E to write a description','info');
+      acceptSuggestion(entryObj.name,r.segType,r.rowIdx).then(()=>advanceAfterAction());
     }else{
-      // Mark as reviewed without changing
       const rvExisting=getRV(key)||{};
       rvExisting.status='ok';rvExisting.reviewed=true;
       rvExisting.editedBy=S.user?.name||S.user?.email||'Unknown';
@@ -4148,16 +4148,14 @@ function handleFocusKey(e){
       toast('Marked reviewed','success');
       advanceAfterAction();
     }
-    return;
-  }
-  // Deny: D
-  if(e.key==='d'||e.key==='D'){
-    e.preventDefault();
+  });
+
+  // Deny button
+  on('#focus-deny','click',()=>{
     if(hasPending){
       denySuggestion(entryObj.name,r.segType,r.rowIdx);
       advanceAfterAction();
     }else if(descEmpty){
-      // Mark empty as reviewed with no description
       const rvExisting=getRV(key)||{};
       rvExisting.status='ok';rvExisting.reviewed=true;
       rvExisting.editedBy=S.user?.name||S.user?.email||'Unknown';
@@ -4166,7 +4164,6 @@ function handleFocusKey(e){
       toast('Skipped — marked reviewed','success');
       advanceAfterAction();
     }else{
-      // Remove existing description — confirm first
       customConfirm(`Remove description "${r.desc}" for ${entryObj.name}?`).then(async(ok)=>{
         if(!ok)return;
         await updateTagDesc(r.rowIdx,entryObj.name,'');
@@ -4179,18 +4176,15 @@ function handleFocusKey(e){
         advanceAfterAction();
       });
     }
-    return;
-  }
-  // Edit: E — exit focus mode and jump to the entry for inline editing
-  if(e.key==='e'||e.key==='E'){
-    e.preventDefault();
+  });
+
+  // Edit button — exits focus mode, jumps to entry in Workspace, opens inline editor
+  on('#focus-edit','click',()=>{
     const entryName=entryObj.name;
     exitFocusMode();
-    // Then jump to the entry in workspace and trigger inline edit
     setTimeout(()=>{
       jumpToEntry(entryName,key);
       setTimeout(()=>{
-        // Find the row and dispatch a double-click to open the inline editor
         const allRows=document.querySelectorAll('.idx-result');
         for(const row of allRows){
           const editBtn=row.querySelector(`[data-clippanel="${CSS.escape(key)}"]`);
@@ -4206,8 +4200,15 @@ function handleFocusKey(e){
         }
       },350);
     },50);
-    return;
-  }
+  });
+
+  // Navigation buttons
+  on('#focus-next','click',()=>{
+    if(S.focusIndex<S.focusQueue.length-1){S.focusIndex++;render()}
+  });
+  on('#focus-prev','click',()=>{
+    if(S.focusIndex>0){S.focusIndex--;render()}
+  });
 }
 
 // After an accept/deny action, rebuild the queue and advance the pointer.
@@ -4372,10 +4373,17 @@ function rIndex(){
           const selKey=esc(e.name)+'|'+seg+'|'+r.rowIdx;
           eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''} title="Select for AI audit">`;
           // Description content
-          const hasOriginal=rv&&rv.originalDesc&&rv.originalDesc!==r.desc;
+          // originalDesc: undefined = never edited. '' = originally empty. String = had content.
+          const hasOrigTracked=rv&&rv.originalDesc!==undefined&&rv.originalDesc!==null;
+          const hasOriginal=hasOrigTracked&&rv.originalDesc!==r.desc;
+          const originalWasEmpty=hasOriginal&&!rv.originalDesc;
           if(isPending){
             if(hasOriginal){
-              eh+=`<span class="idx-orig-inline"><span class="idx-orig-text" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert">${esc(rv.originalDesc)}</span><span class="idx-orig-sep">→</span></span>`;
+              if(originalWasEmpty){
+                eh+=`<span class="idx-orig-inline"><span class="idx-orig-text empty" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert to empty">[empty]</span><span class="idx-orig-sep">→</span></span>`;
+              }else{
+                eh+=`<span class="idx-orig-inline"><span class="idx-orig-text" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert">${esc(rv.originalDesc)}</span><span class="idx-orig-sep">→</span></span>`;
+              }
             }
             eh+=`<span class="idx-sug-old">${descEmpty?'[empty]':esc(r.desc)}</span>`;
             eh+=`<span class="idx-sug-arrow">→</span>`;
@@ -4399,7 +4407,11 @@ function rIndex(){
             eh+=`</span>`;
           }else if(hasOriginal){
             const editInfo=rv.editedBy?`Edited by ${rv.editedBy}${rv.editedAt?' at '+new Date(rv.editedAt).toLocaleString():''}. `:'';
-            eh+=`<span class="idx-orig-inline"><span class="idx-orig-text" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert to original">${esc(rv.originalDesc)}</span><span class="idx-orig-revert" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}">↩</span><span class="idx-orig-sep">→</span></span>`;
+            if(originalWasEmpty){
+              eh+=`<span class="idx-orig-inline"><span class="idx-orig-text empty" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert to empty">[empty]</span><span class="idx-orig-revert" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Revert to empty">↩</span><span class="idx-orig-sep">→</span></span>`;
+            }else{
+              eh+=`<span class="idx-orig-inline"><span class="idx-orig-text" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert to original">${esc(rv.originalDesc)}</span><span class="idx-orig-revert" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}">↩</span><span class="idx-orig-sep">→</span></span>`;
+            }
             eh+=`<span class="idx-result-desc editable" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="${esc(editInfo)}Double-click to edit">${esc(r.desc)}</span>`;
           }else{
             const editInfo2=(rv&&rv.editedBy)?`Edited by ${rv.editedBy}${rv.editedAt?' at '+new Date(rv.editedAt).toLocaleString():''}. `:'';
@@ -4409,8 +4421,15 @@ function rIndex(){
           eh+=`<span class="idx-result-meta">`;
           // Relationship label (hide when matching segment default; Nigunim exception)
           if(shouldShowRel(r,e.section))eh+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
-          // Reference codes (A123/C457/etc + film refs) are shown ONLY in Book View, not in Workspace.
-          // The clip info button (ⓘ) below opens the panel which shows full clip details.
+          // Reference code — book-style. Formatting on the ref reflects relevancy (bold=4, underline=3, italic=2, regular=1).
+          const vidUrlWs=clipLinkForResult(r);
+          if(r.clipType==='Film Chapter'||r.clipType==='Film'){
+            const filmRef=filmRefForResult(r);
+            if(filmRef)eh+=`<span class="idx-result-ref"><a href="${vidUrlWs}" target="_blank" title="${esc(r.clipName||r.pvName||'')}">${esc(filmRef)}</a></span>`;
+          }else{
+            const code=refCodeForResult(r);
+            if(code)eh+=`<span class="idx-result-ref"><a href="${vidUrlWs}" target="_blank" title="${esc(r.clipName||'')}">${esc(code)}</a></span>`;
+          }
           // Description-level notes/comments (threaded)
           const descNoteKey=e.name+'|'+seg+'|'+r.rowIdx;
           const descNote=S.descNotes?.[descNoteKey];
@@ -4845,9 +4864,9 @@ function bindAll(){
     }
     S.view=newView;
     S.clipPanel=null;
-    // When clicking Workspace in sidebar (without using dropdown), open dropdown + reset to all sections
+    // When clicking Workspace in sidebar, open the submenu only if it was closed (don't disturb it if already open)
     if(newView==='index'){
-      S.sidebarWorkspaceOpen=true;
+      if(!S.sidebarWorkspaceOpen)S.sidebarWorkspaceOpen=true;
       S.idxActiveSection='all';
       S.idxPage=0;
       if(S.reviewFilter==='bookmarked')S.reviewFilter='all';
@@ -4873,7 +4892,7 @@ function bindAll(){
     S.idxActiveSection=sec;
     S.idxPage=0;
     S.clipPanel=null;
-    S.sidebarWorkspaceOpen=true;
+    // Don't force sidebar state — user already had it open to click this
     if(S.reviewFilter==='bookmarked')S.reviewFilter='all';
     render();
   });
@@ -5258,6 +5277,18 @@ function bindAll(){
     S.clipPanel=null;
     render();
   });
+  // Transcript highlight buttons (AI finds tag-relevant passages)
+  const doTranscriptHighlight=(force)=>{
+    if(!S.clipPanel)return;
+    const cp=S.clipPanel;
+    const entry=findEntry(cp.entryName);
+    const r=entry?.results.find(x=>x.segType===cp.segType&&x.rowIdx===cp.rowIdx);
+    if(!r||!r.transcript){toast('No transcript to analyze','error');return}
+    const clipId=(r.objId||r.clipId||'').toString().replace(/^video_clip-/,'');
+    requestTranscriptHighlights(cp.entryName,r.transcript,r.desc,clipId,force);
+  };
+  on('#transcript-highlight','click',()=>doTranscriptHighlight(false));
+  on('#transcript-rehighlight','click',()=>doTranscriptHighlight(true));
   // Chip navigation — scroll within panel without re-rendering
   $$('[data-scrollto]').forEach(el=>el.onclick=(ev)=>{
     ev.preventDefault();
@@ -5974,15 +6005,11 @@ Description:"${S.testDesc||'[empty]'}"`;
   on('#ais','click',doSendAI);
   on('#ai-close','click',()=>{S.aiOpen=false;render()});
 
-  // Keyboard shortcuts (when index view is active)
-  if(S.view==='index'){
-    document.onkeydown=handleKeyShortcut;
-  }else{
-    document.onkeydown=null;
-  }
+  // Global keyboard shortcuts: undo + back work from any view
+  document.onkeydown=handleKeyShortcut;
 }
 
-// Keyboard shortcuts for review
+// Keyboard shortcuts for review — minimal set
 function handleKeyShortcut(e){
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
   // Ctrl+Z / Cmd+Z undo
@@ -5990,13 +6017,6 @@ function handleKeyShortcut(e){
   // Ctrl+[ / Cmd+[ or Alt+← go back
   if((e.key==='['&&(e.ctrlKey||e.metaKey))||(e.key==='ArrowLeft'&&e.altKey)){
     if(S.viewHistory&&S.viewHistory.length){e.preventDefault();doBack();return}
-  }
-  if(e.key==='r'&&!e.ctrlKey&&!e.metaKey){S.reviewMode=!S.reviewMode;render();return}
-  // F key — enter focus mode (keyboard reading view)
-  if((e.key==='f'||e.key==='F')&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
-    e.preventDefault();
-    enterFocusMode();
-    return;
   }
 }
 
@@ -6224,6 +6244,103 @@ ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\
 // ═══════════════════════════════════════════════════════════════
 // (Time-tracking removed)
 // ═══════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════
+// TRANSCRIPT HIGHLIGHTING — AI finds passages connecting tag to clip
+// ═══════════════════════════════════════════════════════════════
+
+// Escape a string for use in a regex
+function escapeRegex(s){return String(s).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
+
+// Apply highlights to transcript text — wraps matched phrases in <mark>
+function applyTranscriptHighlights(transcript,phrases){
+  if(!transcript||!phrases||!phrases.length)return esc(transcript);
+  let out=esc(transcript);
+  // Apply longest phrases first to avoid overlap issues
+  const sorted=[...phrases].sort((a,b)=>b.length-a.length);
+  sorted.forEach(phrase=>{
+    if(!phrase||phrase.length<3)return;
+    const escaped=escapeRegex(esc(phrase));
+    try{
+      const re=new RegExp('('+escaped+')','gi');
+      out=out.replace(re,'<mark class="transcript-highlight">$1</mark>');
+    }catch(e){/* skip on bad regex */}
+  });
+  return out;
+}
+
+// Call AI to find transcript passages that connect to the tag
+async function fetchTranscriptHighlights(tag,transcript,desc){
+  if(!S.claudeKey)throw new Error('No API key');
+  const prompt=`You are analyzing a video transcript to find passages connecting it to a specific tag.
+
+TAG: "${tag}"
+${desc?`CURRENT DESCRIPTION: "${desc}"\n`:''}
+
+TRANSCRIPT:
+"""
+${(transcript||'').slice(0,8000)}
+"""
+
+TASK: Find 2-5 SHORT phrases (5-20 words each) from the transcript that relate to the tag "${tag}". These should be EXACT quotes from the transcript — character-for-character matches so they can be highlighted.
+
+If the tag isn't directly discussed, find the CLOSEST connection possible — even tangential mentions, related concepts, or brief references. Only return empty if there is truly zero connection of any kind.
+
+Return JSON:
+{
+  "phrases": ["exact quote from transcript", "another exact quote"],
+  "noMatch": false
+}
+
+If no connection at all exists, return:
+{
+  "phrases": [],
+  "noMatch": true,
+  "note": "brief reason why"
+}
+
+JSON only, no preamble.`;
+
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,messages:[{role:'user',content:prompt}]})
+  });
+  if(!resp.ok)throw new Error('API '+resp.status);
+  const data=await resp.json();
+  const text=data.content?.[0]?.text||'';
+  const m=text.match(/\{[\s\S]*\}/);
+  if(!m)throw new Error('No JSON in response');
+  return JSON.parse(m[0]);
+}
+
+// Cache key builder
+function transcriptHighlightKey(tag,clipId){return tag+'|'+(clipId||'')}
+
+// Request highlights for a (tag, clipId) pair. Uses cache unless force=true.
+async function requestTranscriptHighlights(tag,transcript,desc,clipId,force){
+  const key=transcriptHighlightKey(tag,clipId);
+  if(!S.transcriptHighlights)S.transcriptHighlights={};
+  if(!force&&S.transcriptHighlights[key]&&!S.transcriptHighlights[key].loading&&!S.transcriptHighlights[key].error){
+    return S.transcriptHighlights[key];
+  }
+  S.transcriptHighlights[key]={loading:true,phrases:[],noMatch:false};
+  render();
+  try{
+    const result=await fetchTranscriptHighlights(tag,transcript,desc);
+    S.transcriptHighlights[key]={
+      loading:false,
+      phrases:Array.isArray(result.phrases)?result.phrases:[],
+      noMatch:!!result.noMatch,
+      note:result.note||''
+    };
+  }catch(e){
+    console.error('Transcript highlight error:',e);
+    S.transcriptHighlights[key]={loading:false,phrases:[],noMatch:false,error:e.message||'Failed to analyze'};
+  }
+  render();
+  return S.transcriptHighlights[key];
+}
 
 // Bulk audit an entire section
 async function bulkAuditSection(sectionName){
