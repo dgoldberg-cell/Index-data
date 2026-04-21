@@ -220,6 +220,9 @@ body.clip-panel-open .idx-cols{gap:16px}
 .book-rel{font-size:10px;color:#888;font-style:italic;white-space:nowrap}
 .book-ref{font-family:Georgia,serif;color:#000;text-decoration:none;font-size:12px;white-space:nowrap;font-weight:400}
 .book-ref:hover{color:var(--gold)}
+/* Print-only — visible only when printing (used for section headers in single-section view) */
+.print-only{display:none !important}
+@media print{.print-only{display:block !important}}
 .book-comment{opacity:0;background:none;border:none;cursor:pointer;font-size:10px;padding:0 2px;transition:opacity .1s}
 .book-row:hover .book-comment{opacity:0.6}
 .book-comment:hover{opacity:1}
@@ -640,25 +643,30 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
   .page-hd>div{display:block !important}
 
   /* Two-column book layout with proper page-break control.
-     Using column-count on the container with column-fill:auto lets content
-     flow naturally across both columns AND across pages. */
+     Using column-fill:balance gives predictable column behavior across pages.
+     NOTE: column-span:all with break-before:page causes issues in some browsers,
+     so we rely on natural page flow rather than forced page breaks on section headers. */
   .book-page{
     display:block !important;
+    width:100% !important;
     column-count:2 !important;
     -webkit-column-count:2 !important;
+    -moz-column-count:2 !important;
     column-gap:24px !important;
     -webkit-column-gap:24px !important;
+    -moz-column-gap:24px !important;
     column-rule:1px solid #ccc !important;
-    column-fill:auto !important;
-    -webkit-column-fill:auto !important;
+    -webkit-column-rule:1px solid #ccc !important;
+    -moz-column-rule:1px solid #ccc !important;
+    column-fill:balance !important;
+    -webkit-column-fill:balance !important;
+    -moz-column-fill:balance !important;
   }
 
-  /* Section headings — full-page-width span, new page each */
+  /* Section headings — full-width span at top of each section */
   .book-section-hd{
     -webkit-column-span:all !important;
     column-span:all !important;
-    break-before:page !important;
-    page-break-before:always !important;
     font-size:18px !important;
     text-align:center !important;
     padding:8px 0 12px !important;
@@ -669,10 +677,8 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
     background:#fff !important;
     font-family:Georgia,serif !important;
     letter-spacing:0.3px !important;
-  }
-  .book-section-hd:first-child{
-    break-before:avoid !important;
-    page-break-before:avoid !important;
+    break-after:avoid !important;
+    page-break-after:avoid !important;
   }
 
   /* Each entry stays whole — never split mid-entry, not across columns or pages */
@@ -732,18 +738,18 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
   /* Page setup: Letter size, tight margins, page numbers at bottom, title at top */
   @page{
     size:letter;
-    margin:0.6in 0.5in 0.5in 0.5in;
+    margin:0.9in 0.75in 0.85in 0.75in;
     @top-center{
       content:"JEM Index";
       font-family:Georgia,serif;
-      font-size:9px;
+      font-size:10px;
       color:#999;
       letter-spacing:0.5px;
     }
     @bottom-center{
       content:counter(page);
       font-family:Georgia,serif;
-      font-size:10px;
+      font-size:11px;
       color:#666;
     }
   }
@@ -3710,7 +3716,10 @@ function rBook(){
   sections.forEach(section=>{
     const entries=ix.sections[section]||[];
     if(!entries.length)return;
-    if(scope==='all')h+=`<h2 class="book-section-hd">${esc(section)}</h2>`;
+    // Section header: always rendered. Styled as print-only when viewing a single section
+    // (so PDF export gets it, but on-screen doesn't show redundant header).
+    const hdClass=scope==='all'?'book-section-hd':'book-section-hd print-only';
+    h+=`<h2 class="${hdClass}">${esc(section)}</h2>`;
     entries.forEach(e=>{
       h+=`<div class="book-entry">`;
       h+=`<div class="book-entry-head"><span class="book-entry-name">${esc(e.name)}</span><button class="book-entry-edit" data-bookedit="${esc(e.name)}" title="Edit in workstation">✎</button></div>`;
@@ -4913,9 +4922,10 @@ function bindAll(){
     const title=scope==='all'?'JEM Index - Full':('JEM Index - '+scope);
     const oldTitle=document.title;
     document.title=title;
-    window.print();
+    toast('In the print dialog: set Margins to "Default" (not "None") for proper book margins','info');
+    setTimeout(()=>{window.print()},400);
     // Restore title after print dialog closes
-    setTimeout(()=>{document.title=oldTitle},1000);
+    setTimeout(()=>{document.title=oldTitle},1500);
   });
   on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
   on('#ai-fab','click',()=>{S.aiOpen=true;render()});
