@@ -18,7 +18,7 @@
 --green:#4a8a5a;--green-bg:rgba(74,138,90,.07);--green-bd:rgba(74,138,90,.22);
 --amber:#9a7a30;--amber-bg:rgba(154,122,48,.07);
 --gold:#8c7a50;--gold-bg:rgba(140,122,80,.06);
---sidebar-w:260px;
+--sidebar-w:210px;
 --font:'DM Sans',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;--serif:'Source Serif 4',Georgia,serif;
 --radius:7px;--radius-lg:11px;
 }
@@ -163,27 +163,23 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 
 /* Individual result — full width row, actions pushed right */
 /* Individual result — flex-wraps so long descriptions get full width and meta wraps below */
-.idx-result{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:15px;line-height:1.6;flex-wrap:wrap}
-.idx-result-desc{color:var(--tx-2);flex:1 1 60%;min-width:220px;font-size:15px}
+.idx-result{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:15px;line-height:1.6;flex-wrap:wrap;border:1px solid transparent;border-radius:6px;transition:border-color .15s, background .15s}
+.idx-result:hover{border-color:var(--border-hi);background:var(--bg-0)}
+.idx-result-desc{color:var(--tx-2);flex:1 1 60%;min-width:220px;font-size:15px;display:inline-flex;align-items:center}
 .idx-result-desc.empty-desc{color:var(--red);font-style:italic;background:rgba(176,80,80,.05);padding:0 4px;border-radius:3px}
 .idx-result-desc.editable:hover{background:var(--bg-1);cursor:text;border-radius:3px;padding:0 4px}
-.idx-result-rel{font-size:10px;color:var(--tx-4);font-style:italic;flex-shrink:0}
+.idx-result-rel{font-size:10px;color:var(--tx-4);font-style:italic;flex-shrink:0;align-self:center}
 .idx-result-ref{font-family:var(--mono);font-size:10.5px;color:var(--blue);white-space:nowrap;flex-shrink:0}
 .idx-result-ref a{color:var(--blue)}
 /* Meta container: reference + relationship + buttons group together, wrap as one unit to line 2 */
 .idx-result-meta{display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
-/* Relevance shading — 4 levels. 4 = highest (darkest/full color), 1 = lowest (lightest/grayest) */
-/* Relevancy formatting — applied to reference codes only, not descriptions.
-   Rank 4 = bold, Rank 3 = underline, Rank 2 = italic, Rank 1 = regular. */
-.idx-result[data-rel="4"] .idx-result-ref{font-weight:700}
-.idx-result[data-rel="3"] .idx-result-ref{text-decoration:underline}
-.idx-result[data-rel="2"] .idx-result-ref{font-style:italic}
-.idx-result[data-rel="1"] .idx-result-ref{}
+/* Relevancy formatting in Workspace — not shown here; rank lives in the clip workspace panel.
+   (Reference codes + rank formatting appear only in Book View.) */
 
 /* Single column — bigger text, more spread out */
 .idx-body:not(.two-col-mode) .idx-entry{margin-bottom:20px}
 .idx-body:not(.two-col-mode) .idx-entry-name{font-size:18px}
-.idx-body:not(.two-col-mode) .idx-result{font-size:14px;padding:5px 0}
+.idx-body:not(.two-col-mode) .idx-result{font-size:14px;padding:7px 10px}
 .idx-body:not(.two-col-mode) .idx-seg{margin-bottom:10px}
 .idx-body:not(.two-col-mode) .idx-seg-label{font-size:10px;margin-bottom:4px}
 .idx-body:not(.two-col-mode) .idx-entry-meta{font-size:11px;margin-bottom:6px}
@@ -198,12 +194,12 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-orig-revert{font-size:9px;color:var(--amber);cursor:pointer;padding:1px 5px;border:1px solid rgba(154,122,48,.3);border-radius:8px;background:var(--bg-white);white-space:nowrap;transition:all .1s;font-family:var(--font)}
 .idx-orig-revert:hover{background:var(--amber-bg);border-color:var(--amber)}
 .idx-orig-sep{color:var(--tx-4);font-size:10px}
-.idx-mini-btn{width:28px;height:28px;border:1px solid var(--border);border-radius:5px;background:var(--bg-white);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx-3);font-size:14px;transition:all .1s}
+.idx-mini-btn{width:24px;height:24px;border:1px solid var(--border);border-radius:5px;background:var(--bg-white);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx-3);font-size:13px;transition:all .1s;flex-shrink:0;vertical-align:middle;line-height:1}
 .idx-mini-btn:hover{background:var(--bg-1);color:var(--tx-1);border-color:var(--border-hi)}
 
 /* When clip panel is open, squeeze main content so it stays fully visible */
 /* When clip panel is open, shrink main content width so nothing hides behind panel */
-body.clip-panel-open .main-content{width:calc(100% - 420px);transition:width .2s ease-out}
+body.clip-panel-open .main-content{width:calc(100% - 520px);transition:width .2s ease-out}
 body.clip-panel-open .idx-cols{gap:16px}
 
 /* ═══ BOOK VIEW ═══ */
@@ -222,7 +218,7 @@ body.clip-panel-open .idx-cols{gap:16px}
 .book-desc{flex:1 1 auto;min-width:100px}
 .book-desc-empty{color:#c00;font-style:italic}
 .book-rel{font-size:10px;color:#888;font-style:italic;white-space:nowrap}
-.book-ref{font-family:Georgia,serif;color:#8a6d2e;text-decoration:none;font-size:12px;white-space:nowrap;font-weight:500}
+.book-ref{font-family:Georgia,serif;color:#000;text-decoration:none;font-size:12px;white-space:nowrap;font-weight:400}
 .book-ref:hover{color:var(--gold)}
 .book-comment{opacity:0;background:none;border:none;cursor:pointer;font-size:10px;padding:0 2px;transition:opacity .1s}
 .book-row:hover .book-comment{opacity:0.6}
@@ -235,11 +231,14 @@ body.clip-panel-open .idx-cols{gap:16px}
 .book-pill-cnt{font-size:9px;opacity:.75;font-weight:400}
 .book-pill.active .book-pill-cnt{opacity:1}
 /* Relevance shading inside book */
-/* Book View: same relevancy formatting applied to ref codes only */
-.book-row[data-rel="4"] .book-ref{font-weight:700 !important}
-.book-row[data-rel="3"] .book-ref{text-decoration:underline !important}
-.book-row[data-rel="2"] .book-ref{font-style:italic !important}
-.book-row[data-rel="1"] .book-ref{}
+/* Book View relevancy — applied to reference codes only. Black text, same size.
+   Differences amplified: rank 4 = extra-bold, rank 3 = double-underline + semi-bold,
+   rank 2 = italic + slightly lighter, rank 1 = thin + muted. */
+.book-row .book-ref{color:#000 !important}
+.book-row[data-rel="4"] .book-ref{font-weight:800 !important;letter-spacing:0.3px !important}
+.book-row[data-rel="3"] .book-ref{text-decoration:underline !important;text-decoration-thickness:2px !important;font-weight:600 !important}
+.book-row[data-rel="2"] .book-ref{font-style:italic !important;color:#333 !important}
+.book-row[data-rel="1"] .book-ref{font-weight:300 !important;color:#555 !important}
 
 /* Note popup — chat style like transcript popup */
 .note-popup-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:300;display:flex;align-items:center;justify-content:center}
@@ -249,7 +248,7 @@ body.clip-panel-open .idx-cols{gap:16px}
 .sug-chat-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:300;display:flex;align-items:center;justify-content:center}
 
 /* Clip details side panel */
-.clip-panel-overlay{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:90vw;background:var(--bg-white);border-left:2px solid var(--gold);box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:250;display:flex;flex-direction:column}
+.clip-panel-overlay{position:fixed;top:0;right:0;bottom:0;width:520px;max-width:90vw;background:var(--bg-white);border-left:2px solid var(--gold);box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:250;display:flex;flex-direction:column}
 .clip-panel-overlay.animate-in{animation:slideInRight .2s ease-out}
 .idx-result.panel-source{background:rgba(212,175,55,0.15);border-left:3px solid var(--gold);padding-left:6px;border-radius:4px}
 .clip-panel-chips{display:flex;gap:6px;padding:8px 18px;border-bottom:1px solid var(--border);background:var(--bg-0);overflow-x:auto;flex-shrink:0}
@@ -271,6 +270,13 @@ body.clip-panel-open .idx-cols{gap:16px}
 .clip-panel-section{margin-bottom:14px}
 .clip-panel-label{font-size:10px;font-weight:600;color:var(--tx-3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
 .clip-panel-text{font-size:12px;line-height:1.5;color:var(--tx-1)}
+.clip-relevancy-row{display:flex;align-items:center;gap:10px;margin-top:8px;padding:6px 10px;background:var(--bg-0);border:1px solid var(--border);border-radius:6px}
+.clip-relevancy-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--tx-4)}
+.clip-relevancy-value{font-size:12px;font-weight:500;color:#000;font-family:Georgia,serif}
+.clip-relevancy-value.r4{font-weight:800;letter-spacing:0.3px}
+.clip-relevancy-value.r3{text-decoration:underline;text-decoration-thickness:2px;font-weight:600}
+.clip-relevancy-value.r2{font-style:italic;color:#333}
+.clip-relevancy-value.r1{font-weight:300;color:#555}
 .transcript-highlight{background:rgba(212,175,55,0.35);color:var(--tx-1);padding:1px 2px;border-radius:3px;font-weight:500;box-shadow:0 0 0 1px rgba(140,122,80,0.25)}
 .clip-panel-text.scrollable{max-height:400px;overflow-y:auto;background:var(--bg-1);padding:12px;border-radius:6px;font-size:14px;line-height:1.6;color:var(--tx-1)}
 .clip-panel-actions{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;background:var(--bg-0)}
@@ -716,11 +722,12 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
   .book-desc{flex:1 1 auto !important;font-family:Georgia,serif !important}
   .book-rel{font-size:9px !important;color:#777 !important;font-style:italic !important;white-space:nowrap}
   /* Reference codes — black on paper */
-  .book-ref{color:#1a1a1a !important;text-decoration:none !important;font-size:10px !important;white-space:nowrap;font-family:Georgia,serif !important}
-  /* Preserve relevancy formatting in print */
-  .book-row[data-rel="4"] .book-ref{font-weight:700 !important}
-  .book-row[data-rel="3"] .book-ref{text-decoration:underline !important}
-  .book-row[data-rel="2"] .book-ref{font-style:italic !important}
+  .book-ref{color:#000 !important;text-decoration:none !important;font-size:10px !important;white-space:nowrap;font-family:Georgia,serif !important;font-weight:400 !important}
+  /* Preserve relevancy formatting in print — amplified for visibility on paper */
+  .book-row[data-rel="4"] .book-ref{font-weight:800 !important;letter-spacing:0.3px !important}
+  .book-row[data-rel="3"] .book-ref{text-decoration:underline !important;text-decoration-thickness:1.5px !important;font-weight:600 !important}
+  .book-row[data-rel="2"] .book-ref{font-style:italic !important;color:#333 !important}
+  .book-row[data-rel="1"] .book-ref{font-weight:300 !important;color:#555 !important}
 
   /* Page setup: Letter size, tight margins, page numbers at bottom, title at top */
   @page{
@@ -3400,6 +3407,15 @@ function render(force=true){
       h+=`<div class="clip-panel-section">`;
       h+=`<div class="clip-panel-label">This sub-entry</div>`;
       h+=`<div class="clip-panel-text"><em>${esc(r.desc||'[empty]')}</em>${r.rel?` <span style="color:var(--tx-3)">[${esc(r.rel)}]</span>`:''}</div>`;
+      // Relevancy indicator (1-4)
+      const relNum=parseInt(r.relevancy)||0;
+      if(relNum>=1&&relNum<=4){
+        const relLabel={4:'Highest',3:'High',2:'Medium',1:'Low'}[relNum];
+        h+=`<div class="clip-relevancy-row">`;
+        h+=`<span class="clip-relevancy-label">Relevancy</span>`;
+        h+=`<span class="clip-relevancy-value r${relNum}">${relNum} · ${relLabel}</span>`;
+        h+=`</div>`;
+      }
       if(rv?.suggestion){
         h+=`<div style="margin-top:6px;font-size:13px"><span style="color:var(--tx-3)">AI suggested: </span><strong style="color:var(--green)">${esc(rv.suggestion)}</strong></div>`;
       }
@@ -4421,15 +4437,7 @@ function rIndex(){
           eh+=`<span class="idx-result-meta">`;
           // Relationship label (hide when matching segment default; Nigunim exception)
           if(shouldShowRel(r,e.section))eh+=`<span class="idx-result-rel">[${esc(r.rel)}]</span>`;
-          // Reference code — book-style. Formatting on the ref reflects relevancy (bold=4, underline=3, italic=2, regular=1).
-          const vidUrlWs=clipLinkForResult(r);
-          if(r.clipType==='Film Chapter'||r.clipType==='Film'){
-            const filmRef=filmRefForResult(r);
-            if(filmRef)eh+=`<span class="idx-result-ref"><a href="${vidUrlWs}" target="_blank" title="${esc(r.clipName||r.pvName||'')}">${esc(filmRef)}</a></span>`;
-          }else{
-            const code=refCodeForResult(r);
-            if(code)eh+=`<span class="idx-result-ref"><a href="${vidUrlWs}" target="_blank" title="${esc(r.clipName||'')}">${esc(code)}</a></span>`;
-          }
+          // Reference codes are Book View only — not shown in Workspace (relevancy shows in clip workspace panel instead).
           // Description-level notes/comments (threaded)
           const descNoteKey=e.name+'|'+seg+'|'+r.rowIdx;
           const descNote=S.descNotes?.[descNoteKey];
