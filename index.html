@@ -193,6 +193,8 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-orig-text.empty:hover{text-decoration:none;opacity:1}
 .idx-orig-revert{font-size:9px;color:var(--amber);cursor:pointer;padding:1px 5px;border:1px solid rgba(154,122,48,.3);border-radius:8px;background:var(--bg-white);white-space:nowrap;transition:all .1s;font-family:var(--font)}
 .idx-orig-revert:hover{background:var(--amber-bg);border-color:var(--amber)}
+.idx-orig-forget{font-size:9px;color:var(--tx-4);cursor:pointer;padding:1px 5px;border:1px solid var(--border);border-radius:8px;background:var(--bg-white);white-space:nowrap;transition:all .1s;font-family:var(--font);margin-left:2px;font-weight:600}
+.idx-orig-forget:hover{background:var(--bg-1);color:var(--tx-2);border-color:var(--border-hi)}
 .idx-orig-sep{color:var(--tx-4);font-size:10px}
 .idx-mini-btn{width:24px;height:24px;border:1px solid var(--border);border-radius:5px;background:var(--bg-white);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx-3);font-size:13px;transition:all .1s;flex-shrink:0;vertical-align:middle;line-height:1}
 .idx-mini-btn:hover{background:var(--bg-1);color:var(--tx-1);border-color:var(--border-hi)}
@@ -1785,19 +1787,23 @@ async function syncOriginalToIndexTab(entryName,result,originalDesc){
   }catch(e){console.warn('syncOriginalToIndexTab error:',e)}
 }
 
-// Revert a description back to its original (may be empty string if originally empty)
+// Revert a description back to its original (may be empty string if originally empty).
+// IMPORTANT: We keep rv.originalDesc as the permanent record of the true sheet-load value.
+// Even after revert, originalDesc stays — so if the user edits AGAIN, we still know the true original.
+// hasOriginal logic in render compares originalDesc !== r.desc to decide whether to show the diff trail.
 async function revertToOriginal(entryName,segType,rowIdx){
   const k=rvKey(entryName,segType,rowIdx);
   const rv=getRV(k);
   if(!rv||rv.originalDesc===undefined||rv.originalDesc===null){toast('No original to revert to','error');return}
-  const origDesc=rv.originalDesc; // Save before clearing (may be '')
-  // Flag so updateTagDesc doesn't re-track this as a new edit
+  const origDesc=rv.originalDesc; // Save (may be '')
+  // Flag so updateTagDesc doesn't re-track this write as a new edit
   rv._reverting=true;
   setRV(k,rv);
   await updateTagDesc(rowIdx,entryName,origDesc);
-  // Clear the edit tracking — back to pristine state
+  // Clear status flags but PRESERVE originalDesc as the permanent truth
   const rv2=getRV(k)||{};
-  rv2.originalDesc=undefined;rv2.status='';rv2.suggestion='';rv2.reviewed=false;rv2._reverting=false;
+  rv2.status='';rv2.suggestion='';rv2.reviewed=false;rv2._reverting=false;
+  // Note: rv2.originalDesc is NOT cleared — it stays as the true original
   setRV(k,rv2);
   const entry=findEntry(entryName);
   const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
@@ -1808,6 +1814,38 @@ async function revertToOriginal(entryName,segType,rowIdx){
   logActivity(`Reverted: "${entryName}" → ${origDesc?'"'+origDesc+'"':'(empty)'}`);
   buildIndex();render(true);
   toast(origDesc?'Reverted to original':'Reverted to empty','success');
+}
+
+// Forget edit history — for cases where the tracked "original" is wrong (legacy data bug)
+// or the user wants the current value to be treated as pristine.
+// This makes the row appear untouched without changing the actual description.
+async function forgetEditHistory(entryName,segType,rowIdx){
+  const k=rvKey(entryName,segType,rowIdx);
+  const rv=getRV(k);
+  if(!rv){toast('No edit history to forget','info');return}
+  const ok=await customConfirm(`Treat the current value of "${entryName}" as the original? This dismisses the "→" indicator and forgets the previous tracked original.`);
+  if(!ok)return;
+  // Clear all edit-tracking fields, keep notes/bookmarks etc.
+  rv.originalDesc=undefined;
+  rv.status='';
+  rv.suggestion='';
+  rv.reason='';
+  rv.ruleViolations=[];
+  rv.reviewed=false;
+  rv.editedBy=undefined;
+  rv.editedAt=undefined;
+  rv.deniedHistory=[];
+  setRV(k,rv);
+  // Sync the cleared "original" to the Index tab
+  const entry=findEntry(entryName);
+  const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
+  if(r){
+    syncOriginalToIndexTab(entryName,r,r.desc||'').catch(()=>{});
+    syncToIndexTab(entryName,r,'','').catch(()=>{});
+  }
+  logActivity(`Cleared edit history for "${entryName}"`);
+  render(true);
+  toast('Edit history cleared','success');
 }
 
 // Review data key: entryName|segType|rowIdx
@@ -5407,6 +5445,13 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
     e.stopPropagation();
     const[en,seg,ri]=el.dataset.revert.split('|');
     customConfirm('Revert to original description?').then(ok=>{if(ok)revertToOriginal(en,seg,+ri)});
+  });
+
+  // Forget edit history button — clears tracked original (for legacy bug or to dismiss the diff trail)
+  $$('[data-forget]').forEach(el=>el.onclick=(e)=>{
+    e.stopPropagation();
+    const[en,seg,ri]=el.dataset.forget.split('|');
+    forgetEditHistory(en,seg,+ri);
   });
 
   // Description-level status toggle (Pending ↔ Reviewed)
