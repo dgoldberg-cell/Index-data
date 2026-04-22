@@ -1663,8 +1663,41 @@ async function manualRefresh(){
     await loadBaselineFromSheet();
     buildIndex();render(true);
     toast('All data refreshed','success');
-  }catch(e){toast('Refresh failed','error')}
+  }catch(e){
+    console.error('Refresh failed:',e);
+    toast('Refresh failed: '+(e?.message||e?.result?.error?.message||'unknown'),'error');
+  }
 }
+
+// Rebuild teamMembers from activity log (recovery for if the team list was wiped)
+function rebuildTeamFromActivityLog(){
+  const log=S.activityLog||[];
+  const seen=new Map();
+  // Existing members (preserve emails — log only has names)
+  (S.teamMembers||[]).forEach(m=>{
+    if(m.name)seen.set(m.name,m);
+  });
+  // Add anyone from log not already present
+  log.forEach(entry=>{
+    const name=(entry.user||'').trim();
+    if(!name)return;
+    if(seen.has(name))return;
+    seen.set(name,{name,email:'',lastSeen:entry.timestamp||0});
+  });
+  // Update lastSeen for everyone based on most recent log entry
+  log.forEach(entry=>{
+    const name=(entry.user||'').trim();
+    const m=seen.get(name);
+    if(m && entry.timestamp && entry.timestamp>m.lastSeen)m.lastSeen=entry.timestamp;
+  });
+  const rebuilt=[...seen.values()];
+  S.teamMembers=rebuilt;
+  // Force a sync so the rebuilt list is saved to the sheet
+  syncSharedDataToSheet();
+  console.log('Rebuilt team from activity log:',rebuilt);
+  return rebuilt;
+}
+window.rebuildTeam=rebuildTeamFromActivityLog;
 
 // Update a tag description in both the main keywords column AND the matching search.keywords_relevancy_N column
 // Rename a tag across ALL rows in the sheet. Updates:
@@ -5134,7 +5167,7 @@ function rIndex(){
             eh+=`<span class="idx-sug-btn" data-sugchat="${esc(e.name)}|${seg}|${r.rowIdx}" title="AI Chat" style="color:var(--blue)">🤖</span>`;
             eh+=`</span>`;
           }else if(hasOriginal){
-            const editInfo=rv.editedBy?`Edited by ${rv.editedBy}${rv.editedAt?' at '+new Date(rv.editedAt).toLocaleString():''}. `:(origFromBaseline?'Original from baseline snapshot. ':'');
+            const editInfo=(rv&&rv.editedBy)?`Edited by ${rv.editedBy}${rv.editedAt?' at '+new Date(rv.editedAt).toLocaleString():''}. `:(origFromBaseline?'Original from baseline snapshot. ':'');
             if(originalWasEmpty){
               eh+=`<span class="idx-orig-inline"><span class="idx-orig-text empty" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert to empty">[empty]</span><span class="idx-orig-revert" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Revert to empty">↩</span><span class="idx-orig-sep">→</span></span>`;
             }else{
