@@ -191,6 +191,8 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-orig-text:hover{background:var(--amber-bg);color:var(--amber);text-decoration:line-through}
 .idx-orig-text.empty{font-style:italic;text-decoration:none;font-size:10px;opacity:0.7}
 .idx-orig-text.empty:hover{text-decoration:none;opacity:1}
+.idx-orig-text.from-baseline{color:#7a6024;background:rgba(212,175,55,0.08);border:1px dashed rgba(212,175,55,0.35);font-style:italic}
+.idx-orig-text.from-baseline:hover{background:rgba(212,175,55,0.2)}
 .idx-orig-revert{font-size:9px;color:var(--amber);cursor:pointer;padding:1px 5px;border:1px solid rgba(154,122,48,.3);border-radius:8px;background:var(--bg-white);white-space:nowrap;transition:all .1s;font-family:var(--font)}
 .idx-orig-revert:hover{background:var(--amber-bg);border-color:var(--amber)}
 .idx-orig-forget{font-size:9px;color:var(--tx-4);cursor:pointer;padding:1px 5px;border:1px solid var(--border);border-radius:8px;background:var(--bg-white);white-space:nowrap;transition:all .1s;font-family:var(--font);margin-left:2px;font-weight:600}
@@ -994,6 +996,7 @@ editingDesc:null,
 transcriptPopup:null,
 // Inline review system
 reviewData:JSON.parse(localStorage.getItem('jw_rv')||'{}'), // {key: {suggestion, reason, status:'pending'|'accepted'|'denied', deniedHistory:[], reviewed:bool}}
+originalsBaseline:null, // {version, byClipId:{clipId:{tagName:description}}} — frozen pre-edit snapshot, loaded from _OriginalsBaseline sheet tab
 reviewMode:false, // Toggle: hide reviewed items
 reviewFilter:'all', // 'all','unreviewed','pending','reviewed'
 auditSelectMode:false, // Toggle: show audit checkboxes in index preview
@@ -1067,6 +1070,7 @@ function saveRV(){localStorage.setItem('jw_rv',JSON.stringify(S.reviewData));syn
 // SHARED DATA — stored in a hidden _ReviewData tab in the Google Sheet
 // ═══════════════════════════════════════════════════════════════
 const SHARED_TAB='_ReviewData';
+const BASELINE_TAB='_OriginalsBaseline';
 const ADMIN_EMAILS=['dgoldberg@jemedia.org','es@jemedia.org'];
 let _syncTimer=null;
 let _syncPending=false;
@@ -1177,7 +1181,7 @@ function logActivity(action){
 function syncSharedDataToSheet(){
   if(!S.connected)return;
   if(_syncDebounce)clearTimeout(_syncDebounce);
-  _syncDebounce=setTimeout(()=>doSyncToSheet(),2000);
+  _syncDebounce=setTimeout(()=>doSyncToSheet(),800);
 }
 
 // Actually write shared data to the _ReviewData tab
@@ -1231,9 +1235,42 @@ async function doSyncToSheet(){
     });
     _lastSyncTime=Date.now();
     console.log(`Synced shared data: ${json.length} chars in ${chunks.length} chunk(s) (${Math.round(chunks.length/MAX_CHUNKS*100)}% of capacity)`);
-  }catch(e){console.warn('Sync to sheet failed:',e)}
+    // Clear pending sync flag in localStorage on success
+    try{ localStorage.removeItem('jw_pendingSync'); }catch(_){}
+  }catch(e){
+    console.warn('Sync to sheet failed:',e);
+    // Save the data we tried to sync so it isn't lost — retry on next attempt
+    try{ localStorage.setItem('jw_pendingSync','1'); }catch(_){}
+    toast('Sync failed — will retry. Don\'t close tab if possible.','warn');
+  }
   _syncPending=false;
 }
+
+// Flush any pending sync immediately (no debounce). Used by beforeunload, visibility change, and manual refresh.
+function flushSyncImmediate(){
+  if(!S.connected)return;
+  if(_syncDebounce){clearTimeout(_syncDebounce);_syncDebounce=null;}
+  // Fire and forget — must be sync-callable for beforeunload
+  doSyncToSheet().catch(()=>{});
+}
+
+// Periodic retry: every 30s, if there's a pending sync flag, try to flush
+setInterval(()=>{
+  try{
+    if(localStorage.getItem('jw_pendingSync')==='1' && S.connected && !_syncPending){
+      console.log('Retrying pending sync…');
+      doSyncToSheet().catch(()=>{});
+    }
+  }catch(_){}
+},30000);
+
+// Critical: flush before tab closes / navigates away
+window.addEventListener('beforeunload',()=>{ try{flushSyncImmediate();}catch(_){} });
+window.addEventListener('pagehide',()=>{ try{flushSyncImmediate();}catch(_){} });
+// Also flush when tab becomes hidden (user switches tab — they may not return for hours)
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden'){ try{flushSyncImmediate();}catch(_){} }
+});
 
 // Read shared data from the _ReviewData tab
 async function loadSharedDataFromSheet(){
@@ -1265,7 +1302,26 @@ async function loadSharedDataFromSheet(){
     if(!json)return;
     const data=JSON.parse(json);
     if(data.reviewData){
-      S.reviewData=data.reviewData;
+      // CRITICAL: merge instead of overwrite to avoid wiping local unsaved edits
+      // For each key: if local has newer editedAt, keep local; else take remote
+      const remote=data.reviewData;
+      const local=S.reviewData||{};
+      const merged={};
+      // Start with all remote keys
+      Object.keys(remote).forEach(k=>{ merged[k]=remote[k] });
+      // Overlay local keys where local is newer or remote missing
+      Object.keys(local).forEach(k=>{
+        const lv=local[k], rv=remote[k];
+        if(!rv){ merged[k]=lv; return; } // local-only key — keep it
+        const lt=lv&&lv.editedAt, rt=rv&&rv.editedAt;
+        if(lt&&!rt){ merged[k]=lv; return; } // local has timestamp, remote doesn't — local wins
+        if(!lt&&rt){ merged[k]=rv; return; } // remote has timestamp, local doesn't — remote wins
+        if(lt&&rt){ merged[k]=(lt>=rt)?lv:rv; return; } // both have timestamps — newer wins
+        // Neither has timestamp — prefer local if it has more fields (likely fresher)
+        const lFields=Object.keys(lv||{}).length, rFields=Object.keys(rv||{}).length;
+        merged[k]=(lFields>=rFields)?lv:rv;
+      });
+      S.reviewData=merged;
       // Migrate: cap any deniedHistory that grew before the cap was added (reclaim space)
       Object.values(S.reviewData).forEach(rv=>{
         if(rv&&rv.deniedHistory&&rv.deniedHistory.length>5){
@@ -1380,6 +1436,116 @@ async function ensureSharedTab(){
   }catch(e){console.warn('ensureSharedTab error:',e)}
 }
 
+// ═══════════════════════════════════════════════════════════════
+// BASELINE — frozen original descriptions from pre-edit snapshot
+// Stored in _OriginalsBaseline tab, chunked like _ReviewData.
+// Loaded once on startup, used as auto-protection fallback when a row is missing originalDesc.
+// ═══════════════════════════════════════════════════════════════
+
+async function ensureBaselineTab(){
+  const tabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
+  if(tabs.includes(BASELINE_TAB))return;
+  try{
+    await gapi.client.sheets.spreadsheets.batchUpdate({
+      spreadsheetId:S.sheetId,
+      resource:{requests:[{addSheet:{properties:{title:BASELINE_TAB,hidden:true}}}]}
+    });
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId:S.sheetId,
+      range:`'${BASELINE_TAB}'!A1`,
+      valueInputOption:'RAW',
+      resource:{values:[['OriginalsBaseline_JSON_DoNotEdit']]}
+    });
+    const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+    S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+    console.log('Created _OriginalsBaseline tab');
+  }catch(e){console.warn('ensureBaselineTab error:',e)}
+}
+
+async function loadBaselineFromSheet(){
+  if(!S.connected)return;
+  const tabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
+  if(!tabs.includes(BASELINE_TAB))return; // No baseline uploaded yet
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${BASELINE_TAB}'!A2:A10000`
+    });
+    const rows=r.result.values||[];
+    if(!rows.length)return;
+    let json='';
+    const first=(rows[0]&&rows[0][0])||'';
+    if(first.startsWith('CHUNKS:')){
+      const pipeIdx=first.indexOf('|');
+      const numChunks=parseInt(first.slice(7,pipeIdx),10);
+      json=first.slice(pipeIdx+1);
+      for(let i=1;i<numChunks&&i<rows.length;i++){
+        json+=(rows[i]&&rows[i][0])||'';
+      }
+    }else{
+      json=first;
+    }
+    if(!json)return;
+    S.originalsBaseline=JSON.parse(json);
+    const clipCount=S.originalsBaseline?.byClipId?Object.keys(S.originalsBaseline.byClipId).length:0;
+    console.log(`Loaded baseline: ${clipCount} clips (version: ${S.originalsBaseline?.version||'?'})`);
+  }catch(e){console.warn('Could not load baseline:',e)}
+}
+
+async function saveBaselineToSheet(baseline){
+  if(!S.connected){toast('Not connected','error');return false}
+  try{
+    await ensureBaselineTab();
+    const json=JSON.stringify(baseline);
+    const CHUNK=48000;
+    const MAX_CHUNKS=9995;
+    const chunks=[];
+    for(let i=0;i<json.length;i+=CHUNK)chunks.push(json.slice(i,i+CHUNK));
+    if(chunks.length>MAX_CHUNKS){
+      toast('Baseline too large','error');
+      return false;
+    }
+    const rows=chunks.map((c,i)=>[i===0?'CHUNKS:'+chunks.length+'|'+c:c]);
+    await gapi.client.sheets.spreadsheets.values.clear({
+      spreadsheetId:S.sheetId,
+      range:`'${BASELINE_TAB}'!A2:A${MAX_CHUNKS+5}`
+    });
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId:S.sheetId,
+      range:`'${BASELINE_TAB}'!A2:A${2+rows.length-1}`,
+      valueInputOption:'RAW',
+      resource:{values:rows}
+    });
+    S.originalsBaseline=baseline;
+    console.log(`Saved baseline: ${json.length} chars in ${chunks.length} chunk(s)`);
+    return true;
+  }catch(e){console.warn('saveBaselineToSheet error:',e);toast('Failed to save baseline','error');return false}
+}
+
+// Look up a tag's original description in the baseline for a given sheet rowIdx.
+// Matches by the clip's `id` field (from the sheet) and the tag name.
+function baselineLookup(rowIdx, tagName){
+  if(!S.originalsBaseline||!S.originalsBaseline.byClipId)return undefined;
+  if(!S.rows||!S.rows[rowIdx])return undefined;
+  const idCol=S.headers.findIndex(h=>h.toLowerCase()==='id');
+  if(idCol<0)return undefined;
+  const clipId=String(S.rows[rowIdx][idCol]||'').trim();
+  if(!clipId)return undefined;
+  const clipTags=S.originalsBaseline.byClipId[clipId];
+  if(!clipTags)return undefined;
+  // Try exact match first, then trimmed, then case-insensitive
+  if(Object.prototype.hasOwnProperty.call(clipTags,tagName))return clipTags[tagName];
+  const trimmed=tagName.trim();
+  for(const k of Object.keys(clipTags)){
+    if(k.trim()===trimmed)return clipTags[k];
+  }
+  const lower=trimmed.toLowerCase();
+  for(const k of Object.keys(clipTags)){
+    if(k.trim().toLowerCase()===lower)return clipTags[k];
+  }
+  return undefined;
+}
+
 // Auto-refresh: pull shared data from sheet every 3 minutes
 function registerTeamMember(){
   if(!S.user?.email)return;
@@ -1420,7 +1586,7 @@ function startAutoRefresh(){
   _syncTimer=setInterval(async()=>{
     if(!S.connected)return;
     // Skip refresh if user is interacting with a popup or panel
-    if(S.sugChat||S.clipPanel||S.customEdit||S.notePopup||S.notesPopup)return;
+    if(S.sugChat||S.clipPanel||S.customEdit||S.notePopup||S.notesPopup||S.recoveryView)return;
     try{
       // Snapshot data before refresh
       const before=JSON.stringify({
@@ -1447,10 +1613,14 @@ async function manualRefresh(){
   if(!S.connected)return;
   toast('Refreshing all data…');
   try{
+    // Flush any pending writes first so we don't lose local edits
+    flushSyncImmediate();
     // Reload main sheet data (descriptions, keywords, etc.)
     await loadTab(S.activeTab||0);
     // Reload shared data (review status, notes, bookmarks, etc.)
     await loadSharedDataFromSheet();
+    // Reload baseline (in case it was updated since last load)
+    await loadBaselineFromSheet();
     buildIndex();render(true);
     toast('All data refreshed','success');
   }catch(e){toast('Refresh failed','error')}
@@ -1919,21 +2089,24 @@ function hasPendingSuggestion(entryName,segType,rowIdx){
 // Accept suggestion: update main sheet + Index tab, mark reviewed
 async function acceptSuggestion(entryName,segType,rowIdx){
   const k=rvKey(entryName,segType,rowIdx);
-  const rv=getRV(k);
-  if(!rv||!rv.suggestion)return;
+  const rvBefore=getRV(k);
+  if(!rvBefore||!rvBefore.suggestion)return;
+  const suggestion=rvBefore.suggestion;
   // Get old desc for undo
   const entry=findEntry(entryName);
   const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
   const oldDesc=r?.desc||'';
-  pushUndo('accept',{key:k,suggestion:rv.suggestion,oldDesc,rowIdx,entryName},`"${entryName}": "${oldDesc}" → "${rv.suggestion}"`);
-  const ok=await updateTagDesc(rowIdx,entryName,rv.suggestion);
+  pushUndo('accept',{key:k,suggestion,oldDesc,rowIdx,entryName},`"${entryName}": "${oldDesc}" → "${suggestion}"`);
+  const ok=await updateTagDesc(rowIdx,entryName,suggestion);
   if(!ok)return;
+  // CRITICAL: re-fetch rv AFTER updateTagDesc so we don't wipe originalDesc that updateTagDesc just set
+  const rv=getRV(k)||{};
   rv.status='accepted';rv.reviewed=true;rv.ruleViolations=[];rv.editedBy=S.user?.name||S.user?.email||'Unknown';rv.editedAt=Date.now();setRV(k,rv);
   if(r){
     syncToIndexTab(entryName,r,'accepted','').catch(()=>{});
-    syncDescToIndexTab(entryName,r,rv.suggestion).catch(()=>{});
+    syncDescToIndexTab(entryName,r,suggestion).catch(()=>{});
   }
-  logActivity(`Accepted "${entryName}": "${oldDesc}" → "${rv.suggestion}"`);
+  logActivity(`Accepted "${entryName}": "${oldDesc}" → "${suggestion}"`);
   buildIndex();render(true);
 }
 
@@ -1970,6 +2143,408 @@ async function applyCustomDesc(entryName,segType,rowIdx,customText){
   }
   logActivity(`Custom edit: "${entryName}" → "${customText}"`);
   buildIndex();render(true);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ONE-TIME RECOVERY: rebuild missing originalDesc from activityLog
+// ═══════════════════════════════════════════════════════════════
+// Parses activityLog chronologically, groups edits per tag name into chains,
+// then matches chain-final-values against current r.desc to identify rows.
+// Sets rv.originalDesc to the chain's first-seen old value where missing/wrong.
+// NEVER touches r.desc, customApplied, status, reviewed, editedBy, editedAt.
+
+function _parseActivityEntry(entry){
+  // Returns {tag, oldVal, newVal} where any may be null if not extractable
+  const action=entry.action||'';
+  let m;
+  // "Edited \"TAG\": \"OLD\" → \"NEW\""
+  m=action.match(/^Edited\s+"([^"]+)":\s+"((?:[^"\\]|\\.)*)"\s*[→\-]+>?\s*"((?:[^"\\]|\\.)*)"/);
+  if(m)return{type:'edit',tag:m[1],oldVal:m[2],newVal:m[3]};
+  // "Accepted \"TAG\": \"OLD\" → \"NEW\""
+  m=action.match(/^Accepted\s+"([^"]+)":\s+"((?:[^"\\]|\\.)*)"\s*[→\-]+>?\s*"((?:[^"\\]|\\.)*)"/);
+  if(m)return{type:'accept',tag:m[1],oldVal:m[2],newVal:m[3]};
+  // "Custom edit: \"TAG\" → \"NEW\""
+  m=action.match(/^Custom edit:\s+"([^"]+)"\s*[→\-]+>?\s*"((?:[^"\\]|\\.)*)"/);
+  if(m)return{type:'custom',tag:m[1],oldVal:null,newVal:m[2]};
+  // "Used AI suggestion for \"TAG\": \"NEW\""
+  m=action.match(/^Used AI suggestion for\s+"([^"]+)":\s+"((?:[^"\\]|\\.)*)"/);
+  if(m)return{type:'use_ai',tag:m[1],oldVal:null,newVal:m[2]};
+  // "Reverted: \"TAG\" → \"VALUE\""
+  m=action.match(/^Reverted:\s+"([^"]+)"\s*[→\-]+>?\s*"((?:[^"\\]|\\.)*)"/);
+  if(m)return{type:'revert',tag:m[1],oldVal:null,newVal:m[2]};
+  // "Denied suggestion for \"TAG\""
+  m=action.match(/^Denied suggestion for\s+"([^"]+)"/);
+  if(m)return{type:'deny',tag:m[1],oldVal:null,newVal:null};
+  return null;
+}
+
+// Walk activity log chronologically. Build per-tag chains.
+// Each chain = sequence of values; the FIRST value (oldVal of first edit)
+// is the candidate for true original.
+// Returns: { tagName: [{firstSeen, finalValue, history:[values]}] }
+function _buildChainsFromLog(){
+  const log=(S.activityLog||[]).slice().sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
+  // For each tag, track the running value. When we see a new value not in the running chain,
+  // start a fresh chain (might be a different row of the same tag).
+  // Strategy: use a map { tag: [chains] } where each chain is { firstSeen, currentValue, values }
+  const tagMap={};
+  for(const entry of log){
+    const p=_parseActivityEntry(entry);
+    if(!p||!p.tag)continue;
+    if(!tagMap[p.tag])tagMap[p.tag]=[];
+    const chains=tagMap[p.tag];
+    if(p.oldVal!=null&&p.newVal!=null){
+      // Edit/Accept: oldVal → newVal. Find a chain whose currentValue matches oldVal.
+      const ch=chains.find(c=>c.currentValue===p.oldVal);
+      if(ch){
+        ch.currentValue=p.newVal;
+        ch.values.push(p.newVal);
+      }else{
+        // New chain — oldVal is the first-seen original
+        chains.push({firstSeen:p.oldVal,currentValue:p.newVal,values:[p.oldVal,p.newVal]});
+      }
+    }else if(p.newVal!=null){
+      // Custom/UseAI/Revert: only newVal. Find chain by currentValue=any prior known value.
+      // For these, we don't know the prior value — append to most recent chain or start new.
+      // Heuristic: if there's exactly one chain, append. Else start fresh (ambiguous).
+      if(chains.length===1){
+        chains[0].currentValue=p.newVal;
+        chains[0].values.push(p.newVal);
+      }else if(chains.length===0){
+        // First mention of this tag is a custom/use_ai — no original known
+        chains.push({firstSeen:null,currentValue:p.newVal,values:[p.newVal]});
+      }
+      // Else: multiple chains, can't disambiguate — skip
+    }
+    // Deny: no value change, skip
+  }
+  return tagMap;
+}
+
+// Compute recovery proposals.
+// For each rv in S.reviewData:
+//   - Find candidate chains for the tag name
+//   - Match chain.currentValue to r.desc to pick the right chain
+//   - If unique match AND chain.firstSeen != null: proposed originalDesc = chain.firstSeen
+//   - Compare to current rv.originalDesc:
+//       missing/null/undefined → propose update
+//       differs from chain.firstSeen but matches a mid-chain value → propose update (true original recovery)
+//       already matches chain.firstSeen → no change
+//       differs and is NOT in chain → leave alone (user manually set, don't overwrite)
+function computeRecoveryProposals(){
+  const tagMap=_buildChainsFromLog();
+  const proposals=[]; // {tagKey, entryName, segType, rowIdx, currentValue, currentOriginal, proposedOriginal, reason}
+  const skipped=[];   // {tagKey, currentValue, reason}
+  if(!S.indexData||!S.indexData.entries)return{proposals:[],skipped:[],summary:{total:0}};
+  // Build a lookup: for each tag name, list of all (segType, rowIdx, r.desc) that exist
+  for(const e of S.indexData.entries){
+    const tagName=e.name;
+    const chains=tagMap[tagName];
+    if(!chains||chains.length===0)continue; // no log history for this tag
+    for(const r of (e.results||[])){
+      const k=rvKey(tagName,r.segType,r.rowIdx);
+      const rv=S.reviewData[k];
+      const currentDesc=r.desc||'';
+      // Find chain whose currentValue matches r.desc
+      const matching=chains.filter(c=>c.currentValue===currentDesc);
+      if(matching.length===0)continue; // no chain matches this row's current value
+      if(matching.length>1){
+        // Multiple chains end with the same value — ambiguous
+        skipped.push({tagKey:k,entryName:tagName,segType:r.segType,rowIdx:r.rowIdx,currentValue:currentDesc,reason:'Ambiguous: multiple chains end with same value'});
+        continue;
+      }
+      const ch=matching[0];
+      if(ch.firstSeen==null||ch.firstSeen===undefined)continue; // chain has no original info
+      const proposedOrig=ch.firstSeen;
+      const currentOrig=rv?(rv.originalDesc===undefined?undefined:rv.originalDesc):undefined;
+      // If current original is already correct — skip
+      if(currentOrig===proposedOrig)continue;
+      // If current original exists, is non-empty, and is NOT in the chain history — it's user-set, don't touch
+      if(currentOrig!==undefined&&currentOrig!==null&&currentOrig!==''&&!ch.values.includes(currentOrig)){
+        skipped.push({tagKey:k,entryName:tagName,segType:r.segType,rowIdx:r.rowIdx,currentValue:currentDesc,reason:'Existing original is not in chain history — preserved'});
+        continue;
+      }
+      // Determine reason for the change
+      let reason;
+      if(currentOrig===undefined||currentOrig===null)reason='Missing — fill in true original';
+      else if(currentOrig==='')reason='Empty — fill in true original';
+      else if(ch.values.includes(currentOrig))reason='Mid-chain value — replace with true original';
+      else reason='Update to true original';
+      proposals.push({
+        tagKey:k,entryName:tagName,segType:r.segType,rowIdx:r.rowIdx,
+        currentValue:currentDesc,
+        currentOriginal:currentOrig,
+        proposedOriginal:proposedOrig,
+        reason
+      });
+    }
+  }
+  return{proposals,skipped,summary:{total:proposals.length,skipped:skipped.length}};
+}
+
+// Recovery preview modal state
+function openRecoveryPreview(){
+  if(!S.connected){toast('Not connected — please sign in first','error');return}
+  toast('Scanning activity log…','info');
+  // Defer to allow toast to render
+  setTimeout(()=>{
+    try{
+      const result=computeRecoveryProposals();
+      S.recoveryProposals=result.proposals;
+      S.recoverySkipped=result.skipped;
+      S.recoverySelected=new Set(result.proposals.map((_,i)=>i)); // all selected by default
+      S.recoveryPage=0;
+      S.recoveryView='preview';
+      S.recoverySource='log';
+      render();
+    }catch(e){
+      console.error('Recovery scan failed:',e);
+      toast('Scan failed — see console','error');
+    }
+  },50);
+}
+
+// Compute baseline-based recovery proposals.
+// For every row with missing originalDesc OR originalDesc different from the current value,
+// check baseline. If baseline has a value:
+//   - If current originalDesc is missing → propose fill from baseline
+//   - If current originalDesc matches baseline → skip (already correct)
+//   - If current originalDesc differs from baseline AND current r.desc also differs → propose (likely mid-chain)
+//   - If current originalDesc was manually set and doesn't match baseline → show as "user-set, skipped"
+function computeBaselineRecoveryProposals(){
+  const proposals=[];
+  const skipped=[];
+  if(!S.originalsBaseline||!S.originalsBaseline.byClipId){
+    return{proposals,skipped,summary:{total:0}};
+  }
+  if(!S.indexData||!S.indexData.entries){
+    return{proposals,skipped,summary:{total:0}};
+  }
+  for(const e of S.indexData.entries){
+    for(const r of (e.results||[])){
+      const bl=baselineLookup(r.rowIdx,e.name);
+      if(bl===undefined)continue; // not in baseline
+      const k=rvKey(e.name,r.segType,r.rowIdx);
+      const rv=S.reviewData[k];
+      const currentDesc=r.desc||'';
+      const currentOrig=rv?(rv.originalDesc===undefined?undefined:rv.originalDesc):undefined;
+      // If baseline matches current desc exactly, there's nothing to recover — row is untouched
+      if(bl===currentDesc)continue;
+      // If current originalDesc already matches baseline, skip
+      if(currentOrig===bl)continue;
+      let reason;
+      if(currentOrig===undefined||currentOrig===null){
+        reason='Missing original — fill from baseline';
+      }else if(currentOrig===''){
+        reason='Empty original — fill from baseline';
+      }else if(currentOrig===currentDesc){
+        // originalDesc was wrongly set to current value — almost certainly a bug artifact
+        reason='Original equals current (likely bug artifact) — restore baseline';
+      }else{
+        // currentOrig differs from both baseline and current. Likely mid-chain.
+        reason='Mid-chain value — replace with baseline original';
+      }
+      proposals.push({
+        tagKey:k,entryName:e.name,segType:r.segType,rowIdx:r.rowIdx,
+        currentValue:currentDesc,
+        currentOriginal:currentOrig,
+        proposedOriginal:bl,
+        reason
+      });
+    }
+  }
+  return{proposals,skipped,summary:{total:proposals.length,skipped:skipped.length}};
+}
+
+function openBaselineRecoveryPreview(){
+  if(!S.connected){toast('Not connected — please sign in first','error');return}
+  if(!S.originalsBaseline||!S.originalsBaseline.byClipId){toast('No baseline loaded','error');return}
+  toast('Scanning against baseline…','info');
+  setTimeout(()=>{
+    try{
+      const result=computeBaselineRecoveryProposals();
+      S.recoveryProposals=result.proposals;
+      S.recoverySkipped=result.skipped;
+      S.recoverySelected=new Set(result.proposals.map((_,i)=>i));
+      S.recoveryPage=0;
+      S.recoveryView='preview';
+      S.recoverySource='baseline';
+      render();
+    }catch(e){
+      console.error('Baseline recovery scan failed:',e);
+      toast('Scan failed — see console','error');
+    }
+  },50);
+}
+
+function closeRecoveryPreview(){
+  S.recoveryView=null;
+  S.recoveryProposals=null;
+  S.recoverySkipped=null;
+  S.recoverySelected=null;
+  S.recoveryPage=0;
+  S.recoverySource=null;
+  render();
+}
+
+// Render the recovery preview modal as a full-page overlay
+function renderRecoveryPreview(){
+  const proposals=S.recoveryProposals||[];
+  const skipped=S.recoverySkipped||[];
+  const selected=S.recoverySelected||new Set();
+  const PAGE_SIZE=50;
+  const totalPages=Math.max(1,Math.ceil(proposals.length/PAGE_SIZE));
+  const page=Math.min(S.recoveryPage||0,totalPages-1);
+  const start=page*PAGE_SIZE;
+  const slice=proposals.slice(start,start+PAGE_SIZE);
+  let h='';
+  h+='<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">';
+  h+='<div style="background:var(--bg-white);border-radius:8px;width:100%;max-width:1100px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.3)">';
+  // Header
+  h+='<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">';
+  const sourceLabel=S.recoverySource==='baseline'?'from Baseline Snapshot':'from Activity Log';
+  h+=`<div><h2 style="margin:0;font-size:18px">🔧 Recovery Preview <span style="font-size:12px;color:var(--tx-3);font-weight:normal">(${sourceLabel})</span></h2><div style="font-size:11px;color:var(--tx-3);margin-top:4px">${proposals.length} originals will be recovered. ${skipped.length} skipped (ambiguous or already user-set).</div></div>`;
+  h+='<button class="btn btn-sm" id="recovery-close" style="font-size:12px">✕ Close</button>';
+  h+='</div>';
+  // Body
+  h+='<div style="flex:1;overflow:auto;padding:0 20px">';
+  if(proposals.length===0){
+    h+='<div style="padding:40px;text-align:center;color:var(--tx-3)">No recoverable originals found. Either everything is already correct, or there\'s no usable activity log history.</div>';
+  }else{
+    // Bulk select controls
+    h+='<div style="padding:12px 0;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-white);z-index:5">';
+    h+=`<button class="btn btn-sm" id="recovery-selectall" style="font-size:11px">Select All (${proposals.length})</button>`;
+    h+=`<button class="btn btn-sm" id="recovery-selectnone" style="font-size:11px">Select None</button>`;
+    h+=`<span style="font-size:11px;color:var(--tx-3)">${selected.size} selected</span>`;
+    h+='</div>';
+    // Table
+    h+='<table style="width:100%;border-collapse:collapse;font-size:12px">';
+    h+='<thead><tr style="border-bottom:1px solid var(--border);position:sticky;top:48px;background:var(--bg-white);z-index:4">';
+    h+='<th style="padding:8px;text-align:left;width:30px"></th>';
+    h+='<th style="padding:8px;text-align:left">Tag</th>';
+    h+='<th style="padding:8px;text-align:left">Current value</th>';
+    h+='<th style="padding:8px;text-align:left">Current original</th>';
+    h+='<th style="padding:8px;text-align:left">Proposed original</th>';
+    h+='<th style="padding:8px;text-align:left">Reason</th>';
+    h+='</tr></thead><tbody>';
+    slice.forEach((p,relIdx)=>{
+      const absIdx=start+relIdx;
+      const isSel=selected.has(absIdx);
+      const curOrig=p.currentOriginal===undefined?'<span style="color:var(--red);font-style:italic">(missing)</span>':(p.currentOriginal===''?'<span style="color:var(--tx-4);font-style:italic">(empty)</span>':esc(p.currentOriginal));
+      h+='<tr style="border-bottom:1px solid var(--border)">';
+      h+=`<td style="padding:6px 8px"><input type="checkbox" data-recsel="${absIdx}" ${isSel?'checked':''}></td>`;
+      h+=`<td style="padding:6px 8px"><b>${esc(p.entryName)}</b><br><span style="font-size:10px;color:var(--tx-3)">${esc(p.segType)} #${p.rowIdx}</span></td>`;
+      h+=`<td style="padding:6px 8px;color:var(--tx-2)">${esc(p.currentValue)}</td>`;
+      h+=`<td style="padding:6px 8px">${curOrig}</td>`;
+      h+=`<td style="padding:6px 8px"><b style="color:var(--green)">${esc(p.proposedOriginal||'(empty)')}</b></td>`;
+      h+=`<td style="padding:6px 8px;font-size:10px;color:var(--tx-3)">${esc(p.reason)}</td>`;
+      h+='</tr>';
+    });
+    h+='</tbody></table>';
+    // Pagination
+    if(totalPages>1){
+      h+='<div style="padding:12px 0;display:flex;gap:8px;align-items:center;justify-content:center">';
+      h+=`<button class="btn btn-sm" id="recovery-prev" ${page<=0?'disabled':''} style="font-size:11px">◀ Prev</button>`;
+      h+=`<span style="font-size:11px;color:var(--tx-3)">Page ${page+1} of ${totalPages}</span>`;
+      h+=`<button class="btn btn-sm" id="recovery-next" ${page>=totalPages-1?'disabled':''} style="font-size:11px">Next ▶</button>`;
+      h+='</div>';
+    }
+    // Skipped section (collapsible at bottom)
+    if(skipped.length>0){
+      h+=`<details style="margin:16px 0"><summary style="cursor:pointer;font-size:12px;color:var(--tx-3)">⚠️ ${skipped.length} skipped rows (click to expand)</summary>`;
+      h+='<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px">';
+      h+='<thead><tr style="border-bottom:1px solid var(--border)"><th style="padding:6px;text-align:left">Tag</th><th style="padding:6px;text-align:left">Current</th><th style="padding:6px;text-align:left">Why skipped</th></tr></thead><tbody>';
+      skipped.slice(0,200).forEach(s=>{
+        h+=`<tr><td style="padding:4px 6px">${esc(s.entryName)} · ${esc(s.segType)} #${s.rowIdx}</td><td style="padding:4px 6px">${esc(s.currentValue||'')}</td><td style="padding:4px 6px;color:var(--tx-3)">${esc(s.reason)}</td></tr>`;
+      });
+      h+='</tbody></table>';
+      if(skipped.length>200)h+=`<div style="font-size:10px;color:var(--tx-3);padding:8px 0">…and ${skipped.length-200} more</div>`;
+      h+='</details>';
+    }
+  }
+  h+='</div>';
+  // Footer
+  h+='<div style="padding:16px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">';
+  h+='<div style="font-size:11px;color:var(--tx-3)">Only fills in originalDesc. Will NEVER touch your current value.</div>';
+  h+='<div style="display:flex;gap:8px">';
+  h+='<button class="btn btn-sm" id="recovery-cancel" style="font-size:12px">Cancel</button>';
+  if(proposals.length>0){
+    h+=`<button class="btn btn-sm" id="recovery-apply" style="font-size:12px;background:var(--gold);color:var(--ink);border-color:var(--gold)">✓ Apply ${selected.size} Selected</button>`;
+  }
+  h+='</div>';
+  h+='</div>';
+  h+='</div></div>';
+  return h;
+}
+
+function bindRecoveryPreview(){
+  const on=(sel,ev,fn)=>{const el=$(sel);if(el)el.addEventListener(ev,fn)};
+  on('#recovery-close','click',closeRecoveryPreview);
+  on('#recovery-cancel','click',closeRecoveryPreview);
+  on('#recovery-selectall','click',()=>{
+    S.recoverySelected=new Set((S.recoveryProposals||[]).map((_,i)=>i));
+    render();
+  });
+  on('#recovery-selectnone','click',()=>{
+    S.recoverySelected=new Set();
+    render();
+  });
+  on('#recovery-prev','click',()=>{
+    if(S.recoveryPage>0){S.recoveryPage--;render()}
+  });
+  on('#recovery-next','click',()=>{
+    S.recoveryPage=(S.recoveryPage||0)+1;render();
+  });
+  $$('[data-recsel]').forEach(el=>{
+    el.onchange=()=>{
+      const idx=parseInt(el.dataset.recsel,10);
+      if(el.checked)S.recoverySelected.add(idx);
+      else S.recoverySelected.delete(idx);
+      // Update count without full re-render
+      const countEl=document.querySelector('#recovery-apply');
+      if(countEl)countEl.textContent=`✓ Apply ${S.recoverySelected.size} Selected`;
+    };
+  });
+  on('#recovery-apply','click',()=>applyRecovery());
+}
+
+async function applyRecovery(){
+  const proposals=S.recoveryProposals||[];
+  const selected=S.recoverySelected||new Set();
+  if(selected.size===0){toast('Nothing selected','error');return}
+  const ok=await customConfirm(`Apply recovery to ${selected.size} entries? This will only fill in the original strikethrough next to your current value — never replace your current value.`);
+  if(!ok)return;
+  toast('Re-fetching latest data to avoid conflicts…','info');
+  // Re-fetch latest shared data so we apply against fresh state
+  try{
+    await loadSharedDataFromSheet();
+  }catch(e){
+    toast('Could not re-fetch latest data — try again','error');
+    return;
+  }
+  // Apply each selected proposal
+  let applied=0,conflicts=0;
+  selected.forEach(idx=>{
+    const p=proposals[idx];
+    if(!p)return;
+    const rv=getRV(p.tagKey)||{};
+    // CONFLICT CHECK: did someone edit this row very recently (after we computed)?
+    // For now: just check editedAt — if it's newer than 1 minute ago AND originalDesc is different from what we proposed, skip
+    if(rv.editedAt&&rv.editedAt>Date.now()-60000&&rv.originalDesc!==undefined&&rv.originalDesc!==p.currentOriginal){
+      conflicts++;
+      return;
+    }
+    // SAFETY: only set originalDesc, never touch r.desc, customApplied, status, reviewed, editedBy, editedAt
+    rv.originalDesc=p.proposedOriginal;
+    setRV(p.tagKey,rv);
+    applied++;
+  });
+  // Force a sync to push changes to sheet immediately
+  flushSyncImmediate();
+  closeRecoveryPreview();
+  buildIndex();render(true);
+  toast(`Recovery complete: ${applied} originals restored${conflicts>0?', '+conflicts+' skipped (concurrent edits)':''}`,'success');
+  logActivity(`Recovery: restored ${applied} originals from activity log`);
 }
 
 async function bulkAcceptEntry(entryName){
@@ -3079,7 +3654,10 @@ Answer with JSON only: {"matches": true/false, "reason": "brief explanation focu
           if(!existing||(!existing.reviewed&&existing.status!=='pending')){
             // Normalize rule_violations into an array of short labels
             const violations=Array.isArray(p.rule_violations)?p.rule_violations.filter(Boolean):[];
-            setRV(k,{suggestion:sug,reason:p.reason||'',ruleViolations:violations,status:'pending',reviewed:false,deniedHistory:(existing?.deniedHistory||[])});
+            // CRITICAL: preserve originalDesc — snapshot current r.desc on first AI audit
+            // so when user accepts the suggestion, the true original is still known
+            const preservedOrig=(existing&&existing.originalDesc!==undefined&&existing.originalDesc!==null)?existing.originalDesc:(e.desc||'');
+            setRV(k,{suggestion:sug,reason:p.reason||'',ruleViolations:violations,status:'pending',reviewed:false,deniedHistory:(existing?.deniedHistory||[]),originalDesc:preservedOrig});
             syncQueue.push({entryName:e.entryName,segType:e.segType,rowIdx:e.rowIdx,status:'pending',suggestion:sug});
           }
           fx++;
@@ -3523,6 +4101,10 @@ function render(force=true){
   }
   // Toasts
   h+='<div class="toasts">';S.toasts.forEach(t=>{h+=`<div class="toast ${t.t}">${esc(t.m)}</div>`});h+='</div>';
+  // Recovery preview overlay (full-page modal)
+  if(S.recoveryView==='preview'){
+    h+=renderRecoveryPreview();
+  }
   // Save scroll positions before DOM replacement — catch all known scroll containers AND window
   const scrollSave={};
   scrollSave.win=window.scrollY||document.documentElement.scrollTop||0;
@@ -3899,6 +4481,35 @@ function rTools(){
   h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">🎯 Focus Mode</h4>';
   h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">One-card-at-a-time review view. Goes through pending suggestions + empty descriptions in the current filter. Click buttons to accept, edit, deny, or navigate.</p>';
   h+=`<button class="btn btn-sm btn-gold" id="enter-focus-mode" style="font-size:11px">🎯 Enter Focus Mode</button>`;
+  h+='</div>';
+
+  // ── Baseline Status + Upload ──
+  const hasBaseline=!!(S.originalsBaseline&&S.originalsBaseline.byClipId);
+  const baselineClipCount=hasBaseline?Object.keys(S.originalsBaseline.byClipId).length:0;
+  const baselineVersion=hasBaseline?(S.originalsBaseline.version||'unknown'):'';
+  const isAdmin=ADMIN_EMAILS.includes((S.user?.email||'').toLowerCase());
+  h+='<div class="card" style="margin-bottom:16px;border:1px solid var(--gold);background:#fffaee"><h4 style="margin-bottom:8px">📚 Originals Baseline</h4>';
+  if(hasBaseline){
+    h+=`<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">✓ Baseline loaded: <b>${baselineClipCount} clips</b> from ${esc(baselineVersion)}. Missing originals are auto-filled from baseline in the workspace (shown with a dashed gold outline).</p>`;
+  }else{
+    h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">No baseline uploaded. Upload a baseline JSON to enable auto-protection: when a row is missing its original description, the system will silently fall back to the baseline value.</p>';
+  }
+  if(isAdmin){
+    h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+    h+='<input type="file" id="baseline-file" accept=".json,application/json" style="font-size:11px;font-family:var(--font)">';
+    h+=`<button class="btn btn-sm" id="baseline-upload" style="font-size:11px">📥 Upload Baseline</button>`;
+    if(hasBaseline)h+=`<button class="btn btn-sm" id="run-baseline-recovery" style="font-size:11px;border-color:var(--gold);color:var(--ink);background:var(--gold)">🔧 Recover from Baseline</button>`;
+    h+='</div>';
+    h+='<p style="font-size:10px;color:var(--tx-4);margin-top:6px">(Admin only — recovery scans every row and saves baseline originals where missing. Preview before apply. Never overwrites your current value.)</p>';
+  }else{
+    h+='<p style="font-size:10px;color:var(--tx-4);margin-top:6px">Only admins can upload or apply baseline recovery.</p>';
+  }
+  h+='</div>';
+
+  // ── Activity-Log Recovery (secondary — for tags not in baseline) ──
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">🔧 Recover from Activity Log</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Walks the activity log and reconstructs true originals from edit history. Useful for tags NOT in the baseline (e.g. added after Feb 17). Preview before apply. Never touches your current value.</p>';
+  h+=`<button class="btn btn-sm" id="run-recovery" style="font-size:11px">🔧 Scan Activity Log</button>`;
   h+='</div>';
 
   // ── Consistency Check ──
@@ -4435,15 +5046,22 @@ function rIndex(){
           eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''} title="Select for AI audit">`;
           // Description content
           // originalDesc: undefined = never edited. '' = originally empty. String = had content.
-          const hasOrigTracked=rv&&rv.originalDesc!==undefined&&rv.originalDesc!==null;
-          const hasOriginal=hasOrigTracked&&rv.originalDesc!==r.desc;
-          const originalWasEmpty=hasOriginal&&!rv.originalDesc;
+          // AUTO-PROTECTION: if rv has no originalDesc tracked, try to fall back to baseline
+          let effOrig=(rv&&rv.originalDesc!==undefined&&rv.originalDesc!==null)?rv.originalDesc:undefined;
+          let origFromBaseline=false;
+          if(effOrig===undefined){
+            const bl=baselineLookup(r.rowIdx,e.name);
+            if(bl!==undefined&&bl!==r.desc){ effOrig=bl; origFromBaseline=true; }
+          }
+          const hasOrigTracked=effOrig!==undefined;
+          const hasOriginal=hasOrigTracked&&effOrig!==r.desc;
+          const originalWasEmpty=hasOriginal&&!effOrig;
           if(isPending){
             if(hasOriginal){
               if(originalWasEmpty){
                 eh+=`<span class="idx-orig-inline"><span class="idx-orig-text empty" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert to empty">[empty]</span><span class="idx-orig-sep">→</span></span>`;
               }else{
-                eh+=`<span class="idx-orig-inline"><span class="idx-orig-text" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert">${esc(rv.originalDesc)}</span><span class="idx-orig-sep">→</span></span>`;
+                eh+=`<span class="idx-orig-inline"><span class="idx-orig-text${origFromBaseline?' from-baseline':''}" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="${origFromBaseline?'From baseline snapshot — ':''}Click to revert">${esc(effOrig)}</span><span class="idx-orig-sep">→</span></span>`;
               }
             }
             eh+=`<span class="idx-sug-old">${descEmpty?'[empty]':esc(r.desc)}</span>`;
@@ -4467,11 +5085,11 @@ function rIndex(){
             eh+=`<span class="idx-sug-btn" data-sugchat="${esc(e.name)}|${seg}|${r.rowIdx}" title="AI Chat" style="color:var(--blue)">🤖</span>`;
             eh+=`</span>`;
           }else if(hasOriginal){
-            const editInfo=rv.editedBy?`Edited by ${rv.editedBy}${rv.editedAt?' at '+new Date(rv.editedAt).toLocaleString():''}. `:'';
+            const editInfo=rv.editedBy?`Edited by ${rv.editedBy}${rv.editedAt?' at '+new Date(rv.editedAt).toLocaleString():''}. `:(origFromBaseline?'Original from baseline snapshot. ':'');
             if(originalWasEmpty){
               eh+=`<span class="idx-orig-inline"><span class="idx-orig-text empty" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert to empty">[empty]</span><span class="idx-orig-revert" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Revert to empty">↩</span><span class="idx-orig-sep">→</span></span>`;
             }else{
-              eh+=`<span class="idx-orig-inline"><span class="idx-orig-text" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="Click to revert to original">${esc(rv.originalDesc)}</span><span class="idx-orig-revert" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}">↩</span><span class="idx-orig-sep">→</span></span>`;
+              eh+=`<span class="idx-orig-inline"><span class="idx-orig-text${origFromBaseline?' from-baseline':''}" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}" title="${origFromBaseline?'From baseline snapshot — ':''}Click to revert to original">${esc(effOrig)}</span><span class="idx-orig-revert" data-revert="${esc(e.name)}|${seg}|${r.rowIdx}">↩</span><span class="idx-orig-sep">→</span></span>`;
             }
             eh+=`<span class="idx-result-desc editable" data-editdesc="${esc(e.name)}|${seg}|${ri}" title="${esc(editInfo)}Double-click to edit">${esc(r.desc)}</span>`;
           }else{
@@ -4900,7 +5518,7 @@ function rSetup(app){
   <div style="text-align:left;margin-top:14px"><label style="font-size:11px;color:var(--tx-3);font-weight:500">Code <span style="color:var(--tx-4);font-weight:400">(optional — leave blank to work without AI features)</span></label><input class="s-input" id="ik" type="password" placeholder="Enter team code (optional)" value="${esc(S.claudeKey)}" style="margin-top:4px"></div>
   <div class="setup-err" id="se"></div>
   <button class="btn btn-gold" id="btn-con" style="width:100%;height:42px;font-size:14px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center">Sign In</button></div></div>`;
-  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadTab(0);registerTeamMember();startAutoRefresh();render();if(!k)toast('Signed in without AI features. Add a code in settings to enable AI.','info')}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
+  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadBaselineFromSheet();await loadTab(0);registerTeamMember();startAutoRefresh();render();if(!k)toast('Signed in without AI features. Add a code in settings to enable AI.','info')}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4908,6 +5526,8 @@ function rSetup(app){
 // ═══════════════════════════════════════════════════════════════
 function bindAll(){
   const on=(sel,ev,fn)=>{const el=$(sel);if(el)el.addEventListener(ev,fn)};
+  // Recovery preview overlay handlers (must be early so other handlers don't interfere)
+  if(S.recoveryView==='preview'){bindRecoveryPreview();}
   // Nav
   $$('[data-nav]').forEach(el=>el.onclick=()=>{
     const newView=el.dataset.nav;
@@ -5043,6 +5663,33 @@ function bindAll(){
   });
   // Focus Mode entry button (Tools page)
   on('#enter-focus-mode','click',()=>enterFocusMode());
+  // Recovery button (Tools page)
+  on('#run-recovery','click',()=>openRecoveryPreview());
+  // Baseline upload
+  on('#baseline-upload','click',async()=>{
+    const input=$('#baseline-file');
+    if(!input||!input.files||!input.files[0]){toast('Pick a JSON file first','error');return}
+    const file=input.files[0];
+    try{
+      const text=await file.text();
+      const baseline=JSON.parse(text);
+      if(!baseline||typeof baseline!=='object'||!baseline.byClipId){
+        toast('Invalid baseline format — missing byClipId','error');return;
+      }
+      const clipCount=Object.keys(baseline.byClipId).length;
+      const ok=await customConfirm(`Upload baseline with ${clipCount} clips? This will replace any existing baseline in the sheet.`);
+      if(!ok)return;
+      toast('Saving baseline to sheet…','info');
+      const saved=await saveBaselineToSheet(baseline);
+      if(saved){
+        toast(`Baseline saved: ${clipCount} clips`,'success');
+        logActivity(`Uploaded baseline: ${clipCount} clips (${baseline.version||'unknown'})`);
+        render();
+      }
+    }catch(e){console.error('Baseline upload failed:',e);toast('Could not parse baseline file','error')}
+  });
+  // Baseline-recovery button
+  on('#run-baseline-recovery','click',()=>openBaselineRecoveryPreview());
   // Admin — copy invite
   on('#invite-copy','click',()=>{
     const email=$('#invite-email')?.value?.trim();
