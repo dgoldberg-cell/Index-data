@@ -1546,6 +1546,34 @@ function baselineLookup(rowIdx, tagName){
   return undefined;
 }
 
+// Debug helper — call from browser console:  window.diagRow('Adherence to Rebbe', 'My Encounter', 3393)
+// Returns a report on what the system sees for that row.
+window.diagRow=function(tagName, segType, rowIdx){
+  const out={tagName, segType, rowIdx};
+  out.baselineLoaded=!!(S.originalsBaseline&&S.originalsBaseline.byClipId);
+  out.baselineClipCount=out.baselineLoaded?Object.keys(S.originalsBaseline.byClipId).length:0;
+  if(!S.rows||!S.rows[rowIdx]){out.error='no row at rowIdx '+rowIdx;return out;}
+  const idCol=S.headers.findIndex(h=>h.toLowerCase()==='id');
+  out.idCol=idCol;
+  out.clipId=idCol>=0?String(S.rows[rowIdx][idCol]||'').trim():'(no id col)';
+  out.clipInBaseline=out.baselineLoaded&&!!S.originalsBaseline.byClipId[out.clipId];
+  if(out.clipInBaseline){
+    out.tagsInBaselineForClip=Object.keys(S.originalsBaseline.byClipId[out.clipId]);
+    out.tagInBaseline=Object.prototype.hasOwnProperty.call(S.originalsBaseline.byClipId[out.clipId],tagName);
+    out.baselineValue=baselineLookup(rowIdx,tagName);
+  }
+  const k=rvKey(tagName,segType,rowIdx);
+  out.rvKey=k;
+  out.rv=S.reviewData[k];
+  // Find r.desc
+  const entry=findEntry(tagName);
+  const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
+  out.currentDesc=r?r.desc:'(row not found in entry)';
+  console.log('=== diagRow result ===');
+  console.log(JSON.stringify(out,null,2));
+  return out;
+};
+
 // Auto-refresh: pull shared data from sheet every 3 minutes
 function registerTeamMember(){
   if(!S.user?.email)return;
@@ -5046,12 +5074,25 @@ function rIndex(){
           eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''} title="Select for AI audit">`;
           // Description content
           // originalDesc: undefined = never edited. '' = originally empty. String = had content.
-          // AUTO-PROTECTION: if rv has no originalDesc tracked, try to fall back to baseline
-          let effOrig=(rv&&rv.originalDesc!==undefined&&rv.originalDesc!==null)?rv.originalDesc:undefined;
+          // AUTO-PROTECTION via baseline:
+          //   - If rv has no originalDesc tracked → use baseline
+          //   - If rv.originalDesc === r.desc (stored original equals current — bug artifact, means lost) → use baseline
+          //   - If rv.originalDesc differs from baseline AND rv.originalDesc was never user-set (no editedBy) → use baseline
+          //   - Else preserve rv.originalDesc as-is (user-set or correctly tracked)
+          const trackedOrig=(rv&&rv.originalDesc!==undefined&&rv.originalDesc!==null)?rv.originalDesc:undefined;
+          let effOrig=trackedOrig;
           let origFromBaseline=false;
-          if(effOrig===undefined){
-            const bl=baselineLookup(r.rowIdx,e.name);
-            if(bl!==undefined&&bl!==r.desc){ effOrig=bl; origFromBaseline=true; }
+          const bl=baselineLookup(r.rowIdx,e.name);
+          if(bl!==undefined&&bl!==r.desc){
+            // Baseline says original was different from current — there's something to show
+            if(trackedOrig===undefined){
+              // Nothing tracked — use baseline
+              effOrig=bl; origFromBaseline=true;
+            }else if(trackedOrig===r.desc){
+              // Tracked original equals current value — that's a bug artifact (lost original)
+              effOrig=bl; origFromBaseline=true;
+            }
+            // Otherwise: tracked original is something specific — trust it (user-set or genuinely tracked)
           }
           const hasOrigTracked=effOrig!==undefined;
           const hasOriginal=hasOrigTracked&&effOrig!==r.desc;
