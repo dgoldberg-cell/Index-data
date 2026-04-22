@@ -1254,23 +1254,31 @@ function flushSyncImmediate(){
   doSyncToSheet().catch(()=>{});
 }
 
-// Periodic retry: every 30s, if there's a pending sync flag, try to flush
+// Periodic retry: every 2 minutes, if there's a pending sync flag, try to flush.
+// Less aggressive than 30s to avoid hammering the API when there's a persistent error.
+let _syncRetryCount=0;
 setInterval(()=>{
   try{
     if(localStorage.getItem('jw_pendingSync')==='1' && S.connected && !_syncPending){
-      console.log('Retrying pending sync…');
-      doSyncToSheet().catch(()=>{});
+      _syncRetryCount++;
+      if(_syncRetryCount>10){
+        // Give up after 10 failed retries (~20 min) — clear flag so we don't loop forever
+        console.warn('Giving up on pending sync after 10 retries');
+        try{ localStorage.removeItem('jw_pendingSync'); }catch(_){}
+        _syncRetryCount=0;
+        return;
+      }
+      console.log('Retrying pending sync (attempt '+_syncRetryCount+')…');
+      doSyncToSheet().then(()=>{_syncRetryCount=0}).catch(()=>{});
     }
   }catch(_){}
-},30000);
+},120000);
 
 // Critical: flush before tab closes / navigates away
 window.addEventListener('beforeunload',()=>{ try{flushSyncImmediate();}catch(_){} });
 window.addEventListener('pagehide',()=>{ try{flushSyncImmediate();}catch(_){} });
-// Also flush when tab becomes hidden (user switches tab — they may not return for hours)
-document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='hidden'){ try{flushSyncImmediate();}catch(_){} }
-});
+// NOTE: visibilitychange flush removed — was causing too-frequent sheet writes when users alt-tab.
+// beforeunload + pagehide cover the actual close/navigate-away cases that matter for data preservation.
 
 // Read shared data from the _ReviewData tab
 async function loadSharedDataFromSheet(){
@@ -1524,21 +1532,25 @@ async function saveBaselineToSheet(baseline){
 
 // Look up a tag's original description in the baseline for a given sheet rowIdx.
 // Matches by the clip's `id` field (from the sheet) and the tag name.
+// Cached id column — recomputed when headers change
+let _baselineIdCol=-2; // -2 = not yet computed; -1 = not found; >=0 = found
+function _resetBaselineCache(){_baselineIdCol=-2;}
 function baselineLookup(rowIdx, tagName){
   if(!S.originalsBaseline||!S.originalsBaseline.byClipId)return undefined;
   if(!S.rows||!S.rows[rowIdx])return undefined;
-  const idCol=S.headers.findIndex(h=>h.toLowerCase()==='id');
-  if(idCol<0)return undefined;
-  const clipId=String(S.rows[rowIdx][idCol]||'').trim();
+  if(_baselineIdCol===-2){
+    _baselineIdCol=S.headers.findIndex(h=>h.toLowerCase()==='id');
+  }
+  if(_baselineIdCol<0)return undefined;
+  const clipId=String(S.rows[rowIdx][_baselineIdCol]||'').trim();
   if(!clipId)return undefined;
   const clipTags=S.originalsBaseline.byClipId[clipId];
   if(!clipTags)return undefined;
   // Try exact match first, then trimmed, then case-insensitive
   if(Object.prototype.hasOwnProperty.call(clipTags,tagName))return clipTags[tagName];
   const trimmed=tagName.trim();
-  for(const k of Object.keys(clipTags)){
-    if(k.trim()===trimmed)return clipTags[k];
-  }
+  if(Object.prototype.hasOwnProperty.call(clipTags,trimmed))return clipTags[trimmed];
+  // Case-insensitive (rare; only loop if needed)
   const lower=trimmed.toLowerCase();
   for(const k of Object.keys(clipTags)){
     if(k.trim().toLowerCase()===lower)return clipTags[k];
@@ -2778,7 +2790,7 @@ function checkToken(){
 }
 async function loadTab(idx){
   if(!S.sheetMeta?.tabs?.[idx])return;S.loading=true;render();
-  try{const r=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:S.sheetId,range:`'${S.sheetMeta.tabs[idx].title}'`});const v=r.result.values||[];S.headers=v.length?v[0]:[];S.rows=v.length>1?v.slice(1).map(r=>{while(r.length<S.headers.length)r.push('');return r}):[];S.visibleCols=new Set(S.headers.map((_,i)=>i));S.selected=new Set();S.sortCol=null;S.search='';S.editCell=null;S.activeTab=idx;buildIndex()}catch(e){toast('Load failed: '+e.message,'error')}
+  try{const r=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:S.sheetId,range:`'${S.sheetMeta.tabs[idx].title}'`});const v=r.result.values||[];S.headers=v.length?v[0]:[];S.rows=v.length>1?v.slice(1).map(r=>{while(r.length<S.headers.length)r.push('');return r}):[];S.visibleCols=new Set(S.headers.map((_,i)=>i));S.selected=new Set();S.sortCol=null;S.search='';S.editCell=null;S.activeTab=idx;_resetBaselineCache();buildIndex()}catch(e){toast('Load failed: '+e.message,'error')}
   S.loading=false;render();
 }
 async function saveCell(ri,ci,val){if(!checkToken()){toast('Session expired — please refresh','error');return false}const nm=S.sheetMeta.tabs[S.activeTab].title;try{await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:S.sheetId,range:`'${nm}'!${cl(ci)}${ri+2}`,valueInputOption:'USER_ENTERED',resource:{values:[[val]]}});S.rows[ri][ci]=val;return true}catch(e){console.error('saveCell error:',e);toast('Save failed: '+(e?.result?.error?.message||e?.message||JSON.stringify(e)),'error');return false}}
@@ -5077,22 +5089,18 @@ function rIndex(){
           // AUTO-PROTECTION via baseline:
           //   - If rv has no originalDesc tracked → use baseline
           //   - If rv.originalDesc === r.desc (stored original equals current — bug artifact, means lost) → use baseline
-          //   - If rv.originalDesc differs from baseline AND rv.originalDesc was never user-set (no editedBy) → use baseline
-          //   - Else preserve rv.originalDesc as-is (user-set or correctly tracked)
+          //   Otherwise: trust rv.originalDesc as-is.
+          // Baseline lookup is skipped when rv already has a sensible tracked value (perf optimization).
           const trackedOrig=(rv&&rv.originalDesc!==undefined&&rv.originalDesc!==null)?rv.originalDesc:undefined;
           let effOrig=trackedOrig;
           let origFromBaseline=false;
-          const bl=baselineLookup(r.rowIdx,e.name);
-          if(bl!==undefined&&bl!==r.desc){
-            // Baseline says original was different from current — there's something to show
-            if(trackedOrig===undefined){
-              // Nothing tracked — use baseline
-              effOrig=bl; origFromBaseline=true;
-            }else if(trackedOrig===r.desc){
-              // Tracked original equals current value — that's a bug artifact (lost original)
+          // Only invoke baseline lookup when needed (perf: avoid 10k+ lookups per render)
+          const needsBaselineCheck=(trackedOrig===undefined)||(trackedOrig===r.desc&&r.desc!=='');
+          if(needsBaselineCheck&&S.originalsBaseline){
+            const bl=baselineLookup(r.rowIdx,e.name);
+            if(bl!==undefined&&bl!==r.desc){
               effOrig=bl; origFromBaseline=true;
             }
-            // Otherwise: tracked original is something specific — trust it (user-set or genuinely tracked)
           }
           const hasOrigTracked=effOrig!==undefined;
           const hasOriginal=hasOrigTracked&&effOrig!==r.desc;
