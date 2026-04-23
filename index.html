@@ -1699,6 +1699,39 @@ function rebuildTeamFromActivityLog(){
 }
 window.rebuildTeam=rebuildTeamFromActivityLog;
 
+// Hard-coded restore of the known team list — use this when activity log doesn't have enough history
+// and rebuildTeam() only restores one member.
+function restoreKnownTeam(){
+  const now=Date.now();
+  const known=[
+    {name:'Moti Lazar',email:'motilazar7@gmail.com',lastSeen:1776803913949},
+    {name:'Yossi Sirota',email:'ysirota@jemedia.org',lastSeen:1776885672931},
+    {name:'Dovid Goldberg',email:'dgoldberg@jemedia.org',lastSeen:now},
+    {name:'Dovid Goldberg',email:'dovidnum1@gmail.com',lastSeen:1776828643998},
+    {name:'Rabbi Eli Baron - Chabad of Bowie',email:'chabadofbowie@gmail.com',lastSeen:1776299658464},
+    {name:'Elkanah Shmotkin',email:'es@jemedia.org',lastSeen:1776874041959}
+  ];
+  const byEmail=new Map();
+  // Preserve any existing members not in the known list (shouldn't happen, but safe)
+  (S.teamMembers||[]).forEach(m=>{if(m.email)byEmail.set(m.email,m)});
+  // Overlay known members (known values win, preserving higher lastSeen if local is newer)
+  known.forEach(k=>{
+    const existing=byEmail.get(k.email);
+    if(existing && (existing.lastSeen||0) > (k.lastSeen||0)){
+      byEmail.set(k.email,{...k,lastSeen:existing.lastSeen,name:existing.name||k.name});
+    }else{
+      byEmail.set(k.email,k);
+    }
+  });
+  S.teamMembers=[...byEmail.values()];
+  syncSharedDataToSheet();
+  console.log('Restored known team:',S.teamMembers);
+  toast('Team restored — '+S.teamMembers.length+' members','success');
+  render();
+  return S.teamMembers;
+}
+window.restoreKnownTeam=restoreKnownTeam;
+
 // Update a tag description in both the main keywords column AND the matching search.keywords_relevancy_N column
 // Rename a tag across ALL rows in the sheet. Updates:
 //  - Every tag.name occurrence in the keywords JSON
