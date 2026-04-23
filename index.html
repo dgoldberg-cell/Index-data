@@ -1391,8 +1391,38 @@ async function loadSharedDataFromSheet(){
       const userKey=S.user?.email||S.user?.name||'default';
       S._allBookmarks[userKey]=data.bookmarks;
     }
-    if(data.notes)S.idxNotes=data.notes;
-    if(data.descNotes)S.descNotes=data.descNotes;
+    // idxNotes: merge by key. Longer thread wins; unseen keys from either side preserved.
+    if(data.notes){
+      if(!S.idxNotes)S.idxNotes={};
+      const inc=data.notes;
+      Object.keys(inc).forEach(k=>{
+        const cur=S.idxNotes[k];
+        if(!cur){ S.idxNotes[k]=inc[k]; return; }
+        // Both exist — pick whichever has more thread entries (more content = more recent)
+        const cl=(cur.thread||[]).length, il=(inc[k].thread||[]).length;
+        if(il>cl)S.idxNotes[k]=inc[k];
+      });
+    }
+    // descNotes: merge by key. Per-note: longer thread wins (newer reply appended).
+    // This prevents remote loads from wiping local notes AND prevents local from dropping remote replies.
+    if(data.descNotes){
+      if(!S.descNotes)S.descNotes={};
+      const inc=data.descNotes;
+      Object.keys(inc).forEach(k=>{
+        const cur=S.descNotes[k];
+        if(!cur){ S.descNotes[k]=inc[k]; return; }
+        const cl=(cur.thread||[]).length, il=(inc[k].thread||[]).length;
+        if(il>cl){
+          // Remote thread is longer (someone replied) — adopt remote version
+          S.descNotes[k]=inc[k];
+        }else if(cl>il){
+          // Local is longer (we replied, remote hasn't synced yet) — keep local, will sync up
+        }else{
+          // Equal length — prefer remote's resolved/timestamp if newer
+          if((inc[k].resolvedAt||0)>(cur.resolvedAt||0))S.descNotes[k]=inc[k];
+        }
+      });
+    }
     if(data.teamMembers&&Array.isArray(data.teamMembers)){
       // Merge — never lose existing members, only add/update
       const merged=new Map();
