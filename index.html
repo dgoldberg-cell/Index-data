@@ -491,54 +491,16 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 .idx-sug-old{color:var(--red);font-size:12px}
 .idx-sug-arrow{color:var(--tx-4);font-size:11px;flex-shrink:0}
 .idx-sug-new{color:var(--green);font-weight:600;font-size:12.5px}
+/* 3-alternative suggestion chips — inline, primary highlighted, others muted */
+.idx-sug-chips{display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center}
+.idx-sug-chip{display:inline-block;color:var(--tx-3);background:var(--bg-1,#f2efe8);border:1px solid var(--border);padding:2px 8px;border-radius:10px;font-size:11.5px;font-style:italic;cursor:pointer;transition:all .15s;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.idx-sug-chip:hover{border-color:var(--green);color:var(--green);background:var(--bg-white)}
+.idx-sug-chip.primary{color:var(--green);font-weight:600;background:rgba(60,140,60,.08);border-color:var(--green);font-style:italic}
+.idx-sug-chip.primary::before{content:'★ ';font-size:9px;font-style:normal}
 .idx-sug-reason{position:relative;font-size:9px;color:var(--purple);background:var(--purple-bg);padding:1px 6px;border-radius:8px;cursor:help;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
 .idx-rule-chip{display:inline-flex;align-items:center;font-family:var(--mono,monospace);font-size:9px;color:var(--gold);background:rgba(140,122,80,.08);border:1px solid rgba(140,122,80,.22);padding:1px 6px;border-radius:4px;margin-left:3px;white-space:nowrap;font-weight:500;letter-spacing:.2px;cursor:help}
 .idx-rule-chip:hover{background:rgba(140,122,80,.16);color:var(--tx-1)}
 
-/* Focus Mode — keyboard reading view */
-.focus-wrap{position:fixed;inset:0;background:var(--bg-0);z-index:1000;display:flex;flex-direction:column;align-items:center;padding:0;overflow:hidden}
-.focus-topbar{width:100%;max-width:780px;display:flex;justify-content:space-between;align-items:center;padding:18px 28px 8px}
-.focus-exit-btn,.focus-help-btn{background:var(--bg-white);border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-size:12px;font-weight:500;color:var(--tx-2);cursor:pointer;font-family:var(--font)}
-.focus-exit-btn:hover,.focus-help-btn:hover{border-color:var(--gold);color:var(--gold)}
-.focus-help-btn{min-width:32px;padding:6px 10px;font-weight:700;text-align:center}
-.focus-progress-text{font-family:var(--mono,monospace);font-size:11px;color:var(--tx-3);font-weight:500;letter-spacing:.3px;text-transform:uppercase}
-.focus-card{flex:1;width:100%;max-width:780px;background:var(--bg-white);border:1px solid var(--border);border-radius:12px;margin:8px 28px;padding:48px 56px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;overflow-y:auto;box-shadow:0 2px 24px rgba(0,0,0,.04)}
-.focus-tag-line{font-family:var(--mono,monospace);font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx-4);margin-bottom:12px}
-.focus-tag-name{font-family:var(--serif,Georgia,serif);font-size:36px;font-weight:700;letter-spacing:-.5px;color:var(--tx-1);margin:0 0 32px;line-height:1.1}
-.focus-original-label,.focus-suggestion-label{font-family:var(--mono,monospace);font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--tx-4);margin-bottom:8px;font-weight:600}
-.focus-suggestion-label{color:var(--gold)}
-.focus-original{font-family:var(--serif,Georgia,serif);font-size:17px;font-style:italic;color:var(--tx-3);background:var(--bg-0);border:1px solid var(--border);border-radius:8px;padding:12px 20px;margin-bottom:0;max-width:600px;line-height:1.5}
-.focus-arrow{font-size:18px;color:var(--tx-4);margin:14px 0;font-weight:300}
-.focus-suggestion{font-family:var(--serif,Georgia,serif);font-size:22px;font-style:italic;color:var(--gold);background:rgba(140,122,80,.06);border:1px solid rgba(140,122,80,.2);border-radius:8px;padding:16px 24px;margin-bottom:14px;max-width:600px;line-height:1.45;font-weight:500}
-.focus-reason{font-size:12px;color:var(--tx-3);font-style:italic;margin-bottom:10px;max-width:520px}
-.focus-rules{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:4px;margin-bottom:12px;max-width:600px}
-.focus-rules .idx-rule-chip{margin-left:0;font-size:10px;padding:2px 8px}
-.focus-empty-badge{font-family:var(--serif,Georgia,serif);font-size:18px;font-style:italic;color:var(--red);background:var(--red-bg,rgba(176,80,80,.08));border:1px solid var(--red-bd,rgba(176,80,80,.2));border-radius:8px;padding:14px 22px;margin-bottom:14px}
-.focus-hint{font-size:12px;color:var(--tx-3);font-style:italic;margin-top:6px;max-width:520px;line-height:1.5}
-.focus-clip-info{margin-top:28px;font-size:11px;color:var(--tx-4);font-style:italic;max-width:560px;padding-top:18px;border-top:1px solid var(--border)}
-.focus-actionbar{display:flex;justify-content:center;gap:10px;padding:14px 28px 6px;flex-wrap:wrap}
-.focus-action{background:var(--bg-white);border:1px solid var(--border);border-radius:8px;padding:10px 22px;font-size:13px;font-weight:500;color:var(--tx-2);cursor:pointer;font-family:var(--font);transition:all .1s}
-.focus-action:hover{border-color:var(--gold);color:var(--gold);background:var(--bg-0)}
-.focus-action.accept{background:var(--green);color:#fff;border-color:var(--green)}
-.focus-action.accept:hover{filter:brightness(1.1);color:#fff}
-.focus-action.deny{color:var(--red);border-color:rgba(176,80,80,.3)}
-.focus-action.deny:hover{background:var(--red-bg);color:var(--red);border-color:var(--red)}
-.focus-action.edit{color:var(--gold);border-color:rgba(140,122,80,.3)}
-.focus-action.edit:hover{background:var(--gold-bg);color:var(--gold);border-color:var(--gold)}
-.focus-navbar{display:flex;justify-content:space-between;padding:0 28px 10px;gap:8px;max-width:780px;width:100%;margin:0 auto}
-.focus-nav{background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-size:12px;color:var(--tx-3);cursor:pointer;font-family:var(--font)}
-.focus-nav:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
-.focus-nav:disabled{opacity:.4;cursor:not-allowed}
-.focus-progressbar{width:100%;max-width:780px;margin:0 28px 18px;height:4px;background:var(--bg-1);border-radius:2px;overflow:hidden}
-.focus-progress-fill{height:100%;background:linear-gradient(to right,var(--gold),var(--amber,var(--gold)));transition:width .2s ease}
-.focus-help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
-.focus-help-panel{background:var(--bg-white);border:1px solid var(--border);border-radius:12px;padding:30px 40px;max-width:480px;width:calc(100% - 40px);box-shadow:0 16px 48px rgba(0,0,0,.2)}
-.focus-help-panel h3{font-family:var(--serif,Georgia,serif);font-size:20px;margin:0 0 18px;font-weight:700}
-.focus-help-panel table{width:100%;border-collapse:collapse;font-size:13px}
-.focus-help-panel td{padding:8px 4px;vertical-align:middle}
-.focus-help-panel td:first-child{white-space:nowrap;padding-right:18px;width:40%}
-.focus-help-panel tr{border-bottom:1px solid var(--bg-1)}
-.focus-help-panel tr:last-child{border-bottom:none}
 .idx-sug-reason:hover{overflow:visible;max-width:none;z-index:20}
 .idx-sug-reason:hover::after{content:attr(data-reason);position:absolute;left:0;top:100%;margin-top:4px;background:var(--tx-1);color:#fff;padding:6px 10px;border-radius:6px;font-size:11px;line-height:1.4;white-space:normal;width:280px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.15);pointer-events:none}
 .idx-sug-actions{display:flex;gap:2px;flex-shrink:0}
@@ -636,7 +598,7 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
   /* Hide everything that's chrome or UI */
   body > *{display:none !important}
   body > #app, body > div[id]{display:block !important}
-  .sidebar,.page-hd,.page-back-btn,.page-hd-actions,.book-entry-edit,.book-comment,#clip-panel-overlay,.notif-panel,.ai-fab,#ai-fab,.toast-stack,.toasts,.toast,.confirm-overlay,.note-popup-overlay,.transcript-popup,.rename-input,.idx-rename-input,.idx-search-modes,#user-filter-clear,.book-section-pills,.focus-wrap{display:none !important}
+  .sidebar,.page-hd,.page-back-btn,.page-hd-actions,.book-entry-edit,.book-comment,#clip-panel-overlay,.notif-panel,.ai-fab,#ai-fab,.toast-stack,.toasts,.toast,.confirm-overlay,.note-popup-overlay,.transcript-popup,.rename-input,.idx-rename-input,.idx-search-modes,#user-filter-clear,.book-section-pills{display:none !important}
 
   /* Page containers — must allow natural flow across pages */
   html,body{height:auto !important;overflow:visible !important}
@@ -985,10 +947,6 @@ indexData:null,
 idxSearch:'',idxSearchMode:'both',idxNavMode:'tabs',idxLayout:'single',idxActiveSection:'all',idxActiveEntry:null,idxPage:0,
 userWorkFilter:'', // Admin only: when set, filter entries to show only those touched by this user (email)
 sidebarWorkspaceOpen:true, // Workspace section dropdown expand/collapse (user-controlled)
-focusMode:false, // Keyboard reading mode — one-card-at-a-time focus view
-focusIndex:0, // Current item in focus queue
-focusQueue:[], // Cached queue — built when entering focus mode
-focusShowHelp:false, // ? key toggles help overlay
 transcriptHighlights:{}, // Cache: {tag|clipId → {loading, phrases:[], noMatch:bool, error}}
 idxBookmarks:JSON.parse(localStorage.getItem('jw_bm')||'{}'),
 idxNotes:JSON.parse(localStorage.getItem('jw_notes')||'{}'),
@@ -1071,6 +1029,8 @@ function saveRV(){localStorage.setItem('jw_rv',JSON.stringify(S.reviewData));syn
 // ═══════════════════════════════════════════════════════════════
 const SHARED_TAB='_ReviewData';
 const BASELINE_TAB='_OriginalsBaseline';
+const BACKUP_TAB_PREFIX='_ReviewData_Backup_'; // followed by YYYY-MM-DD
+const BACKUP_MAX_DAYS=14; // keep rolling 14-day history
 const ADMIN_EMAILS=['dgoldberg@jemedia.org','es@jemedia.org'];
 let _syncTimer=null;
 let _syncPending=false;
@@ -1186,6 +1146,9 @@ function syncSharedDataToSheet(){
 
 // Snapshot of what we last successfully READ from the sheet — used to detect data-loss syncs
 let _lastLoadedCounts=null;
+// Override flag: set true when user explicitly confirms "yes, I meant to delete this".
+// Cleared on every successful sync, so the override applies to ONE sync then auto-resets.
+let _syncOverride=false;
 
 // Actually write shared data to the _ReviewData tab
 async function doSyncToSheet(){
@@ -1242,10 +1205,23 @@ async function doSyncToSheet(){
             }
           }
           if(remoteLosses.length){
-            console.error('SYNC ABORTED (vs remote) — would delete data:',remoteLosses);
-            toast('Sync BLOCKED — local state is smaller than sheet. Reload to reload sheet data first.\n'+remoteLosses.join('\n'),'error');
-            _syncPending=false;
-            return;
+            console.warn('SYNC HOLD (vs remote) — would delete data:',remoteLosses);
+            if(_syncOverride){
+              console.log('Sync override active — proceeding despite remote loss guard');
+            }else{
+              _syncPending=false;
+              const msg='⚠ This save would DELETE data from the sheet:\n\n'+remoteLosses.join('\n')+'\n\nThis could be a bug OR you may have intentionally deleted a lot. If this was NOT intentional, click Cancel and reload the page to recover from the sheet.\n\nDid you mean to delete this?';
+              const proceed=await customConfirm(msg);
+              if(!proceed){
+                toast('Sync cancelled — reload to recover remote state','info');
+                return;
+              }
+              // User confirmed — set override and retry sync
+              _syncOverride=true;
+              console.log('User confirmed intentional delete — overriding guard');
+              syncSharedDataToSheet();
+              return;
+            }
           }
         }
       }
@@ -1268,10 +1244,22 @@ async function doSyncToSheet(){
         }
       }
       if(losses.length){
-        console.error('SYNC ABORTED — would delete data:',losses);
-        toast('Sync blocked — would delete data:\n'+losses.join('\n')+'\nReload page to recover remote state.','error');
-        _syncPending=false;
-        return;
+        console.warn('SYNC HOLD — would delete data:',losses);
+        if(_syncOverride){
+          console.log('Sync override active — proceeding despite delta guard');
+        }else{
+          _syncPending=false;
+          const msg='⚠ This save would DELETE data:\n\n'+losses.join('\n')+'\n\nThis could be a bug OR you may have intentionally deleted a lot. If this was NOT intentional, click Cancel and reload the page.\n\nDid you mean to delete this?';
+          const proceed=await customConfirm(msg);
+          if(!proceed){
+            toast('Sync cancelled','info');
+            return;
+          }
+          _syncOverride=true;
+          console.log('User confirmed intentional delete — overriding guard');
+          syncSharedDataToSheet();
+          return;
+        }
       }
     }
     const data={
@@ -1330,6 +1318,11 @@ async function doSyncToSheet(){
     };
     // Clear pending sync flag in localStorage on success
     try{ localStorage.removeItem('jw_pendingSync'); }catch(_){}
+    // Reset override flag — next sync with data loss will re-prompt
+    if(_syncOverride){
+      console.log('Override-granted sync completed — override flag reset');
+      _syncOverride=false;
+    }
   }catch(e){
     console.warn('Sync to sheet failed:',e);
     // Save the data we tried to sync so it isn't lost — retry on next attempt
@@ -1575,6 +1568,263 @@ async function ensureSharedTab(){
     console.log('Created _ReviewData tab');
   }catch(e){console.warn('ensureSharedTab error:',e)}
 }
+
+// ═══════════════════════════════════════════════════════════════
+// DAILY BACKUPS — snapshot _ReviewData to dated tabs, keep rolling 14-day history
+// Runs on app startup if the most recent backup is >20 hours old.
+// Guards: refuses to create a backup if current _ReviewData is significantly smaller
+// than the most recent backup (prevents propagating a wipe into backups).
+// ═══════════════════════════════════════════════════════════════
+
+function backupTabName(date){
+  date=date||new Date();
+  const y=date.getFullYear();
+  const m=String(date.getMonth()+1).padStart(2,'0');
+  const d=String(date.getDate()).padStart(2,'0');
+  return `${BACKUP_TAB_PREFIX}${y}-${m}-${d}`;
+}
+
+function parseBackupDate(tabName){
+  const m=tabName.match(/^_ReviewData_Backup_(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m)return null;
+  return new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));
+}
+
+// Read a _ReviewData tab-style chunked JSON from any tab.
+async function readChunkedTab(tabTitle){
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${tabTitle}'!A2:A10000`
+    });
+    const rows=r.result.values||[];
+    if(!rows.length)return null;
+    let json='';
+    const first=(rows[0]&&rows[0][0])||'';
+    if(first.startsWith('CHUNKS:')){
+      const pipeIdx=first.indexOf('|');
+      const numChunks=parseInt(first.slice(7,pipeIdx),10);
+      json=first.slice(pipeIdx+1);
+      for(let i=1;i<numChunks&&i<rows.length;i++){
+        json+=(rows[i]&&rows[i][0])||'';
+      }
+    }else{ json=first; }
+    if(!json)return null;
+    return JSON.parse(json);
+  }catch(e){console.warn('readChunkedTab failed:',tabTitle,e);return null}
+}
+
+// Find most recent backup tab and return {tabName, date, data}.
+async function findMostRecentBackup(){
+  const tabs=(S.sheetMeta?.tabs||[]).map(t=>t.title).filter(t=>t.startsWith(BACKUP_TAB_PREFIX));
+  if(!tabs.length)return null;
+  tabs.sort(); // YYYY-MM-DD lexical sort == chronological
+  const latest=tabs[tabs.length-1];
+  const date=parseBackupDate(latest);
+  return {tabName:latest,date};
+}
+
+// Create/overwrite a backup tab with the current _ReviewData contents.
+async function writeBackupTab(targetTabName,chunkedRows){
+  const tabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
+  if(!tabs.includes(targetTabName)){
+    await gapi.client.sheets.spreadsheets.batchUpdate({
+      spreadsheetId:S.sheetId,
+      resource:{requests:[{addSheet:{properties:{title:targetTabName,hidden:true}}}]}
+    });
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId:S.sheetId,
+      range:`'${targetTabName}'!A1`,
+      valueInputOption:'RAW',
+      resource:{values:[['SharedData_Backup_Snapshot_DoNotEdit']]}
+    });
+    // Refresh sheet meta so we know about the new tab
+    const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+    S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+  }
+  // Clear old data (wide range to catch any stale rows)
+  await gapi.client.sheets.spreadsheets.values.clear({
+    spreadsheetId:S.sheetId,
+    range:`'${targetTabName}'!A2:A10000`
+  });
+  if(chunkedRows.length){
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId:S.sheetId,
+      range:`'${targetTabName}'!A2:A${2+chunkedRows.length-1}`,
+      valueInputOption:'RAW',
+      resource:{values:chunkedRows}
+    });
+  }
+}
+
+// Delete backup tabs older than BACKUP_MAX_DAYS to keep sheet uncluttered.
+async function rotateOldBackups(){
+  const tabs=(S.sheetMeta?.tabs||[]);
+  const cutoff=new Date();
+  cutoff.setDate(cutoff.getDate()-BACKUP_MAX_DAYS);
+  const toDelete=tabs.filter(t=>{
+    if(!t.title.startsWith(BACKUP_TAB_PREFIX))return false;
+    const d=parseBackupDate(t.title);
+    return d && d<cutoff;
+  });
+  if(!toDelete.length)return 0;
+  try{
+    await gapi.client.sheets.spreadsheets.batchUpdate({
+      spreadsheetId:S.sheetId,
+      resource:{requests:toDelete.map(t=>({deleteSheet:{sheetId:t.sid}}))}
+    });
+    // Refresh meta
+    const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+    S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+    console.log('Rotated out',toDelete.length,'old backups');
+    return toDelete.length;
+  }catch(e){console.warn('Backup rotation failed:',e);return 0}
+}
+
+// Main backup function — called on startup if last backup >20h old.
+// GUARDS: refuses to write if current data is significantly smaller than most recent backup.
+async function runDailyBackupIfDue(){
+  if(!S.connected)return {status:'skipped',reason:'not connected'};
+  try{
+    const latest=await findMostRecentBackup();
+    const now=new Date();
+    // Is a backup due?
+    if(latest && latest.date){
+      const hoursAgo=(now-latest.date)/(1000*60*60);
+      if(hoursAgo<20){
+        console.log(`Backup not due — last backup ${Math.round(hoursAgo)}h ago`);
+        return {status:'skipped',reason:'recent backup exists'};
+      }
+    }
+    // Read current _ReviewData
+    const current=await readChunkedTab(SHARED_TAB);
+    if(!current){
+      console.warn('Backup aborted — current _ReviewData is empty/unreadable');
+      return {status:'aborted',reason:'current data empty'};
+    }
+    const currentCounts={
+      reviewData:Object.keys(current.reviewData||{}).length,
+      descNotes:Object.keys(current.descNotes||{}).length,
+      teamMembers:(current.teamMembers||[]).length,
+      activityLog:(current.activityLog||[]).length,
+    };
+    // GUARD: compare against most recent backup. Refuse if current is way smaller in any category.
+    if(latest){
+      const latestData=await readChunkedTab(latest.tabName);
+      if(latestData){
+        const latestCounts={
+          reviewData:Object.keys(latestData.reviewData||{}).length,
+          descNotes:Object.keys(latestData.descNotes||{}).length,
+          teamMembers:(latestData.teamMembers||[]).length,
+          activityLog:(latestData.activityLog||[]).length,
+        };
+        const losses=[];
+        for(const k of Object.keys(latestCounts)){
+          const before=latestCounts[k], after=currentCounts[k];
+          if(before>5 && after<=1)losses.push(`${k}: ${before} → ${after}`);
+          else if(before-after>10 && (before-after)/before>0.3)losses.push(`${k}: ${before} → ${after}`);
+        }
+        if(losses.length){
+          console.error('BACKUP REFUSED — current data is much smaller than latest backup:',losses);
+          toast('Backup SKIPPED — current state looks wiped. Manual recovery needed.','error');
+          return {status:'refused',reason:'data-loss detected',losses};
+        }
+      }
+    }
+    // All good. Read the raw chunked rows from _ReviewData so we copy exact bytes.
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${SHARED_TAB}'!A2:A10000`
+    });
+    const rows=r.result.values||[];
+    if(!rows.length){
+      console.warn('Backup aborted — _ReviewData tab has no rows');
+      return {status:'aborted',reason:'no source rows'};
+    }
+    const targetTab=backupTabName(now);
+    await writeBackupTab(targetTab,rows);
+    console.log(`Backup written to ${targetTab}: ${currentCounts.reviewData} rv, ${currentCounts.descNotes} notes`);
+    // Rotate out old backups
+    await rotateOldBackups();
+    return {status:'success',tabName:targetTab,counts:currentCounts};
+  }catch(e){
+    console.warn('Daily backup error:',e);
+    return {status:'error',error:String(e)};
+  }
+}
+
+// List available backups — used by Tools UI.
+async function listBackups(){
+  const tabs=(S.sheetMeta?.tabs||[]).filter(t=>t.title.startsWith(BACKUP_TAB_PREFIX));
+  tabs.sort((a,b)=>a.title.localeCompare(b.title));
+  return tabs.map(t=>({tabName:t.title,sid:t.sid,date:parseBackupDate(t.title)}));
+}
+
+// Restore _ReviewData contents from a backup tab. SAFE: requires user confirmation.
+async function restoreFromBackup(backupTabName){
+  if(!S.connected)return {status:'not-connected'};
+  const backupData=await readChunkedTab(backupTabName);
+  if(!backupData){
+    toast('Backup tab unreadable — cannot restore','error');
+    return {status:'unreadable'};
+  }
+  const backupCounts={
+    reviewData:Object.keys(backupData.reviewData||{}).length,
+    descNotes:Object.keys(backupData.descNotes||{}).length,
+    teamMembers:(backupData.teamMembers||[]).length,
+    activityLog:(backupData.activityLog||[]).length,
+  };
+  const currentData=await readChunkedTab(SHARED_TAB);
+  const currentCounts=currentData?{
+    reviewData:Object.keys(currentData.reviewData||{}).length,
+    descNotes:Object.keys(currentData.descNotes||{}).length,
+    teamMembers:(currentData.teamMembers||[]).length,
+    activityLog:(currentData.activityLog||[]).length,
+  }:{reviewData:0,descNotes:0,teamMembers:0,activityLog:0};
+  const msg=`Restore from ${backupTabName}?\n\nWill REPLACE current data:\n  reviewData: ${currentCounts.reviewData} → ${backupCounts.reviewData}\n  descNotes: ${currentCounts.descNotes} → ${backupCounts.descNotes}\n  teamMembers: ${currentCounts.teamMembers} → ${backupCounts.teamMembers}\n  activityLog: ${currentCounts.activityLog} → ${backupCounts.activityLog}\n\nA safety snapshot of the CURRENT state will be saved to ${backupTabName}_PreRestore first.\n\nProceed?`;
+  const ok=await customConfirm(msg);
+  if(!ok)return {status:'cancelled'};
+  // Safety: snapshot current state before overwriting
+  try{
+    const curR=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${SHARED_TAB}'!A2:A10000`
+    });
+    const curRows=curR.result.values||[];
+    if(curRows.length)await writeBackupTab(`${backupTabName}_PreRestore`,curRows);
+  }catch(e){console.warn('Pre-restore snapshot failed:',e)}
+  // Now copy backup → _ReviewData
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${backupTabName}'!A2:A10000`
+    });
+    const rows=r.result.values||[];
+    await gapi.client.sheets.spreadsheets.values.clear({
+      spreadsheetId:S.sheetId,
+      range:`'${SHARED_TAB}'!A2:A${9995+5}`
+    });
+    if(rows.length){
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${SHARED_TAB}'!A2:A${2+rows.length-1}`,
+        valueInputOption:'RAW',
+        resource:{values:rows}
+      });
+    }
+    // Reload into memory
+    await loadSharedDataFromSheet();
+    toast(`Restored from ${backupTabName}`,'success');
+    logActivity(`Restored _ReviewData from backup ${backupTabName}`);
+    render();
+    return {status:'success'};
+  }catch(e){
+    console.error('Restore failed:',e);
+    toast('Restore failed: '+(e?.message||e),'error');
+    return {status:'error',error:String(e)};
+  }
+}
+
 
 // ═══════════════════════════════════════════════════════════════
 // BASELINE — frozen original descriptions from pre-edit snapshot
@@ -2339,7 +2589,10 @@ async function acceptSuggestion(entryName,segType,rowIdx){
   if(!ok)return;
   // CRITICAL: re-fetch rv AFTER updateTagDesc so we don't wipe originalDesc that updateTagDesc just set
   const rv=getRV(k)||{};
-  rv.status='accepted';rv.reviewed=true;rv.ruleViolations=[];rv.editedBy=S.user?.name||S.user?.email||'Unknown';rv.editedAt=Date.now();setRV(k,rv);
+  rv.status='accepted';rv.reviewed=true;rv.ruleViolations=[];rv.editedBy=S.user?.name||S.user?.email||'Unknown';rv.editedAt=Date.now();
+  // Clear 3-chip data — primary was applied, other alternatives discarded
+  delete rv.suggestions;delete rv.suggestionPrimary;
+  setRV(k,rv);
   if(r){
     syncToIndexTab(entryName,r,'accepted','').catch(()=>{});
     syncDescToIndexTab(entryName,r,suggestion).catch(()=>{});
@@ -2352,11 +2605,21 @@ function denySuggestion(entryName,segType,rowIdx){
   const k=rvKey(entryName,segType,rowIdx);
   const rv=getRV(k);
   if(!rv)return;
-  pushUndo('deny',{key:k,suggestion:rv.suggestion},`Denied suggestion for "${entryName}"`);
+  pushUndo('deny',{key:k,suggestion:rv.suggestion,suggestions:rv.suggestions},`Denied suggestion for "${entryName}"`);
   if(!rv.deniedHistory)rv.deniedHistory=[];
-  rv.deniedHistory.push({suggestion:rv.suggestion,reason:rv.reason,time:Date.now()});
+  // If 3-chip suggestions exist, push all of them to deniedHistory; otherwise just the single one
+  const t=Date.now();
+  if(Array.isArray(rv.suggestions)&&rv.suggestions.length>1){
+    rv.suggestions.forEach(sg=>{
+      if(sg&&sg.text)rv.deniedHistory.push({suggestion:sg.text,reason:sg.reason||'',time:t});
+    });
+  }else if(rv.suggestion){
+    rv.deniedHistory.push({suggestion:rv.suggestion,reason:rv.reason,time:t});
+  }
   if(rv.deniedHistory.length>5)rv.deniedHistory=rv.deniedHistory.slice(-5);
   rv.suggestion='';rv.reason='';rv.ruleViolations=[];rv.status='denied';
+  // Clear the 3-chip data too
+  delete rv.suggestions;delete rv.suggestionPrimary;
   setRV(k,rv);
   const entry=findEntry(entryName);
   const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
@@ -4047,12 +4310,6 @@ function render(force=true){
   const app=$('#app');
   if(!S.connected){rSetup(app);return}
   if(S.loading&&!S.headers.length){app.innerHTML='<div class="loading-state"><div class="spinner"></div>Loading…</div>';return}
-  // Focus mode takes over the full screen
-  if(S.focusMode){
-    app.innerHTML=rFocus();
-    wireFocusModeHandlers();
-    return;
-  }
   let h='';
   h+=rSidebar();
   const isIdx=S.view==='index';
@@ -4236,16 +4493,17 @@ function render(force=true){
         h+=`<div class="clip-panel-section" id="clip-section-transcript">`;
         h+=`<div class="clip-panel-label" style="display:flex;align-items:center;justify-content:space-between">`;
         h+=`<span>Transcript</span>`;
-        // Highlight button — AI finds and marks tag-relevant passages
+        // Transcript highlighting runs automatically when the clip panel opens (see openClipPanel wiring).
+        // Cache key per tag|clipId so reopens don't re-fire.
         const tclipId=(r.objId||r.clipId||'').toString().replace(/^video_clip-/,'');
         const thKey=transcriptHighlightKey(cp.entryName,tclipId);
         const th=S.transcriptHighlights?.[thKey];
         if(th&&th.loading){
           h+=`<span style="font-size:11px;color:var(--tx-3);font-style:italic">🔍 Analyzing…</span>`;
+        }else if(th&&th.error){
+          h+=`<button class="btn btn-sm" id="transcript-rehighlight" style="font-size:10px;padding:2px 8px;border-color:var(--red);color:var(--red)" title="Retry">↻ Retry</button>`;
         }else if(th&&!th.error&&(th.phrases.length||th.noMatch)){
           h+=`<button class="btn btn-sm" id="transcript-rehighlight" style="font-size:10px;padding:2px 8px" title="Re-analyze">↻ Re-analyze</button>`;
-        }else{
-          h+=`<button class="btn btn-sm btn-gold" id="transcript-highlight" style="font-size:10px;padding:2px 10px" title="AI: highlight passages connected to this tag">🔍 Highlight matches</button>`;
         }
         h+=`</div>`;
         // Render transcript with highlights if we have them
@@ -4257,7 +4515,7 @@ function render(force=true){
           h+=`<div style="margin-top:6px;font-size:11px;color:var(--tx-4);font-style:italic">No direct mention found in transcript${th.note?' — '+esc(th.note):''}</div>`;
         }
         if(th&&th.error){
-          h+=`<div style="margin-top:6px;font-size:11px;color:var(--red)">Error: ${esc(th.error)}</div>`;
+          h+=`<div style="margin-top:6px;font-size:11px;color:var(--red);padding:8px;background:var(--red-bg,rgba(176,80,80,.08));border:1px solid rgba(176,80,80,.2);border-radius:4px">⚠ Highlight failed: ${esc(th.error)}. Click ↻ Retry above to try again.</div>`;
         }
         h+=`</div>`;
       }
@@ -4715,12 +4973,6 @@ function rTools(){
   h+=`<button class="btn btn-sm btn-purple" id="audit-sec-run" style="font-size:11px">${IC.audit} Run Audit</button>`;
   h+='</div></div>';
 
-  // ── Focus Mode ──
-  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">🎯 Focus Mode</h4>';
-  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">One-card-at-a-time review view. Goes through pending suggestions + empty descriptions in the current filter. Click buttons to accept, edit, deny, or navigate.</p>';
-  h+=`<button class="btn btn-sm btn-gold" id="enter-focus-mode" style="font-size:11px">🎯 Enter Focus Mode</button>`;
-  h+='</div>';
-
   // ── Baseline Status + Upload ──
   const hasBaseline=!!(S.originalsBaseline&&S.originalsBaseline.byClipId);
   const baselineClipCount=hasBaseline?Object.keys(S.originalsBaseline.byClipId).length:0;
@@ -4758,6 +5010,30 @@ function rTools(){
     h+='<input type="file" id="merge-file" accept=".json,application/json" style="font-size:11px;font-family:var(--font)">';
     h+=`<button class="btn btn-sm" id="merge-upload" style="font-size:11px;border-color:var(--amber);color:var(--ink);background:var(--amber)">📥 Merge & Save</button>`;
     h+='</div>';
+    h+='</div>';
+  }
+
+  // ── Daily Backups ──
+  if(isAdmin){
+    const existingTabsForBackup=(S.sheetMeta?.tabs||[]).map(t=>t.title).filter(t=>t.startsWith(BACKUP_TAB_PREFIX));
+    existingTabsForBackup.sort().reverse(); // most recent first
+    h+='<div class="card" style="margin-bottom:16px;border:1px solid #5a9e6f;background:#f3faf5"><h4 style="margin-bottom:8px">🛟 Daily Backups</h4>';
+    h+=`<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Automatic daily snapshots of the _ReviewData tab. Keeps a rolling ${BACKUP_MAX_DAYS}-day history. Guards in place so a wipe won't propagate into backups. <b>${existingTabsForBackup.length}</b> backup(s) available.</p>`;
+    if(existingTabsForBackup.length){
+      h+='<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;max-height:200px;overflow-y:auto">';
+      existingTabsForBackup.forEach(tn=>{
+        const d=parseBackupDate(tn);
+        const label=d?d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}):tn;
+        h+=`<div style="display:flex;gap:8px;align-items:center;padding:4px 8px;background:white;border:1px solid var(--line);border-radius:4px;font-size:11px">`;
+        h+=`<span style="flex:1"><b>${esc(label)}</b> <span style="color:var(--tx-4);font-family:monospace">${esc(tn)}</span></span>`;
+        h+=`<button class="btn btn-sm" data-restorebackup="${esc(tn)}" style="font-size:10px;border-color:#5a9e6f;color:#3a7d52">↩ Restore</button>`;
+        h+=`</div>`;
+      });
+      h+='</div>';
+    }else{
+      h+='<p style="font-size:11px;color:var(--tx-4);margin-bottom:8px">No backups yet. One will be created on next sign-in.</p>';
+    }
+    h+=`<button class="btn btn-sm" id="force-backup" style="font-size:11px">💾 Create Backup Now</button>`;
     h+='</div>';
   }
 
@@ -4865,293 +5141,6 @@ function rTeam(){
   return h+'</div>';
 }
 
-// ═══════════════════════════════════════════════════════════════
-// FOCUS MODE — one-card-at-a-time keyboard reading view (F key)
-// ═══════════════════════════════════════════════════════════════
-
-// Build the queue of items to review in focus mode.
-// Respects the current filters (section, search, user-work, reviewFilter).
-// Includes entries with pending AI suggestions AND entries with empty/unreviewed descriptions.
-function buildFocusQueue(){
-  if(!S.indexData)return[];
-  const q=S.idxSearch.toLowerCase();
-  const searchMode=S.idxSearchMode||'both';
-  const userFilter=S.userWorkFilter||'';
-  // Determine which sections to include
-  const sectionsToShow=S.idxActiveSection==='all'?RULES.sectionOrder:[S.idxActiveSection];
-  const queue=[];
-  sectionsToShow.forEach(sec=>{
-    let entries=(S.indexData.sections[sec]||[]);
-    // Apply search filter
-    if(q){
-      if(searchMode==='name')entries=entries.filter(e=>e.name.toLowerCase().includes(q));
-      else if(searchMode==='desc')entries=entries.filter(e=>e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
-      else entries=entries.filter(e=>e.name.toLowerCase().includes(q)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
-    }
-    // Apply admin user-work filter
-    if(userFilter){
-      entries=entries.filter(e=>userTouchedEntry(e,userFilter));
-    }
-    // Apply review filter (same logic as applyReviewFilter, but without the reviewMode side-effect)
-    const f=S.reviewFilter;
-    if(f==='reviewed')entries=entries.filter(e=>isEntryReviewed(e));
-    else if(f==='unreviewed')entries=entries.filter(e=>!isEntryReviewed(e));
-    else if(f==='pending')entries=entries.filter(e=>e.results.some(r=>hasPendingSuggestion(e.name,r.segType,r.rowIdx)));
-    else if(f==='bookmarked')entries=entries.filter(e=>S.idxBookmarks[e.name]);
-    // Flatten to (entry, result) pairs
-    entries.forEach(e=>{
-      e.results.forEach(r=>{
-        const k=rvKey(e.name,r.segType,r.rowIdx);
-        const rv=S.reviewData?.[k]||{};
-        const hasPending=rv.suggestion&&rv.status==='pending';
-        const isEmpty=!r.desc||!r.desc.trim();
-        const isReviewed=rv.status==='accepted'||rv.status==='denied'||rv.status==='custom'||rv.status==='ok'||rv.reviewed;
-        // Always include: pending suggestions (priority), empty descriptions, and unreviewed non-empty ones.
-        // Skip: already-reviewed items that have no pending (those are done).
-        if(hasPending){
-          queue.push({entry:e,result:r,section:sec,type:'pending',key:k});
-        }else if(isEmpty&&!isReviewed){
-          queue.push({entry:e,result:r,section:sec,type:'empty',key:k});
-        }else if(!isReviewed){
-          queue.push({entry:e,result:r,section:sec,type:'unreviewed',key:k});
-        }
-      });
-    });
-  });
-  // Sort: pending first, then empties, then unreviewed
-  const order={pending:0,empty:1,unreviewed:2};
-  queue.sort((a,b)=>(order[a.type]||9)-(order[b.type]||9));
-  return queue;
-}
-
-function enterFocusMode(){
-  const queue=buildFocusQueue();
-  if(!queue.length){
-    toast('No items to review in the current filter','info');
-    return;
-  }
-  // Soft warning for very large queues
-  if(queue.length>500){
-    customConfirm(`This queue has ${queue.length} items. That's a lot to go through — consider narrowing your filter first. Continue anyway?`).then(ok=>{
-      if(!ok)return;
-      S.focusQueue=queue;
-      S.focusIndex=0;
-      S.focusMode=true;
-      render();
-    });
-    return;
-  }
-  S.focusQueue=queue;
-  S.focusIndex=0;
-  S.focusMode=true;
-  render();
-}
-
-function exitFocusMode(){
-  S.focusMode=false;
-  S.focusShowHelp=false;
-  render();
-}
-
-function rFocus(){
-  if(!S.focusQueue||!S.focusQueue.length){
-    return `<div class="focus-wrap"><div class="focus-card"><div style="text-align:center;padding:40px"><h2>No items in queue</h2><p style="color:var(--tx-3);margin:16px 0">Adjust your filters and try again.</p><button class="btn" id="focus-exit">← Exit focus mode</button></div></div></div>`;
-  }
-  // Clamp index
-  if(S.focusIndex<0)S.focusIndex=0;
-  if(S.focusIndex>=S.focusQueue.length)S.focusIndex=S.focusQueue.length-1;
-  const item=S.focusQueue[S.focusIndex];
-  const{entry:e,result:r,section,type,key}=item;
-  const rv=S.reviewData?.[key]||{};
-  const hasPending=rv.suggestion&&rv.status==='pending';
-  const descEmpty=!r.desc||!r.desc.trim();
-  const progress=Math.round(((S.focusIndex+1)/S.focusQueue.length)*100);
-
-  let h=`<div class="focus-wrap">`;
-  // Top bar — exit button + progress + section/tag info
-  h+=`<div class="focus-topbar">`;
-  h+=`<button class="focus-exit-btn" id="focus-exit" title="Exit focus mode">← Exit</button>`;
-  h+=`<div class="focus-progress-text">${S.focusIndex+1} / ${S.focusQueue.length} · ${esc(section)}</div>`;
-  h+=`<span style="min-width:60px"></span>`;
-  h+=`</div>`;
-
-  // Main card — book-page style
-  h+=`<div class="focus-card">`;
-  h+=`<div class="focus-tag-line">${esc(section)} · ${esc(r.segType||'')}</div>`;
-  h+=`<h1 class="focus-tag-name">${esc(e.name)}</h1>`;
-
-  // Type-specific content
-  if(hasPending){
-    h+=`<div class="focus-original-label">Original</div>`;
-    h+=`<div class="focus-original">${descEmpty?'<span style="color:var(--tx-4);font-style:italic">[empty]</span>':esc(r.desc)}</div>`;
-    h+=`<div class="focus-arrow">↓</div>`;
-    h+=`<div class="focus-suggestion-label">AI Suggestion</div>`;
-    h+=`<div class="focus-suggestion">${esc(rv.suggestion)}</div>`;
-    if(rv.reason){
-      h+=`<div class="focus-reason">${esc(rv.reason)}</div>`;
-    }
-    if(Array.isArray(rv.ruleViolations)&&rv.ruleViolations.length){
-      h+=`<div class="focus-rules">`;
-      rv.ruleViolations.forEach(v=>{
-        const m=String(v).match(/Rule\s*(\d+)\s*[—-]?\s*(.*)/i);
-        const lbl=m?`R${m[1]}${m[2]?' · '+m[2]:''}`:v;
-        h+=`<span class="idx-rule-chip" title="${esc(v)}">${esc(lbl.length>40?lbl.slice(0,40)+'…':lbl)}</span>`;
-      });
-      h+=`</div>`;
-    }
-  }else if(descEmpty){
-    h+=`<div class="focus-original-label">Description</div>`;
-    h+=`<div class="focus-empty-badge">[empty — needs description]</div>`;
-    h+=`<div class="focus-hint">Press E to write one, or D to mark as reviewed with no description</div>`;
-  }else{
-    h+=`<div class="focus-original-label">Current Description</div>`;
-    h+=`<div class="focus-suggestion">${esc(r.desc)}</div>`;
-    h+=`<div class="focus-hint">Press A to mark reviewed (no change), E to edit, D to remove</div>`;
-  }
-
-  // Clip context (small, subtle)
-  if(r.clipName){
-    h+=`<div class="focus-clip-info">Clip: ${esc(r.clipName)}${r.pvName&&r.pvName!==r.clipName?' · '+esc(r.pvName):''}</div>`;
-  }
-
-  h+=`</div>`;
-
-  // Action button bar
-  h+=`<div class="focus-actionbar">`;
-  if(hasPending){
-    h+=`<button class="focus-action accept" id="focus-accept">✓ Accept</button>`;
-    h+=`<button class="focus-action edit" id="focus-edit">✎ Edit</button>`;
-    h+=`<button class="focus-action deny" id="focus-deny">✗ Deny</button>`;
-  }else if(descEmpty){
-    h+=`<button class="focus-action edit" id="focus-edit">✎ Write description</button>`;
-    h+=`<button class="focus-action" id="focus-deny">Skip / mark reviewed</button>`;
-  }else{
-    h+=`<button class="focus-action accept" id="focus-accept">✓ Mark reviewed</button>`;
-    h+=`<button class="focus-action edit" id="focus-edit">✎ Edit</button>`;
-    h+=`<button class="focus-action deny" id="focus-deny">Remove description</button>`;
-  }
-  h+=`</div>`;
-
-  // Navigation buttons
-  h+=`<div class="focus-navbar">`;
-  h+=`<button class="focus-nav" id="focus-prev" ${S.focusIndex<=0?'disabled':''}>← Previous</button>`;
-  h+=`<button class="focus-nav" id="focus-next" ${S.focusIndex>=S.focusQueue.length-1?'disabled':''}>Next →</button>`;
-  h+=`</div>`;
-
-  // Progress bar at bottom
-  h+=`<div class="focus-progressbar"><div class="focus-progress-fill" style="width:${progress}%"></div></div>`;
-
-  h+=`</div>`; // .focus-wrap
-  return h;
-}
-
-// Wire up focus mode event handlers (buttons only — no keyboard shortcuts)
-function wireFocusModeHandlers(){
-  const exitBtn=$('#focus-exit');
-  if(exitBtn)exitBtn.onclick=exitFocusMode;
-  const item=S.focusQueue[S.focusIndex];
-  if(!item)return;
-  const{entry:entryObj,result:r,key}=item;
-  const rv=S.reviewData?.[key]||{};
-  const hasPending=rv.suggestion&&rv.status==='pending';
-  const descEmpty=!r.desc||!r.desc.trim();
-
-  // Accept button
-  on('#focus-accept','click',()=>{
-    if(hasPending){
-      acceptSuggestion(entryObj.name,r.segType,r.rowIdx).then(()=>advanceAfterAction());
-    }else{
-      const rvExisting=getRV(key)||{};
-      rvExisting.status='ok';rvExisting.reviewed=true;
-      rvExisting.editedBy=S.user?.name||S.user?.email||'Unknown';
-      rvExisting.editedAt=Date.now();
-      setRV(key,rvExisting);
-      toast('Marked reviewed','success');
-      advanceAfterAction();
-    }
-  });
-
-  // Deny button
-  on('#focus-deny','click',()=>{
-    if(hasPending){
-      denySuggestion(entryObj.name,r.segType,r.rowIdx);
-      advanceAfterAction();
-    }else if(descEmpty){
-      const rvExisting=getRV(key)||{};
-      rvExisting.status='ok';rvExisting.reviewed=true;
-      rvExisting.editedBy=S.user?.name||S.user?.email||'Unknown';
-      rvExisting.editedAt=Date.now();
-      setRV(key,rvExisting);
-      toast('Skipped — marked reviewed','success');
-      advanceAfterAction();
-    }else{
-      customConfirm(`Remove description "${r.desc}" for ${entryObj.name}?`).then(async(ok)=>{
-        if(!ok)return;
-        await updateTagDesc(r.rowIdx,entryObj.name,'');
-        const rvExisting=getRV(key)||{};
-        rvExisting.status='ok';rvExisting.reviewed=true;
-        rvExisting.editedBy=S.user?.name||S.user?.email||'Unknown';
-        rvExisting.editedAt=Date.now();
-        setRV(key,rvExisting);
-        buildIndex();
-        advanceAfterAction();
-      });
-    }
-  });
-
-  // Edit button — exits focus mode, jumps to entry in Workspace, opens inline editor
-  on('#focus-edit','click',()=>{
-    const entryName=entryObj.name;
-    exitFocusMode();
-    setTimeout(()=>{
-      jumpToEntry(entryName,key);
-      setTimeout(()=>{
-        const allRows=document.querySelectorAll('.idx-result');
-        for(const row of allRows){
-          const editBtn=row.querySelector(`[data-clippanel="${CSS.escape(key)}"]`);
-          if(editBtn){
-            row.scrollIntoView({behavior:'smooth',block:'center'});
-            const descEl=row.querySelector('.idx-result-desc.editable, .idx-result-desc.empty-desc');
-            if(descEl){
-              const evt=new MouseEvent('dblclick',{bubbles:true,cancelable:true});
-              descEl.dispatchEvent(evt);
-            }
-            break;
-          }
-        }
-      },350);
-    },50);
-  });
-
-  // Navigation buttons
-  on('#focus-next','click',()=>{
-    if(S.focusIndex<S.focusQueue.length-1){S.focusIndex++;render()}
-  });
-  on('#focus-prev','click',()=>{
-    if(S.focusIndex>0){S.focusIndex--;render()}
-  });
-}
-
-// After an accept/deny action, rebuild the queue and advance the pointer.
-function advanceAfterAction(){
-  // Rebuild queue (the item we just acted on should drop out)
-  const oldKey=S.focusQueue[S.focusIndex]?.key;
-  S.focusQueue=buildFocusQueue();
-  // Find where we are now — keep roughly the same position
-  if(!S.focusQueue.length){
-    toast('All done! No more items in this filter.','success');
-    exitFocusMode();
-    return;
-  }
-  // If the old item is gone, the index stays pointing at the next item naturally
-  // If it's still there (e.g. deny that didn't remove), skip past it
-  if(S.focusQueue[S.focusIndex]?.key===oldKey){
-    S.focusIndex++;
-  }
-  if(S.focusIndex>=S.focusQueue.length)S.focusIndex=S.focusQueue.length-1;
-  if(S.focusIndex<0)S.focusIndex=0;
-  render();
-}
 
 function rIndex(){
   if(!S.indexData)return'<div class="pad" style="color:var(--tx-3)">No index data. Load a sheet first.</div>';
@@ -5324,8 +5313,27 @@ function rIndex(){
             }
             eh+=`<span class="idx-sug-old">${descEmpty?'[empty]':esc(r.desc)}</span>`;
             eh+=`<span class="idx-sug-arrow">→</span>`;
-            eh+=`<span class="idx-sug-new">${esc(rv.suggestion)}</span>`;
-            if(rv.reason)eh+=`<span class="idx-sug-reason" data-reason="${esc(rv.reason)}">${esc(rv.reason.length>18?rv.reason.slice(0,18)+'…':rv.reason)}</span>`;
+            // If rv has 3 suggestions, render as clickable chips with primary highlighted.
+            // Clicking a chip promotes it to primary. Hover shows trade-off.
+            // Backward-compat: old rv entries have only rv.suggestion — render as single chip.
+            if(Array.isArray(rv.suggestions)&&rv.suggestions.length>1){
+              const primaryIdx=(typeof rv.suggestionPrimary==='number')?rv.suggestionPrimary:0;
+              eh+=`<span class="idx-sug-chips">`;
+              rv.suggestions.forEach((sg,si)=>{
+                const isPrimary=si===primaryIdx;
+                const tip=[sg.reason,sg.tradeoff].filter(Boolean).join(' — ');
+                eh+=`<span class="idx-sug-chip${isPrimary?' primary':''}" data-sugpromote="${esc(e.name)}|${seg}|${r.rowIdx}|${si}" title="${esc(tip)}">${esc(sg.text)}</span>`;
+              });
+              eh+=`</span>`;
+              // Show reason for currently-primary chip
+              const primarySg=rv.suggestions[primaryIdx];
+              if(primarySg&&primarySg.reason){
+                eh+=`<span class="idx-sug-reason" data-reason="${esc(primarySg.reason)}">${esc(primarySg.reason.length>18?primarySg.reason.slice(0,18)+'…':primarySg.reason)}</span>`;
+              }
+            }else{
+              eh+=`<span class="idx-sug-new">${esc(rv.suggestion)}</span>`;
+              if(rv.reason)eh+=`<span class="idx-sug-reason" data-reason="${esc(rv.reason)}">${esc(rv.reason.length>18?rv.reason.slice(0,18)+'…':rv.reason)}</span>`;
+            }
             // Rule violation chips — show which rules were violated by the original
             if(Array.isArray(rv.ruleViolations)&&rv.ruleViolations.length){
               rv.ruleViolations.forEach(v=>{
@@ -5337,8 +5345,8 @@ function rIndex(){
               });
             }
             eh+=`<span class="idx-sug-actions">`;
-            eh+=`<span class="idx-sug-btn accept" data-sugaccept="${esc(e.name)}|${seg}|${r.rowIdx}" title="Accept">${IC.check}</span>`;
-            eh+=`<span class="idx-sug-btn deny" data-sugdeny="${esc(e.name)}|${seg}|${r.rowIdx}" title="Deny">${IC.x}</span>`;
+            eh+=`<span class="idx-sug-btn accept" data-sugaccept="${esc(e.name)}|${seg}|${r.rowIdx}" title="Accept primary">${IC.check}</span>`;
+            eh+=`<span class="idx-sug-btn deny" data-sugdeny="${esc(e.name)}|${seg}|${r.rowIdx}" title="Deny all">${IC.x}</span>`;
             eh+=`<span class="idx-sug-btn custom" data-sugcustom="${esc(e.name)}|${seg}|${r.rowIdx}" title="Custom edit">✎</span>`;
             eh+=`<span class="idx-sug-btn" data-sugchat="${esc(e.name)}|${seg}|${r.rowIdx}" title="AI Chat" style="color:var(--blue)">🤖</span>`;
             eh+=`</span>`;
@@ -5776,7 +5784,7 @@ function rSetup(app){
   <div style="text-align:left;margin-top:14px"><label style="font-size:11px;color:var(--tx-3);font-weight:500">Code <span style="color:var(--tx-4);font-weight:400">(optional — leave blank to work without AI features)</span></label><input class="s-input" id="ik" type="password" placeholder="Enter team code (optional)" value="${esc(S.claudeKey)}" style="margin-top:4px"></div>
   <div class="setup-err" id="se"></div>
   <button class="btn btn-gold" id="btn-con" style="width:100%;height:42px;font-size:14px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center">Sign In</button></div></div>`;
-  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadBaselineFromSheet();await loadTab(0);registerTeamMember();startAutoRefresh();render();if(!k)toast('Signed in without AI features. Add a code in settings to enable AI.','info')}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
+  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadBaselineFromSheet();await loadTab(0);registerTeamMember();startAutoRefresh();render();runDailyBackupIfDue().then(res=>{if(res.status==='success')console.log('Daily backup created:',res.tabName);});if(!k)toast('Signed in without AI features. Add a code in settings to enable AI.','info')}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -5919,8 +5927,6 @@ function bindAll(){
     const sec=$('#audit-sec-select')?.value;
     if(sec)bulkAuditSection(sec);
   });
-  // Focus Mode entry button (Tools page)
-  on('#enter-focus-mode','click',()=>enterFocusMode());
   // Recovery button (Tools page)
   on('#run-recovery','click',()=>openRecoveryPreview());
   // Baseline upload
@@ -5998,6 +6004,45 @@ function bindAll(){
       logActivity(`Merged from file: ${newNoteKeys.length} notes, ${newTeamEmails.length} team, ${newLogEntries.length} log entries`);
       render();
     }catch(e){console.error('Merge failed:',e);toast('Could not parse merge file','error')}
+  });
+
+  // Backup handlers
+  on('#force-backup','click',async()=>{
+    const btn=$('#force-backup');
+    if(btn){btn.disabled=true;btn.textContent='Creating…';}
+    try{
+      // Force: override the 20-hour throttle by deleting any existing backup for today first
+      const todayName=backupTabName(new Date());
+      const existing=(S.sheetMeta?.tabs||[]).find(t=>t.title===todayName);
+      if(existing){
+        try{
+          await gapi.client.sheets.spreadsheets.batchUpdate({
+            spreadsheetId:S.sheetId,
+            resource:{requests:[{deleteSheet:{sheetId:existing.sid}}]}
+          });
+          const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+          S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+        }catch(_){}
+      }
+      const res=await runDailyBackupIfDue();
+      if(res.status==='success'){
+        toast(`Backup created: ${res.tabName}`,'success');
+        logActivity(`Manual backup created: ${res.tabName}`);
+        render();
+      }else if(res.status==='refused'){
+        toast('Backup refused: '+((res.losses||[]).join(', ')||'data-loss detected'),'error');
+      }else{
+        toast('Backup '+res.status+': '+(res.reason||res.error||'unknown'),'warn');
+      }
+    }catch(e){console.error('Force backup failed:',e);toast('Backup failed: '+(e?.message||e),'error')}
+    finally{if(btn){btn.disabled=false;btn.textContent='💾 Create Backup Now';}}
+  });
+  $$('[data-restorebackup]').forEach(el=>el.onclick=async()=>{
+    const tabName=el.dataset.restorebackup;
+    const res=await restoreFromBackup(tabName);
+    if(res.status==='success'){
+      render();
+    }
   });
   // Admin — copy invite
   on('#invite-copy','click',()=>{
@@ -6203,6 +6248,17 @@ function bindAll(){
     const[en,seg,ri]=el.dataset.sugdeny.split('|');
     denySuggestion(en,seg,+ri);
   });
+  // Click chip to promote it to primary — updates rv.suggestionPrimary + rv.suggestion
+  $$('[data-sugpromote]').forEach(el=>el.onclick=(ev)=>{
+    ev.stopPropagation();
+    const[en,seg,ri,si]=el.dataset.sugpromote.split('|');
+    const k=rvKey(en,seg,+ri);
+    const rv=getRV(k);
+    if(!rv||!Array.isArray(rv.suggestions)||!rv.suggestions[+si])return;
+    const sg=rv.suggestions[+si];
+    setRV(k,{...rv,suggestion:sg.text,reason:sg.reason||'',suggestionPrimary:+si});
+    render();
+  });
   $$('[data-sugcustom]').forEach(el=>el.onclick=()=>{
     const[en,seg,ri]=el.dataset.sugcustom.split('|');
     // Get the AI suggestion to pre-fill
@@ -6296,8 +6352,22 @@ function bindAll(){
     const clipId=(r.objId||r.clipId||'').toString().replace(/^video_clip-/,'');
     requestTranscriptHighlights(cp.entryName,r.transcript,r.desc,clipId,force);
   };
-  on('#transcript-highlight','click',()=>doTranscriptHighlight(false));
   on('#transcript-rehighlight','click',()=>doTranscriptHighlight(true));
+  // AUTO-FIRE on panel open: if we have a transcript and no cached highlight, trigger one.
+  // Cached results (including errors and "no match") are respected — user must hit retry to re-run.
+  (function autoFireHighlight(){
+    if(!S.clipPanel)return;
+    const cp=S.clipPanel;
+    const entry=findEntry(cp.entryName);
+    const r=entry?.results.find(x=>x.segType===cp.segType&&x.rowIdx===cp.rowIdx);
+    if(!r||!r.transcript)return;
+    const clipId=(r.objId||r.clipId||'').toString().replace(/^video_clip-/,'');
+    const thKey=transcriptHighlightKey(cp.entryName,clipId);
+    const cached=S.transcriptHighlights?.[thKey];
+    if(cached)return; // already analyzed or in flight
+    // Fire without blocking render; requestTranscriptHighlights sets loading:true and re-renders when done
+    requestTranscriptHighlights(cp.entryName,r.transcript,r.desc,clipId,false);
+  })();
   // Chip navigation — scroll within panel without re-rendering
   $$('[data-scrollto]').forEach(el=>el.onclick=(ev)=>{
     ev.preventDefault();
@@ -7092,17 +7162,54 @@ CHECKLIST — check each one:
 10. Blank?
 11. If passes all → ok
 
-Respond with JSON only: {status:"ok"|"fix"|"generate", suggestion:"...", reason:"which rule(s) violated and why"}`;
-    const sysPrompt='You are a strict professional index editor. Walk through every rule for this description. JSON only.';
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:512,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
+If the description passes all rules, respond: {"status":"ok"}
+
+If it needs changes, generate THREE distinct alternative suggestions with different trade-offs. Each alternative should be valid per the rules but make different choices (e.g. more concise vs more specific, different emphasis, different phrasing strategy). The FIRST alternative is your primary recommendation.
+
+Respond with JSON only:
+{
+  "status": "fix"|"generate",
+  "suggestions": [
+    {"text": "primary alternative", "reason": "rule(s) violated + why this choice", "tradeoff": "what this emphasizes vs the others"},
+    {"text": "second alternative", "reason": "why this works", "tradeoff": "what this chooses differently"},
+    {"text": "third alternative", "reason": "why this works", "tradeoff": "what this chooses differently"}
+  ]
+}`;
+    const sysPrompt='You are a strict professional index editor. Walk through every rule for this description. Generate 3 distinct alternatives with trade-offs when changes are needed. JSON only.';
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
     if(!resp.ok)throw new Error('API '+resp.status);
     const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
     let parsed;try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{throw new Error('Parse fail')}
     const k=rvKey(entryName,segType||r.segType,rowIdx);
     if(parsed.status==='fix'||parsed.status==='generate'){
-      setRV(k,{suggestion:parsed.suggestion||'',reason:parsed.reason||'',status:'pending',reviewed:false,deniedHistory:(getRV(k)?.deniedHistory||[])});
-      syncToIndexTab(entryName,r,'pending',parsed.suggestion||'').catch(()=>{});
-      toast('Suggestion ready','success');
+      // Normalize: support both new (suggestions[]) and legacy (suggestion) responses
+      let suggestions=[];
+      if(Array.isArray(parsed.suggestions)&&parsed.suggestions.length){
+        suggestions=parsed.suggestions.slice(0,3).map(s=>({
+          text:s.text||'',
+          reason:s.reason||'',
+          tradeoff:s.tradeoff||''
+        })).filter(s=>s.text);
+      }else if(parsed.suggestion){
+        suggestions=[{text:parsed.suggestion,reason:parsed.reason||'',tradeoff:''}];
+      }
+      if(!suggestions.length){
+        toast('AI returned no usable suggestions','error');
+        return;
+      }
+      const existing=getRV(k)||{};
+      setRV(k,{
+        ...existing,
+        suggestion:suggestions[0].text, // primary = backward compat with existing logic
+        reason:suggestions[0].reason,
+        suggestions:suggestions, // new 3-chip array
+        suggestionPrimary:0, // index of currently-selected primary
+        status:'pending',
+        reviewed:false,
+        deniedHistory:(existing.deniedHistory||[])
+      });
+      syncToIndexTab(entryName,r,'pending',suggestions[0].text).catch(()=>{});
+      toast(suggestions.length>1?`${suggestions.length} suggestions ready`:'Suggestion ready','success');
     }else{
       setRV(k,{...(getRV(k)||{}),status:'ok'});
       syncToIndexTab(entryName,r,'ok','').catch(()=>{});
@@ -7724,6 +7831,7 @@ window.addEventListener('resize',fixIdxScroll);
       await loadTab(0);
       registerTeamMember();
       startAutoRefresh();
+      runDailyBackupIfDue().then(res=>{if(res.status==='success')console.log('Daily backup created:',res.tabName);});
     }catch(e){
       console.log('Auto-reconnect failed, showing login:',e.message);
     }
