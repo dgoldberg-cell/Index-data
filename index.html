@@ -100,9 +100,10 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 
 /* Index Preview */
 .idx-toolbar{display:flex;align-items:center;gap:6px;padding:8px 24px;border-bottom:1px solid var(--border);background:var(--bg-white);flex-shrink:0}
-.idx-search{display:flex;align-items:center;gap:7px;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius);padding:0 10px;height:30px;min-width:160px;flex:1;max-width:260px}
-.idx-search:focus-within{border-color:var(--gold)}
-.idx-search input{background:none;border:none;outline:none;color:var(--tx-1);font-size:12px;width:100%}
+.idx-search{display:flex;align-items:center;gap:7px;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius);padding:0 12px;height:34px;min-width:180px;flex:1;max-width:320px;box-shadow:inset 0 1px 2px rgba(0,0,0,.04),0 1px 0 rgba(255,255,255,.4);transition:all .15s}
+.idx-search:hover{border-color:var(--tx-4);box-shadow:inset 0 1px 2px rgba(0,0,0,.06),0 1px 0 rgba(255,255,255,.4)}
+.idx-search:focus-within{border-color:var(--gold);box-shadow:inset 0 1px 2px rgba(0,0,0,.04),0 0 0 3px rgba(140,122,80,.12)}
+.idx-search input{background:none;border:none;outline:none;color:var(--tx-1);font-size:13px;width:100%;font-family:var(--font)}
 .idx-search input::placeholder{color:var(--tx-4)}
 .idx-sm-pill{background:var(--bg-1);color:var(--tx-3);border:1px solid var(--border);border-radius:10px;padding:2px 8px;cursor:pointer;font-size:9px;font-weight:500;transition:all .1s;font-family:var(--font);white-space:nowrap}
 .idx-sm-pill:hover{background:var(--bg-0);color:var(--tx-2)}
@@ -1819,11 +1820,26 @@ async function restoreFromBackup(backupTabName){
         resource:{values:rows}
       });
     }
-    // Reload into memory
+    // HARD REPLACE local memory: clear fields that would otherwise get merged (descNotes uses longer-thread-wins
+    // which could cause local to dominate the restored data). Reset everything and let the load populate fresh.
+    S.reviewData={};
+    S.descNotes={};
+    S.idxNotes={};
+    S.teamMembers=[];
+    S.activityLog=[];
+    S._allBookmarks={};
+    S.idxBookmarks={};
+    S.notifications=[];
+    S.sectionOverrides={};
+    S.tagRenames={};
+    // Reset protection baseline so next sync doesn't abort
+    _lastLoadedCounts=null;
+    // Reload from sheet — memory is empty so load writes cleanly, no merge conflicts
     await loadSharedDataFromSheet();
     toast(`Restored from ${backupTabName}`,'success');
     logActivity(`Restored _ReviewData from backup ${backupTabName}`);
-    render();
+    buildIndex();
+    render(true);
     return {status:'success'};
   }catch(e){
     console.error('Restore failed:',e);
@@ -2042,8 +2058,8 @@ async function manualRefresh(){
   if(!S.connected)return;
   toast('Refreshing all data…');
   try{
-    // Flush any pending writes first so we don't lose local edits
-    flushSyncImmediate();
+    // Don't flush first — that would push local state over remote changes we're about to load.
+    // Load first; merge-on-load preserves any unsaved local edits.
     // Reload main sheet data (descriptions, keywords, etc.)
     await loadTab(S.activeTab||0);
     // Reload shared data (review status, notes, bookmarks, etc.)
@@ -2465,10 +2481,15 @@ async function revertToOriginal(entryName,segType,rowIdx){
   rv._reverting=true;
   setRV(k,rv);
   await updateTagDesc(rowIdx,entryName,origDesc);
-  // Clear status flags but PRESERVE originalDesc as the permanent truth
+  // Clear ALL edit-tracking fields — a successful revert returns the row to pristine state.
+  // Previously we preserved originalDesc, but that caused the render to show a phantom
+  // "original → same original" trail because trackedOrig === r.desc triggered baseline fallback.
   const rv2=getRV(k)||{};
-  rv2.status='';rv2.suggestion='';rv2.reviewed=false;rv2._reverting=false;
-  // Note: rv2.originalDesc is NOT cleared — it stays as the true original
+  rv2.status='';rv2.suggestion='';rv2.reason='';rv2.ruleViolations=[];rv2.reviewed=false;rv2._reverting=false;
+  rv2.originalDesc=undefined;
+  rv2.editedBy=undefined;rv2.editedAt=undefined;
+  // Clear 3-chip data if present
+  delete rv2.suggestions;delete rv2.suggestionPrimary;
   setRV(k,rv2);
   const entry=findEntry(entryName);
   const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
@@ -6103,28 +6124,35 @@ function bindAll(){
     S.idxPage=0;
     render();
   });
-  on('#idx-search','input',()=>{
-    if(_searchTimer)clearTimeout(_searchTimer);
-    _searchTimer=setTimeout(()=>{
-      const curEl=$('#idx-search');
-      if(!curEl)return;
-      const savedValue=curEl.value;
-      const savedPos=curEl.selectionStart??savedValue.length;
-      S.idxSearch=savedValue;
-      S.idxPage=0;
-      S.clipPanel=null;
-      render();
-      requestAnimationFrame(()=>{
-        const newEl=$('#idx-search');
-        if(newEl){
-          newEl.value=savedValue;
-          S.idxSearch=savedValue;
-          newEl.focus();
-          newEl.selectionStart=newEl.selectionEnd=savedPos;
-        }
-      });
-    },1000);
-  });
+  // Search input — handle typing AND spellcheck/autocomplete replacements
+  const searchEl=$('#idx-search');
+  if(searchEl){
+    const handleSearchChange=()=>{
+      if(_searchTimer)clearTimeout(_searchTimer);
+      _searchTimer=setTimeout(()=>{
+        const curEl=$('#idx-search');
+        if(!curEl)return;
+        const savedValue=curEl.value;
+        const savedPos=curEl.selectionStart??savedValue.length;
+        S.idxSearch=savedValue;
+        S.idxPage=0;
+        S.clipPanel=null;
+        render();
+        requestAnimationFrame(()=>{
+          const newEl=$('#idx-search');
+          if(newEl){
+            newEl.value=savedValue;
+            S.idxSearch=savedValue;
+            newEl.focus();
+            newEl.selectionStart=newEl.selectionEnd=savedPos;
+          }
+        });
+      },1000);
+    };
+    searchEl.addEventListener('input',handleSearchChange);
+    // 'change' fires when browser replaces text (spellcheck/autocomplete) without typing
+    searchEl.addEventListener('change',handleSearchChange);
+  }
   $$('[data-tree]').forEach(el=>el.onclick=()=>{S.idxActiveEntry=el.dataset.tree;render()});
   on('#idx-undo','click',()=>doUndo());
   on('#idx-sync','click',()=>manualRefresh());
