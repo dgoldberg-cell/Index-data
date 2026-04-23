@@ -1203,6 +1203,56 @@ async function doSyncToSheet(){
       activityLog:(S.activityLog||[]).length,
       bookmarks:Object.keys(S._allBookmarks||{}).length,
     };
+    // Cross-check against current remote state BEFORE sync — more defensive than _lastLoadedCounts alone
+    // (covers cases where local state was wiped without a prior load to establish counts)
+    try{
+      const probe=await gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId:S.sheetId,
+        range:`'${SHARED_TAB}'!A2:A10000`
+      });
+      const probeRows=probe.result.values||[];
+      if(probeRows.length){
+        let pj='';
+        const pfirst=(probeRows[0]&&probeRows[0][0])||'';
+        if(pfirst.startsWith('CHUNKS:')){
+          const pipeIdx=pfirst.indexOf('|');
+          const numC=parseInt(pfirst.slice(7,pipeIdx),10);
+          pj=pfirst.slice(pipeIdx+1);
+          for(let i=1;i<numC&&i<probeRows.length;i++)pj+=(probeRows[i]&&probeRows[i][0])||'';
+        }else{ pj=pfirst; }
+        if(pj){
+          const pData=JSON.parse(pj);
+          const remoteCounts={
+            reviewData:Object.keys(pData.reviewData||{}).length,
+            descNotes:Object.keys(pData.descNotes||{}).length,
+            idxNotes:Object.keys(pData.notes||{}).length,
+            teamMembers:(pData.teamMembers||[]).length,
+            activityLog:(pData.activityLog||[]).length,
+          };
+          const remoteLosses=[];
+          for(const k of Object.keys(remoteCounts)){
+            const rem=remoteCounts[k], loc=localCounts[k]||0;
+            // If remote has data and local has almost none, abort
+            if(rem>5 && loc<=1){
+              remoteLosses.push(`${k}: remote=${rem} → local=${loc} (would wipe nearly all)`);
+            }else if(rem-loc>5 && (rem-loc)/rem>0.2){
+              remoteLosses.push(`${k}: remote=${rem} → local=${loc} (lost ${rem-loc})`);
+            }else if(rem-loc>50){
+              remoteLosses.push(`${k}: remote=${rem} → local=${loc} (lost ${rem-loc})`);
+            }
+          }
+          if(remoteLosses.length){
+            console.error('SYNC ABORTED (vs remote) — would delete data:',remoteLosses);
+            toast('Sync BLOCKED — local state is smaller than sheet. Reload to reload sheet data first.\n'+remoteLosses.join('\n'),'error');
+            _syncPending=false;
+            return;
+          }
+        }
+      }
+    }catch(probeErr){
+      console.warn('Pre-sync probe failed:',probeErr);
+      // If probe fails, fall through to normal guard — don't block on network errors
+    }
     if(_lastLoadedCounts){
       // Threshold: if we lost more than 5 entries OR more than 20%, refuse sync
       const losses=[];
@@ -5908,12 +5958,17 @@ function bindAll(){
       const data=JSON.parse(text);
       const incomingNotes=data.descNotes||{};
       const incomingTeam=Array.isArray(data.teamMembers)?data.teamMembers:[];
+      const incomingLog=Array.isArray(data.activityLog)?data.activityLog:[];
       // Count what would be NEW (not already present)
       const curNotes=S.descNotes||{};
       const curTeam=S.teamMembers||[];
+      const curLog=S.activityLog||[];
       const newNoteKeys=Object.keys(incomingNotes).filter(k=>!curNotes[k]);
       const newTeamEmails=incomingTeam.filter(m=>m.email&&!curTeam.some(t=>t.email===m.email));
-      const msg=`Merge will ADD:\n  ${newNoteKeys.length} new notes\n  ${newTeamEmails.length} new team members\n\nExisting entries will NOT be changed. OK to proceed?`;
+      // Activity log entries: use timestamp as dedupe key
+      const curLogTs=new Set(curLog.map(e=>e.timestamp));
+      const newLogEntries=incomingLog.filter(e=>e.timestamp&&!curLogTs.has(e.timestamp));
+      const msg=`Merge will ADD:\n  ${newNoteKeys.length} new notes\n  ${newTeamEmails.length} new team members\n  ${newLogEntries.length} new activity log entries\n\nExisting entries will NOT be changed. OK to proceed?`;
       const ok=await customConfirm(msg);
       if(!ok)return;
       // Merge notes — only add keys that don't exist
@@ -5922,11 +5977,25 @@ function bindAll(){
       // Merge team — only add emails that don't exist
       if(!Array.isArray(S.teamMembers))S.teamMembers=[];
       newTeamEmails.forEach(m=>{S.teamMembers.push(m)});
+      // Merge activity log — append new entries, re-sort chronologically
+      if(!Array.isArray(S.activityLog))S.activityLog=[];
+      newLogEntries.forEach(e=>{S.activityLog.push(e)});
+      S.activityLog.sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
+      // Also, crucially, update _lastLoadedCounts to include the merged content so the guard
+      // doesn't falsely trigger on the sync that will follow
+      _lastLoadedCounts={
+        reviewData:Object.keys(S.reviewData||{}).length,
+        descNotes:Object.keys(S.descNotes||{}).length,
+        idxNotes:Object.keys(S.idxNotes||{}).length,
+        teamMembers:(S.teamMembers||[]).length,
+        activityLog:(S.activityLog||[]).length,
+        bookmarks:Object.keys(S._allBookmarks||{}).length,
+      };
       // Force sync
       syncSharedDataToSheet();
       flushSyncImmediate();
-      toast(`Merged: ${newNoteKeys.length} notes, ${newTeamEmails.length} team members added`,'success');
-      logActivity(`Merged from file: ${newNoteKeys.length} notes, ${newTeamEmails.length} team members added`);
+      toast(`Merged: ${newNoteKeys.length} notes, ${newTeamEmails.length} team, ${newLogEntries.length} log entries`,'success');
+      logActivity(`Merged from file: ${newNoteKeys.length} notes, ${newTeamEmails.length} team, ${newLogEntries.length} log entries`);
       render();
     }catch(e){console.error('Merge failed:',e);toast('Could not parse merge file','error')}
   });
