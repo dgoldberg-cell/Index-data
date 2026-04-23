@@ -1769,6 +1769,9 @@ async function listBackups(){
 }
 
 // Restore _ReviewData contents from a backup tab. SAFE: requires user confirmation.
+// IMPORTANT LIMITATION: This only restores _ReviewData metadata (notes, team, review status, activity log).
+// It does NOT restore actual description text, which lives in the main sheet's keywords column.
+// For description-text rollback, use the baseline recovery tool instead.
 async function restoreFromBackup(backupTabName){
   if(!S.connected)return {status:'not-connected'};
   const backupData=await readChunkedTab(backupTabName);
@@ -1789,7 +1792,7 @@ async function restoreFromBackup(backupTabName){
     teamMembers:(currentData.teamMembers||[]).length,
     activityLog:(currentData.activityLog||[]).length,
   }:{reviewData:0,descNotes:0,teamMembers:0,activityLog:0};
-  const msg=`Restore from ${backupTabName}?\n\nWill REPLACE current data:\n  reviewData: ${currentCounts.reviewData} → ${backupCounts.reviewData}\n  descNotes: ${currentCounts.descNotes} → ${backupCounts.descNotes}\n  teamMembers: ${currentCounts.teamMembers} → ${backupCounts.teamMembers}\n  activityLog: ${currentCounts.activityLog} → ${backupCounts.activityLog}\n\nA safety snapshot of the CURRENT state will be saved to ${backupTabName}_PreRestore first.\n\nProceed?`;
+  const msg=`Restore from ${backupTabName}?\n\n⚠ IMPORTANT: This restores METADATA only (notes, team, review status, activity log). Description text is NOT restored — for that, use "Recover from Baseline" on the Tools page.\n\nMetadata changes:\n  reviewData: ${currentCounts.reviewData} → ${backupCounts.reviewData}\n  descNotes: ${currentCounts.descNotes} → ${backupCounts.descNotes}\n  teamMembers: ${currentCounts.teamMembers} → ${backupCounts.teamMembers}\n  activityLog: ${currentCounts.activityLog} → ${backupCounts.activityLog}\n\nA safety snapshot of the CURRENT state will be saved to ${backupTabName}_PreRestore first.\n\nProceed?`;
   const ok=await customConfirm(msg);
   if(!ok)return {status:'cancelled'};
   // Safety: snapshot current state before overwriting
@@ -2474,32 +2477,33 @@ async function syncOriginalToIndexTab(entryName,result,originalDesc){
 // hasOriginal logic in render compares originalDesc !== r.desc to decide whether to show the diff trail.
 async function revertToOriginal(entryName,segType,rowIdx){
   const k=rvKey(entryName,segType,rowIdx);
-  const rv=getRV(k);
-  if(!rv||rv.originalDesc===undefined||rv.originalDesc===null){toast('No original to revert to','error');return}
-  const origDesc=rv.originalDesc; // Save (may be '')
+  const rv=getRV(k)||{};
+  // BASELINE IS SOURCE OF TRUTH — look up the Feb 17 baseline for this row+tag
+  const baselineDesc=baselineLookup(rowIdx,entryName);
+  if(baselineDesc===undefined){
+    toast('No baseline for this row — cannot revert','error');
+    return;
+  }
   // Flag so updateTagDesc doesn't re-track this write as a new edit
   rv._reverting=true;
   setRV(k,rv);
-  await updateTagDesc(rowIdx,entryName,origDesc);
-  // Clear ALL edit-tracking fields — a successful revert returns the row to pristine state.
-  // Previously we preserved originalDesc, but that caused the render to show a phantom
-  // "original → same original" trail because trackedOrig === r.desc triggered baseline fallback.
+  await updateTagDesc(rowIdx,entryName,baselineDesc);
+  // Clear edit-tracking state. The baseline is the source of truth; rv doesn't need to track "original".
   const rv2=getRV(k)||{};
   rv2.status='';rv2.suggestion='';rv2.reason='';rv2.ruleViolations=[];rv2.reviewed=false;rv2._reverting=false;
-  rv2.originalDesc=undefined;
+  rv2.originalDesc=undefined; // Legacy field, keep clear
   rv2.editedBy=undefined;rv2.editedAt=undefined;
-  // Clear 3-chip data if present
   delete rv2.suggestions;delete rv2.suggestionPrimary;
   setRV(k,rv2);
   const entry=findEntry(entryName);
   const r=entry?.results.find(x=>x.segType===segType&&x.rowIdx===rowIdx);
   if(r){
-    syncDescToIndexTab(entryName,r,origDesc).catch(()=>{});
+    syncDescToIndexTab(entryName,r,baselineDesc).catch(()=>{});
     syncToIndexTab(entryName,r,'','').catch(()=>{});
   }
-  logActivity(`Reverted: "${entryName}" → ${origDesc?'"'+origDesc+'"':'(empty)'}`);
+  logActivity(`Reverted: "${entryName}" → baseline ${baselineDesc?'"'+baselineDesc+'"':'(empty)'}`);
   buildIndex();render(true);
-  toast(origDesc?'Reverted to original':'Reverted to empty','success');
+  toast(baselineDesc?'Reverted to baseline':'Reverted to empty','success');
 }
 
 // Forget edit history — for cases where the tracked "original" is wrong (legacy data bug)
@@ -2592,6 +2596,8 @@ function toggleDescReviewed(entryName,segType,rowIdx){
   const k=rvKey(entryName,segType,rowIdx);
   const rv=getRV(k)||{};
   rv.reviewed=!rv.reviewed;
+  rv.editedAt=Date.now(); // Critical: so cross-device merge picks up this change
+  rv.editedBy=S.user?.name||S.user?.email||'Unknown';
   setRV(k,rv);
 }
 
@@ -5046,7 +5052,7 @@ function rTools(){
     const existingTabsForBackup=(S.sheetMeta?.tabs||[]).map(t=>t.title).filter(t=>t.startsWith(BACKUP_TAB_PREFIX));
     existingTabsForBackup.sort().reverse(); // most recent first
     h+='<div class="card" style="margin-bottom:16px;border:1px solid #5a9e6f;background:#f3faf5"><h4 style="margin-bottom:8px">🛟 Daily Backups</h4>';
-    h+=`<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Automatic daily snapshots of the _ReviewData tab. Keeps a rolling ${BACKUP_MAX_DAYS}-day history. Guards in place so a wipe won't propagate into backups. <b>${existingTabsForBackup.length}</b> backup(s) available.</p>`;
+    h+=`<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Automatic daily snapshots of <b>metadata</b> (notes, team, review status, activity log). Keeps a rolling ${BACKUP_MAX_DAYS}-day history. <i>Description text is NOT in these backups — use "Recover from Baseline" below for that.</i> <b>${existingTabsForBackup.length}</b> backup(s) available.</p>`;
     if(existingTabsForBackup.length){
       h+='<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;max-height:200px;overflow-y:auto">';
       existingTabsForBackup.forEach(tn=>{
@@ -5310,22 +5316,19 @@ function rIndex(){
           // Audit checkbox (hidden unless select mode)
           const selKey=esc(e.name)+'|'+seg+'|'+r.rowIdx;
           eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''} title="Select for AI audit">`;
-          // Description content
-          // originalDesc: undefined = never edited. '' = originally empty. String = had content.
-          // AUTO-PROTECTION via baseline:
-          //   - If rv has no originalDesc tracked → use baseline
-          //   - If rv.originalDesc === r.desc (stored original equals current — bug artifact, means lost) → use baseline
-          //   Otherwise: trust rv.originalDesc as-is.
-          // Baseline lookup is skipped when rv already has a sensible tracked value (perf optimization).
-          const trackedOrig=(rv&&rv.originalDesc!==undefined&&rv.originalDesc!==null)?rv.originalDesc:undefined;
-          let effOrig=trackedOrig;
+          // Description content — BASELINE IS THE SOURCE OF TRUTH FOR "ORIGINAL"
+          // The LEFT side (strikethrough) ALWAYS shows the Feb 17 baseline value.
+          // The RIGHT side shows the current r.desc.
+          // Users can revert to the baseline at any time.
+          // rv.originalDesc is no longer used for display — it's a legacy field we leave alone.
+          // Rows added after Feb 17 (not in baseline) simply don't show a LEFT side.
+          let effOrig=undefined;
           let origFromBaseline=false;
-          // Only invoke baseline lookup when needed (perf: avoid 10k+ lookups per render)
-          const needsBaselineCheck=(trackedOrig===undefined)||(trackedOrig===r.desc&&r.desc!=='');
-          if(needsBaselineCheck&&S.originalsBaseline){
+          if(S.originalsBaseline){
             const bl=baselineLookup(r.rowIdx,e.name);
-            if(bl!==undefined&&bl!==r.desc){
-              effOrig=bl; origFromBaseline=true;
+            if(bl!==undefined){
+              effOrig=bl;
+              origFromBaseline=true;
             }
           }
           const hasOrigTracked=effOrig!==undefined;
