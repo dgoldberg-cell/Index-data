@@ -1184,12 +1184,46 @@ function syncSharedDataToSheet(){
   _syncDebounce=setTimeout(()=>doSyncToSheet(),800);
 }
 
+// Snapshot of what we last successfully READ from the sheet — used to detect data-loss syncs
+let _lastLoadedCounts=null;
+
 // Actually write shared data to the _ReviewData tab
 async function doSyncToSheet(){
   if(!S.connected||_syncPending||!checkToken())return;
   _syncPending=true;
   try{
     await ensureSharedTab();
+    // ─── LOSS-PREVENTION GUARDS ───
+    // If remote had entries that we don't have now, ABORT — something wiped local state
+    const localCounts={
+      reviewData:Object.keys(S.reviewData||{}).length,
+      descNotes:Object.keys(S.descNotes||{}).length,
+      idxNotes:Object.keys(S.idxNotes||{}).length,
+      teamMembers:(S.teamMembers||[]).length,
+      activityLog:(S.activityLog||[]).length,
+      bookmarks:Object.keys(S._allBookmarks||{}).length,
+    };
+    if(_lastLoadedCounts){
+      // Threshold: if we lost more than 5 entries OR more than 20%, refuse sync
+      const losses=[];
+      for(const k of Object.keys(_lastLoadedCounts)){
+        const before=_lastLoadedCounts[k];
+        const after=localCounts[k];
+        const absDelta=before-after;
+        const pctDelta=before>0?absDelta/before:0;
+        if(absDelta>5 && pctDelta>0.2){
+          losses.push(`${k}: ${before} → ${after} (lost ${absDelta})`);
+        }else if(absDelta>50){ // catch large absolute losses even at low percentage
+          losses.push(`${k}: ${before} → ${after} (lost ${absDelta})`);
+        }
+      }
+      if(losses.length){
+        console.error('SYNC ABORTED — would delete data:',losses);
+        toast('Sync blocked — would delete data:\n'+losses.join('\n')+'\nReload page to recover remote state.','error');
+        _syncPending=false;
+        return;
+      }
+    }
     const data={
       reviewData:S.reviewData,
       bookmarks_by_user:S._allBookmarks||{},
@@ -1235,6 +1269,15 @@ async function doSyncToSheet(){
     });
     _lastSyncTime=Date.now();
     console.log(`Synced shared data: ${json.length} chars in ${chunks.length} chunk(s) (${Math.round(chunks.length/MAX_CHUNKS*100)}% of capacity)`);
+    // Update last-loaded counts to match what we just wrote (since remote now matches local)
+    _lastLoadedCounts={
+      reviewData:Object.keys(S.reviewData||{}).length,
+      descNotes:Object.keys(S.descNotes||{}).length,
+      idxNotes:Object.keys(S.idxNotes||{}).length,
+      teamMembers:(S.teamMembers||[]).length,
+      activityLog:(S.activityLog||[]).length,
+      bookmarks:Object.keys(S._allBookmarks||{}).length,
+    };
     // Clear pending sync flag in localStorage on success
     try{ localStorage.removeItem('jw_pendingSync'); }catch(_){}
   }catch(e){
@@ -1416,6 +1459,15 @@ async function loadSharedDataFromSheet(){
     localStorage.setItem('jw_notes',JSON.stringify(S.idxNotes));
     _lastSyncTime=Date.now();
     console.log(`Loaded shared data: ${json.length} chars, updated by:`,data.updatedBy);
+    // Record last-loaded counts — used as a loss-prevention baseline for future syncs
+    _lastLoadedCounts={
+      reviewData:Object.keys(S.reviewData||{}).length,
+      descNotes:Object.keys(S.descNotes||{}).length,
+      idxNotes:Object.keys(S.idxNotes||{}).length,
+      teamMembers:(S.teamMembers||[]).length,
+      activityLog:(S.activityLog||[]).length,
+      bookmarks:Object.keys(S._allBookmarks||{}).length,
+    };
   }catch(e){
     console.log('No shared data tab yet, using localStorage');
   }
@@ -4618,6 +4670,17 @@ function rTools(){
   h+=`<button class="btn btn-sm" id="run-recovery" style="font-size:11px">🔧 Scan Activity Log</button>`;
   h+='</div>';
 
+  // ── Merge Notes / Team from JSON File ──
+  if(isAdmin){
+    h+='<div class="card" style="margin-bottom:16px;border:1px dashed var(--amber);background:#fffcf5"><h4 style="margin-bottom:8px">💬 Merge Notes / Team from File</h4>';
+    h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Upload a JSON file with <code>descNotes</code> and/or <code>teamMembers</code> to restore lost data. <b>ONLY ADDS — never overwrites or deletes existing entries.</b> Safe to run multiple times.</p>';
+    h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+    h+='<input type="file" id="merge-file" accept=".json,application/json" style="font-size:11px;font-family:var(--font)">';
+    h+=`<button class="btn btn-sm" id="merge-upload" style="font-size:11px;border-color:var(--amber);color:var(--ink);background:var(--amber)">📥 Merge & Save</button>`;
+    h+='</div>';
+    h+='</div>';
+  }
+
   // ── Consistency Check ──
   h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">🔍 Consistency Check</h4>';
   h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Scan all entries for inconsistent phrasing, word order, transliteration, capitalization, and style.</p>';
@@ -5805,6 +5868,38 @@ function bindAll(){
   });
   // Baseline-recovery button
   on('#run-baseline-recovery','click',()=>openBaselineRecoveryPreview());
+  // Merge Notes/Team from JSON file — ONLY ADDS, NEVER OVERWRITES
+  on('#merge-upload','click',async()=>{
+    const input=$('#merge-file');
+    if(!input||!input.files||!input.files[0]){toast('Pick a JSON file first','error');return}
+    const file=input.files[0];
+    try{
+      const text=await file.text();
+      const data=JSON.parse(text);
+      const incomingNotes=data.descNotes||{};
+      const incomingTeam=Array.isArray(data.teamMembers)?data.teamMembers:[];
+      // Count what would be NEW (not already present)
+      const curNotes=S.descNotes||{};
+      const curTeam=S.teamMembers||[];
+      const newNoteKeys=Object.keys(incomingNotes).filter(k=>!curNotes[k]);
+      const newTeamEmails=incomingTeam.filter(m=>m.email&&!curTeam.some(t=>t.email===m.email));
+      const msg=`Merge will ADD:\n  ${newNoteKeys.length} new notes\n  ${newTeamEmails.length} new team members\n\nExisting entries will NOT be changed. OK to proceed?`;
+      const ok=await customConfirm(msg);
+      if(!ok)return;
+      // Merge notes — only add keys that don't exist
+      if(!S.descNotes)S.descNotes={};
+      newNoteKeys.forEach(k=>{S.descNotes[k]=incomingNotes[k]});
+      // Merge team — only add emails that don't exist
+      if(!Array.isArray(S.teamMembers))S.teamMembers=[];
+      newTeamEmails.forEach(m=>{S.teamMembers.push(m)});
+      // Force sync
+      syncSharedDataToSheet();
+      flushSyncImmediate();
+      toast(`Merged: ${newNoteKeys.length} notes, ${newTeamEmails.length} team members added`,'success');
+      logActivity(`Merged from file: ${newNoteKeys.length} notes, ${newTeamEmails.length} team members added`);
+      render();
+    }catch(e){console.error('Merge failed:',e);toast('Could not parse merge file','error')}
+  });
   // Admin — copy invite
   on('#invite-copy','click',()=>{
     const email=$('#invite-email')?.value?.trim();
