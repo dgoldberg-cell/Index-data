@@ -1725,6 +1725,93 @@ window.retryReviewMigration=async function(){
   return {written,errors};
 };
 
+// Merge reviewData from a file (JSON object with keys like "TagName|Segment|rowIdx": {...}).
+// For each entry: keeps whichever version has a NEWER editedAt; preserves existing entries not in file.
+// Will NOT overwrite entries that are already reviewed/edited unless incoming is demonstrably newer.
+// Writes to _Review tab as per-row upserts with rate limiting.
+window.mergeReviewDataFromFile=async function(jsonString){
+  if(!S.connected){console.error('Not connected');return}
+  let incoming;
+  try{
+    incoming=JSON.parse(jsonString);
+  }catch(e){console.error('Could not parse JSON:',e);return}
+  if(!incoming||typeof incoming!=='object'){console.error('Expected object');return}
+  const keys=Object.keys(incoming);
+  console.log(`Merging ${keys.length} reviewData entries from file...`);
+  let added=0,updated=0,skipped=0,errors=0;
+  const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+  for(const k of keys){
+    const inc=incoming[k];
+    if(!inc||typeof inc!=='object')continue;
+    const cur=S.reviewData[k];
+    let action='skip';
+    if(!cur){
+      // Add new entry
+      S.reviewData[k]=inc;
+      action='add';
+    }else{
+      // Merge: newer editedAt wins; otherwise keep existing
+      const ce=cur.editedAt||0, ie=inc.editedAt||0;
+      if(ie>ce){
+        S.reviewData[k]=inc;
+        action='update';
+      }else if(ce===0&&ie===0){
+        // Neither has timestamp — prefer whichever has more data (reviewed flag, originalDesc, etc.)
+        const cFields=Object.keys(cur).length, iFields=Object.keys(inc).length;
+        const cHasReview=cur.reviewed||cur.editedBy||cur.originalDesc;
+        const iHasReview=inc.reviewed||inc.editedBy||inc.originalDesc;
+        if(iHasReview&&!cHasReview){
+          S.reviewData[k]=inc;
+          action='update';
+        }else if(iFields>cFields&&!cHasReview){
+          S.reviewData[k]=inc;
+          action='update';
+        }
+      }
+    }
+    if(action==='add')added++;
+    else if(action==='update')updated++;
+    else{skipped++;continue}
+    // Persist this entry to sheet
+    try{
+      const parts=k.split('|');
+      const rv=S.reviewData[k];
+      const row={
+        key:k,
+        entryName:parts[0]||'',
+        segType:parts[1]||'',
+        rowIdx:parts[2]||'',
+        status:rv.status||'',
+        reviewed:rv.reviewed?'1':'',
+        editedBy:rv.editedBy||'',
+        editedAt:rv.editedAt||'',
+        data:JSON.stringify(rv),
+      };
+      let attempt=0, success=false;
+      while(attempt<3&&!success){
+        try{
+          await upsertPerRowTab(REVIEW_TAB,REVIEW_HEADERS,'key',row);
+          success=true;
+        }catch(e){
+          attempt++;
+          if(e?.result?.error?.code===429){await sleep(2000*attempt)}
+          else{errors++;break}
+        }
+      }
+      if(!success)errors++;
+    }catch(e){errors++}
+    if((added+updated)%25===0&&(added+updated)>0){
+      console.log(`Progress: added ${added}, updated ${updated}, skipped ${skipped}, errors ${errors}`);
+      await sleep(500);
+    }
+  }
+  // Save to localStorage
+  localStorage.setItem('jw_rv',JSON.stringify(S.reviewData));
+  console.log(`ReviewData merge complete: added ${added}, updated ${updated}, skipped ${skipped}, errors ${errors}`);
+  render();
+  return {added,updated,skipped,errors};
+};
+
 // Merge older activity entries from a file (JSON or text format).
 // Skips entries that already exist on the sheet (by timestamp+user+action fingerprint).
 window.mergeActivityFromFile=async function(fileTextOrArray){
