@@ -2113,7 +2113,11 @@ async function loadSharedDataFromSheet(){
       range:`'${SHARED_TAB}'!A2:A10000`
     });
     const rows=r.result.values||[];
-    if(!rows.length)return;
+    // NOTE: we continue even if blob is empty — per-row tabs (notes, team, activity, review) are now primary.
+    // Wrap blob parsing in conditional, then per-row load still runs at the end.
+    let skipBlobParse=!rows.length;
+    
+    if(!skipBlobParse){
     
     // Reassemble chunked JSON
     let json='';
@@ -2270,6 +2274,11 @@ async function loadSharedDataFromSheet(){
     localStorage.setItem('jw_notes',JSON.stringify(S.idxNotes));
     _lastSyncTime=Date.now();
     console.log(`Loaded shared data (blob): ${json.length} chars, updated by:`,data.updatedBy);
+
+    } // end of if(!skipBlobParse)
+    if(skipBlobParse){
+      console.log('Blob empty — skipping to per-row load');
+    }
 
     // ─── PER-ROW OVERRIDE ───
     // If per-row tabs have data, they OVERWRITE what came from the blob.
