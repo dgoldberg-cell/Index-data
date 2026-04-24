@@ -99,7 +99,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .pad{padding:22px 28px}
 
 /* Index Preview */
-.idx-toolbar{display:flex;align-items:center;gap:6px;padding:8px 24px;border-bottom:1px solid var(--border);background:var(--bg-white);flex-shrink:0}
+.idx-toolbar{display:flex;align-items:flex-start;gap:6px;padding:8px 24px;border-bottom:1px solid var(--border);background:var(--bg-white);flex-shrink:0}
 .idx-search{display:inline-flex;align-items:center;gap:6px;background:var(--bg-white);border:1px solid var(--border);border-radius:var(--radius);padding:0 10px;height:28px;min-width:180px;max-width:320px;box-shadow:inset 0 1px 2px rgba(0,0,0,.04);transition:all .15s;font-family:var(--font)}
 .idx-search:hover{border-color:var(--border-hi)}
 .idx-search:focus-within{border-color:var(--gold);box-shadow:inset 0 1px 2px rgba(0,0,0,.04),0 0 0 2px rgba(140,122,80,.15)}
@@ -1990,112 +1990,6 @@ async function doSyncToSheet(){
   _syncPending=true;
   try{
     await ensureSharedTab();
-    // ─── LOSS-PREVENTION GUARDS ───
-    // If remote had entries that we don't have now, ABORT — something wiped local state
-    const localCounts={
-      reviewData:Object.keys(S.reviewData||{}).length,
-      descNotes:Object.keys(S.descNotes||{}).length,
-      idxNotes:Object.keys(S.idxNotes||{}).length,
-      teamMembers:(S.teamMembers||[]).length,
-      activityLog:(S.activityLog||[]).length,
-      bookmarks:Object.keys(S._allBookmarks||{}).length,
-    };
-    // Cross-check against current remote state BEFORE sync — more defensive than _lastLoadedCounts alone
-    // (covers cases where local state was wiped without a prior load to establish counts)
-    try{
-      const probe=await gapi.client.sheets.spreadsheets.values.get({
-        spreadsheetId:S.sheetId,
-        range:`'${SHARED_TAB}'!A2:A10000`
-      });
-      const probeRows=probe.result.values||[];
-      if(probeRows.length){
-        let pj='';
-        const pfirst=(probeRows[0]&&probeRows[0][0])||'';
-        if(pfirst.startsWith('CHUNKS:')){
-          const pipeIdx=pfirst.indexOf('|');
-          const numC=parseInt(pfirst.slice(7,pipeIdx),10);
-          pj=pfirst.slice(pipeIdx+1);
-          for(let i=1;i<numC&&i<probeRows.length;i++)pj+=(probeRows[i]&&probeRows[i][0])||'';
-        }else{ pj=pfirst; }
-        if(pj){
-          const pData=JSON.parse(pj);
-          const remoteCounts={
-            reviewData:Object.keys(pData.reviewData||{}).length,
-            descNotes:Object.keys(pData.descNotes||{}).length,
-            idxNotes:Object.keys(pData.notes||{}).length,
-            teamMembers:(pData.teamMembers||[]).length,
-            activityLog:(pData.activityLog||[]).length,
-          };
-          const remoteLosses=[];
-          for(const k of Object.keys(remoteCounts)){
-            const rem=remoteCounts[k], loc=localCounts[k]||0;
-            // If remote has data and local has almost none, abort
-            if(rem>5 && loc<=1){
-              remoteLosses.push(`${k}: remote=${rem} → local=${loc} (would wipe nearly all)`);
-            }else if(rem-loc>5 && (rem-loc)/rem>0.2){
-              remoteLosses.push(`${k}: remote=${rem} → local=${loc} (lost ${rem-loc})`);
-            }else if(rem-loc>50){
-              remoteLosses.push(`${k}: remote=${rem} → local=${loc} (lost ${rem-loc})`);
-            }
-          }
-          if(remoteLosses.length){
-            console.warn('SYNC HOLD (vs remote) — would delete data:',remoteLosses);
-            if(_syncOverride){
-              console.log('Sync override active — proceeding despite remote loss guard');
-            }else{
-              _syncPending=false;
-              const msg='⚠ This save would DELETE data from the sheet:\n\n'+remoteLosses.join('\n')+'\n\nThis could be a bug OR you may have intentionally deleted a lot. If this was NOT intentional, click Cancel and reload the page to recover from the sheet.\n\nDid you mean to delete this?';
-              const proceed=await customConfirm(msg);
-              if(!proceed){
-                toast('Sync cancelled — reload to recover remote state','info');
-                return;
-              }
-              // User confirmed — set override and retry sync
-              _syncOverride=true;
-              console.log('User confirmed intentional delete — overriding guard');
-              syncSharedDataToSheet();
-              return;
-            }
-          }
-        }
-      }
-    }catch(probeErr){
-      console.warn('Pre-sync probe failed:',probeErr);
-      // If probe fails, fall through to normal guard — don't block on network errors
-    }
-    if(_lastLoadedCounts){
-      // Threshold: if we lost more than 5 entries OR more than 20%, refuse sync
-      const losses=[];
-      for(const k of Object.keys(_lastLoadedCounts)){
-        const before=_lastLoadedCounts[k];
-        const after=localCounts[k];
-        const absDelta=before-after;
-        const pctDelta=before>0?absDelta/before:0;
-        if(absDelta>5 && pctDelta>0.2){
-          losses.push(`${k}: ${before} → ${after} (lost ${absDelta})`);
-        }else if(absDelta>50){ // catch large absolute losses even at low percentage
-          losses.push(`${k}: ${before} → ${after} (lost ${absDelta})`);
-        }
-      }
-      if(losses.length){
-        console.warn('SYNC HOLD — would delete data:',losses);
-        if(_syncOverride){
-          console.log('Sync override active — proceeding despite delta guard');
-        }else{
-          _syncPending=false;
-          const msg='⚠ This save would DELETE data:\n\n'+losses.join('\n')+'\n\nThis could be a bug OR you may have intentionally deleted a lot. If this was NOT intentional, click Cancel and reload the page.\n\nDid you mean to delete this?';
-          const proceed=await customConfirm(msg);
-          if(!proceed){
-            toast('Sync cancelled','info');
-            return;
-          }
-          _syncOverride=true;
-          console.log('User confirmed intentional delete — overriding guard');
-          syncSharedDataToSheet();
-          return;
-        }
-      }
-    }
     // Blob excludes reviewData, descNotes, teamMembers, activityLog, idxNotes — all live in per-row tabs or have been removed.
     // The blob only holds bookmarks, notifications, sectionOverrides, tagRenames, rules.
     const data={
@@ -5258,7 +5152,15 @@ function render(force=true){
   else if(S.view==='settings')h+=rSettings();
   else if(S.view==='consistency')h+=rConsistency();
   else if(S.view==='notes')h+=rNotes();
-  else if(S.view==='tools')h+=rTools();
+  else if(S.view==='tools'){
+    // Admin-only — silently redirect non-admins to index
+    if(ADMIN_EMAILS.includes(S.user?.email?.toLowerCase())){
+      h+=rTools();
+    }else{
+      S.view='index';
+      h+=rIndex();
+    }
+  }
   else if(S.view==='team')h+=rTeam();
   h+='</div>';
   if(S.aiOpen)h+=rAI();
@@ -5629,8 +5531,11 @@ function rSidebar(){
   // ── Book View ──
   h+=`<div class="nav-item ${S.view==='book'?'active':''}" data-nav="book"><span style="font-size:14px">📖</span><span>Book View</span></div>`;
 
-  // ── Tools (Audit + Consistency + Index Tabs) ──
-  h+=`<div class="nav-item ${S.view==='tools'?'active':''}" data-nav="tools"><span style="font-size:14px">🛠️</span><span>Tools</span></div>`;
+  // ── Tools (Audit + Consistency + Index Tabs) — admin only ──
+  const isAdminForNav=ADMIN_EMAILS.includes(S.user?.email?.toLowerCase());
+  if(isAdminForNav){
+    h+=`<div class="nav-item ${S.view==='tools'?'active':''}" data-nav="tools"><span style="font-size:14px">🛠️</span><span>Tools</span></div>`;
+  }
 
   // ── Notes ──
   const noteKeys=Object.keys(S.descNotes||{}).filter(k=>{const n=S.descNotes[k];return n&&n.thread&&n.thread.length>0&&!n.resolved});
@@ -5861,8 +5766,13 @@ function rDash(){
   const myName=S.user?.name||'Unknown';
   // Initial limit shown — user can "Load more" to see older. Default 50, expandable.
   if(!S.activityShowLimit)S.activityShowLimit=50;
-  const myFull=[...S.activityLog].filter(e=>e.user===myName).reverse();
-  const allFull=[...S.activityLog].reverse();
+  // S.activityLog is already sorted newest-first by loadActivityFromPerRowTab.
+  // Fresh entries from logActivity are pushed to end — but the full reload from sheet restores correct order.
+  // For display, we want newest at top, so use the array as-is (no reverse).
+  // For legacy data where logActivity pushed to end, we still need to ensure newest first — so sort defensively.
+  const sortedLog=[...S.activityLog].sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
+  const myFull=sortedLog.filter(e=>e.user===myName);
+  const allFull=sortedLog;
   const myActivity=myFull.slice(0,S.activityShowLimit);
   const allActivity=allFull.slice(0,S.activityShowLimit);
   if(isAdmin){
@@ -7126,20 +7036,20 @@ function bindAll(){
     S.idxPage=0;
     render();
   });
-  // Search input — handle typing AND spellcheck/autocomplete replacements
-  // Uses a longer debounce (1.2s) to give browser time to show spellcheck squiggle before re-render destroys the input.
-  // Also checks if the value actually changed meaningfully before triggering a re-render.
+  // Search input — handles typing, spellcheck replacements, Enter key, and blur.
+  // Long debounce (2s) gives browser time to show spellcheck squiggle.
+  // Re-render only fires if value genuinely changed.
+  // Enter key and blur trigger immediate search without waiting for debounce.
   const searchEl=$('#idx-search');
   if(searchEl){
     let _lastRenderedSearch=S.idxSearch||'';
-    const handleSearchChange=()=>{
+    const triggerSearchUpdate=(immediate)=>{
       if(_searchTimer)clearTimeout(_searchTimer);
-      _searchTimer=setTimeout(()=>{
+      const doUpdate=()=>{
         const curEl=$('#idx-search');
         if(!curEl)return;
         const savedValue=curEl.value;
         const savedPos=curEl.selectionStart??savedValue.length;
-        // Skip re-render if value unchanged (prevents unnecessary DOM churn that kills spellcheck state)
         if(savedValue===_lastRenderedSearch)return;
         _lastRenderedSearch=savedValue;
         S.idxSearch=savedValue;
@@ -7152,14 +7062,22 @@ function bindAll(){
             newEl.value=savedValue;
             S.idxSearch=savedValue;
             newEl.focus();
-            newEl.selectionStart=newEl.selectionEnd=savedPos;
+            try{newEl.selectionStart=newEl.selectionEnd=savedPos}catch(_){}
           }
         });
-      },1200);
+      };
+      if(immediate)doUpdate();
+      else _searchTimer=setTimeout(doUpdate,2000);
     };
-    searchEl.addEventListener('input',handleSearchChange);
-    // 'change' fires when browser replaces text (spellcheck/autocomplete) without typing
-    searchEl.addEventListener('change',handleSearchChange);
+    searchEl.addEventListener('input',()=>triggerSearchUpdate(false));
+    // 'change' fires when browser replaces text via spellcheck context menu
+    searchEl.addEventListener('change',()=>triggerSearchUpdate(true));
+    // Enter = immediate search
+    searchEl.addEventListener('keydown',(ev)=>{
+      if(ev.key==='Enter'){ev.preventDefault();triggerSearchUpdate(true)}
+    });
+    // Blur = immediate search (e.g. when user clicks elsewhere)
+    searchEl.addEventListener('blur',()=>triggerSearchUpdate(true));
   }
   $$('[data-tree]').forEach(el=>el.onclick=()=>{S.idxActiveEntry=el.dataset.tree;render()});
   on('#idx-undo','click',()=>doUndo());
