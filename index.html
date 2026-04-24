@@ -1510,6 +1510,128 @@ async function migrateBlobToPerRow(){
 }
 window.migrateBlobToPerRow=migrateBlobToPerRow; // expose for manual triggering
 
+// Force migration from CURRENT IN-MEMORY state (S.descNotes etc), bypassing all empty-checks.
+// Use when initial migration raced with registerTeamMember/logActivity and left tabs partially empty.
+// This is safe to run — writes are upserts for team/review (keyed), appends for notes/activity
+// (but first we clear the tabs so we don't get duplicates from re-appending).
+window.forceMigrate=async function(){
+  if(!S.connected){console.error('Not connected');return}
+  console.log('Starting force migration from in-memory state...');
+  const report={notes:0,team:0,activity:0,review:0,errors:[]};
+  try{
+    // For append-style tabs (_Notes, _Activity), clear existing data first so we don't duplicate
+    async function clearTabData(tabName,headers){
+      try{
+        const lastCol=String.fromCharCode(64+headers.length);
+        await gapi.client.sheets.spreadsheets.values.clear({
+          spreadsheetId:S.sheetId,
+          range:`'${tabName}'!A2:${lastCol}99999`
+        });
+        console.log(`Cleared ${tabName} for fresh migration`);
+      }catch(e){console.warn(`Could not clear ${tabName}:`,e)}
+    }
+    await ensurePerRowTab(NOTES_TAB,NOTES_HEADERS);
+    await ensurePerRowTab(TEAM_TAB,TEAM_HEADERS);
+    await ensurePerRowTab(ACTIVITY_TAB,ACTIVITY_HEADERS);
+    await ensurePerRowTab(REVIEW_TAB,REVIEW_HEADERS);
+    await clearTabData(NOTES_TAB,NOTES_HEADERS);
+    await clearTabData(ACTIVITY_TAB,ACTIVITY_HEADERS);
+    // Don't clear _Team or _Review — upserts handle existing rows
+
+    // Notes — from S.descNotes
+    console.log('Migrating notes...');
+    const notes=S.descNotes||{};
+    for(const key of Object.keys(notes)){
+      const [tagName,segType,rowIdx]=key.split('|');
+      const n=notes[key];
+      if(!n||!n.thread||!n.thread.length)continue;
+      const parentId=genId();
+      for(const entry of n.thread){
+        const row={
+          id:entry.id||genId(),
+          timestamp:entry.timestamp||Date.now(),
+          tagName,segType,rowIdx,
+          user:entry.user||'Unknown',
+          text:entry.text||'',
+          resolved:n.resolved?'1':'',
+          parentId,
+          editedAt:Date.now(),
+        };
+        try{
+          await appendPerRowTab(NOTES_TAB,NOTES_HEADERS,row);
+          report.notes++;
+        }catch(e){report.errors.push('note: '+e.message)}
+      }
+    }
+
+    // Team — from S.teamMembers
+    console.log('Migrating team...');
+    const team=S.teamMembers||[];
+    for(const m of team){
+      if(!m||!m.email)continue;
+      try{
+        await persistTeamMember(m);
+        report.team++;
+      }catch(e){report.errors.push('team: '+e.message)}
+    }
+
+    // Activity — from S.activityLog
+    console.log('Migrating activity...');
+    const log=S.activityLog||[];
+    for(const a of log){
+      if(!a||!a.timestamp)continue;
+      try{
+        await persistActivity({timestamp:a.timestamp,user:a.user||'Unknown',action:a.action||'',details:a.details||''});
+        report.activity++;
+      }catch(e){report.errors.push('activity: '+e.message)}
+    }
+
+    // Review — from S.reviewData (batched for speed)
+    console.log('Migrating review data...');
+    const rd=S.reviewData||{};
+    const rdKeys=Object.keys(rd);
+    const BATCH=500;
+    const lastCol=String.fromCharCode(64+REVIEW_HEADERS.length);
+    // Clear _Review tab too for clean migration
+    await clearTabData(REVIEW_TAB,REVIEW_HEADERS);
+    for(let i=0;i<rdKeys.length;i+=BATCH){
+      const chunk=rdKeys.slice(i,i+BATCH);
+      const values=chunk.map(k=>{
+        const rv=rd[k]||{};
+        const parts=k.split('|');
+        return [
+          k,
+          parts[0]||'',
+          parts[1]||'',
+          parts[2]||'',
+          rv.status||'',
+          rv.reviewed?'1':'',
+          rv.editedBy||'',
+          String(rv.editedAt||''),
+          JSON.stringify(rv),
+        ];
+      });
+      try{
+        await gapi.client.sheets.spreadsheets.values.append({
+          spreadsheetId:S.sheetId,
+          range:`'${REVIEW_TAB}'!A2:${lastCol}`,
+          valueInputOption:'RAW',
+          insertDataOption:'INSERT_ROWS',
+          resource:{values}
+        });
+        report.review+=chunk.length;
+        console.log(`Review batch ${i/BATCH+1}: wrote ${chunk.length} rows`);
+      }catch(e){report.errors.push('review batch '+i+': '+e.message)}
+    }
+
+    console.log('Force migration complete:',report);
+    return report;
+  }catch(e){
+    console.error('Force migration failed:',e);
+    return {status:'error',error:String(e),report};
+  }
+};
+
 // ═══════════════════════════════════════════════════════════════
 // UNDO & ACTIVITY LOG
 // ═══════════════════════════════════════════════════════════════
@@ -6370,8 +6492,14 @@ function rSetup(app){
   <div style="text-align:left;margin-top:14px"><label style="font-size:11px;color:var(--tx-3);font-weight:500">Code <span style="color:var(--tx-4);font-weight:400">(optional — leave blank to work without AI features)</span></label><input class="s-input" id="ik" type="password" placeholder="Enter team code (optional)" value="${esc(S.claudeKey)}" style="margin-top:4px"></div>
   <div class="setup-err" id="se"></div>
   <button class="btn btn-gold" id="btn-con" style="width:100%;height:42px;font-size:14px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center">Sign In</button></div></div>`;
-  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadBaselineFromSheet();await loadTab(0);registerTeamMember();startAutoRefresh();render();runDailyBackupIfDue().then(res=>{if(res.status==='success')console.log('Daily backup created:',res.tabName);});// Run migration in background — idempotent, only writes to empty tabs
-migrateBlobToPerRow().then(res=>{if(res.status==='success'&&(res.report.notes||res.report.team||res.report.activity)){console.log('Migration complete:',res.report);toast(`Migrated ${res.report.notes} notes, ${res.report.team} team, ${res.report.activity} activity entries to per-row tabs`,'success')}});if(!k)toast('Signed in without AI features. Add a code in settings to enable AI.','info')}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
+  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadBaselineFromSheet();await loadTab(0);
+// CRITICAL: migration runs BEFORE any writes so tabs are populated before anything else touches them
+const migRes=await migrateBlobToPerRow();
+if(migRes&&migRes.status==='success'&&(migRes.report.notes||migRes.report.team||migRes.report.activity||migRes.report.review)){
+  console.log('Migration complete:',migRes.report);
+  toast(`Migrated ${migRes.report.notes} notes, ${migRes.report.team} team, ${migRes.report.activity} activity, ${migRes.report.review||0} review entries`,'success');
+}
+registerTeamMember();startAutoRefresh();render();runDailyBackupIfDue().then(res=>{if(res.status==='success')console.log('Daily backup created:',res.tabName);});if(!k)toast('Signed in without AI features. Add a code in settings to enable AI.','info')}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
 }
 
 // ═══════════════════════════════════════════════════════════════
