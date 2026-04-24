@@ -1586,14 +1586,16 @@ window.forceMigrate=async function(){
       }catch(e){report.errors.push('activity: '+e.message)}
     }
 
-    // Review — from S.reviewData (batched for speed)
+    // Review — from S.reviewData (throttled batches to avoid 429 rate limits)
     console.log('Migrating review data...');
     const rd=S.reviewData||{};
     const rdKeys=Object.keys(rd);
-    const BATCH=500;
+    const BATCH=200; // Smaller batches
     const lastCol=String.fromCharCode(64+REVIEW_HEADERS.length);
     // Clear _Review tab too for clean migration
     await clearTabData(REVIEW_TAB,REVIEW_HEADERS);
+    await new Promise(r=>setTimeout(r,2000)); // Pause after clear
+    const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
     for(let i=0;i<rdKeys.length;i+=BATCH){
       const chunk=rdKeys.slice(i,i+BATCH);
       const values=chunk.map(k=>{
@@ -1611,17 +1613,40 @@ window.forceMigrate=async function(){
           JSON.stringify(rv),
         ];
       });
-      try{
-        await gapi.client.sheets.spreadsheets.values.append({
-          spreadsheetId:S.sheetId,
-          range:`'${REVIEW_TAB}'!A2:${lastCol}`,
-          valueInputOption:'RAW',
-          insertDataOption:'INSERT_ROWS',
-          resource:{values}
-        });
-        report.review+=chunk.length;
-        console.log(`Review batch ${i/BATCH+1}: wrote ${chunk.length} rows`);
-      }catch(e){report.errors.push('review batch '+i+': '+e.message)}
+      // Try up to 3 times with exponential backoff on 429
+      let attempt=0, success=false;
+      while(attempt<5&&!success){
+        try{
+          await gapi.client.sheets.spreadsheets.values.append({
+            spreadsheetId:S.sheetId,
+            range:`'${REVIEW_TAB}'!A2:${lastCol}`,
+            valueInputOption:'RAW',
+            insertDataOption:'INSERT_ROWS',
+            resource:{values}
+          });
+          report.review+=chunk.length;
+          console.log(`Review batch ${Math.floor(i/BATCH)+1}/${Math.ceil(rdKeys.length/BATCH)}: wrote ${chunk.length} rows (total: ${report.review})`);
+          success=true;
+        }catch(e){
+          attempt++;
+          const code=e?.result?.error?.code||e?.status||0;
+          if(code===429){
+            const wait=Math.pow(2,attempt)*1000; // 2s, 4s, 8s, 16s, 32s
+            console.warn(`Rate limited at batch ${i/BATCH+1}, waiting ${wait}ms before retry ${attempt}/5...`);
+            await sleep(wait);
+          }else{
+            report.errors.push('review batch '+i+': '+e.message);
+            console.error('Review batch failed (non-429):',e);
+            break;
+          }
+        }
+      }
+      if(!success&&attempt>=5){
+        report.errors.push('review batch '+i+': failed after 5 retries');
+        console.error(`Gave up on batch ${i/BATCH+1} after 5 retries`);
+      }
+      // Baseline pause between batches (1 second) to stay under rate limit
+      await sleep(1000);
     }
 
     console.log('Force migration complete:',report);
@@ -1630,6 +1655,125 @@ window.forceMigrate=async function(){
     console.error('Force migration failed:',e);
     return {status:'error',error:String(e),report};
   }
+};
+
+// Re-migrate ONLY the review tab with rate-limit-safe throttling.
+// Use if initial force migration failed with 429 errors.
+window.retryReviewMigration=async function(){
+  if(!S.connected){console.error('Not connected');return}
+  const rd=S.reviewData||{};
+  const rdKeys=Object.keys(rd);
+  if(!rdKeys.length){console.error('No reviewData in memory');return}
+  console.log(`Starting review-only re-migration of ${rdKeys.length} entries...`);
+  const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+  const lastCol=String.fromCharCode(64+REVIEW_HEADERS.length);
+  // Clear _Review tab
+  try{
+    await gapi.client.sheets.spreadsheets.values.clear({
+      spreadsheetId:S.sheetId,
+      range:`'${REVIEW_TAB}'!A2:${lastCol}99999`
+    });
+    console.log('Cleared _Review tab');
+  }catch(e){console.warn('Clear failed:',e)}
+  await sleep(3000); // Big pause after clear
+  const BATCH=200;
+  let written=0;
+  const errors=[];
+  for(let i=0;i<rdKeys.length;i+=BATCH){
+    const chunk=rdKeys.slice(i,i+BATCH);
+    const values=chunk.map(k=>{
+      const rv=rd[k]||{};
+      const parts=k.split('|');
+      return [
+        k,parts[0]||'',parts[1]||'',parts[2]||'',
+        rv.status||'',rv.reviewed?'1':'',
+        rv.editedBy||'',String(rv.editedAt||''),
+        JSON.stringify(rv),
+      ];
+    });
+    let attempt=0, success=false;
+    while(attempt<5&&!success){
+      try{
+        await gapi.client.sheets.spreadsheets.values.append({
+          spreadsheetId:S.sheetId,
+          range:`'${REVIEW_TAB}'!A2:${lastCol}`,
+          valueInputOption:'RAW',
+          insertDataOption:'INSERT_ROWS',
+          resource:{values}
+        });
+        written+=chunk.length;
+        console.log(`Batch ${Math.floor(i/BATCH)+1}/${Math.ceil(rdKeys.length/BATCH)}: ${chunk.length} rows (total: ${written})`);
+        success=true;
+      }catch(e){
+        attempt++;
+        const code=e?.result?.error?.code||e?.status||0;
+        if(code===429){
+          const wait=Math.pow(2,attempt)*1500;
+          console.warn(`Rate limit at batch ${Math.floor(i/BATCH)+1}, waiting ${wait}ms (attempt ${attempt}/5)...`);
+          await sleep(wait);
+        }else{
+          errors.push('batch '+i+': '+e.message);
+          break;
+        }
+      }
+    }
+    if(!success)errors.push('batch '+i+': failed after retries');
+    await sleep(1200); // Pause between successful batches
+  }
+  console.log(`Review re-migration complete: ${written} rows written, ${errors.length} errors`);
+  if(errors.length)console.log('Errors:',errors);
+  return {written,errors};
+};
+
+// Merge older activity entries from a file (JSON or text format).
+// Skips entries that already exist on the sheet (by timestamp+user+action fingerprint).
+window.mergeActivityFromFile=async function(fileTextOrArray){
+  if(!S.connected){console.error('Not connected');return}
+  let entries=[];
+  if(Array.isArray(fileTextOrArray)){
+    entries=fileTextOrArray;
+  }else if(typeof fileTextOrArray==='string'){
+    try{
+      const parsed=JSON.parse(fileTextOrArray);
+      if(Array.isArray(parsed))entries=parsed;
+      else if(parsed.activityLog)entries=parsed.activityLog;
+      else{console.error('Could not find activityLog array in JSON');return}
+    }catch(e){
+      console.error('Could not parse input as JSON:',e);
+      return;
+    }
+  }else{
+    console.error('Pass a string (JSON) or array');return;
+  }
+  if(!entries.length){console.log('No entries to merge');return {added:0,skipped:0}}
+  console.log(`Merging ${entries.length} activity entries...`);
+  // Load existing from sheet
+  const existing=await readPerRowTab(ACTIVITY_TAB,ACTIVITY_HEADERS);
+  const existingFP=new Set(existing.map(r=>`${r.timestamp}|${r.user}|${r.action}`));
+  let added=0,skipped=0,errors=[];
+  const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+  for(const e of entries){
+    if(!e||!e.timestamp)continue;
+    const fp=`${e.timestamp}|${e.user||'Unknown'}|${e.action||''}`;
+    if(existingFP.has(fp)){skipped++;continue}
+    try{
+      await persistActivity({timestamp:e.timestamp,user:e.user||'Unknown',action:e.action||'',details:e.details||''});
+      added++;
+      existingFP.add(fp);
+      if(added%50===0){console.log(`Added ${added}, skipped ${skipped}...`);await sleep(500)}
+    }catch(err){
+      errors.push('entry '+added+': '+err.message);
+      // Retry on 429
+      if(err?.result?.error?.code===429){
+        await sleep(5000);
+      }
+    }
+  }
+  console.log(`Activity merge complete: ${added} added, ${skipped} skipped (already present), ${errors.length} errors`);
+  if(errors.length)console.log('Errors:',errors.slice(0,5));
+  // Reload activity into memory
+  S.activityLog=await loadActivityFromPerRowTab(200);
+  return {added,skipped,errors};
 };
 
 // ═══════════════════════════════════════════════════════════════
