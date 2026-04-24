@@ -1077,9 +1077,9 @@ async function ensurePerRowTab(tabName,headers){
         valueInputOption:'RAW',
         resource:{values:[headers]}
       });
-      // Refresh sheet metadata to pick up new tab
+      // Refresh sheet metadata to pick up new tab (use same 'sid' key as main load path)
       const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
-      S.sheetMeta={tabs:meta.result.sheets.map(s=>({title:s.properties.title,id:s.properties.sheetId}))};
+      S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
       console.log(`Created per-row tab: ${tabName}`);
     }catch(e){
       console.error(`Failed to create ${tabName}:`,e);
@@ -1184,6 +1184,13 @@ async function deletePerRowTab(tabName,headers,keyCol,keyVal){
   try{
     const tabMeta=(S.sheetMeta?.tabs||[]).find(t=>t.title===tabName);
     if(!tabMeta){console.warn(`Tab ${tabName} doesn't exist for delete`);return false}
+    // sheetMeta stores id as either 'sid' (in main load path) or 'id' (in ensurePerRowTab).
+    // Handle both so delete works regardless of which path created the metadata entry.
+    const sheetId=tabMeta.sid!==undefined?tabMeta.sid:tabMeta.id;
+    if(sheetId===undefined||sheetId===null){
+      console.error(`Tab ${tabName} has no sheet ID in metadata — cannot delete`);
+      return false;
+    }
     const lastCol=String.fromCharCode(64+headers.length);
     const r=await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId:S.sheetId,
@@ -1196,12 +1203,13 @@ async function deletePerRowTab(tabName,headers,keyCol,keyVal){
     for(let i=0;i<rows.length;i++){
       if((rows[i][keyIdx]||'')===String(keyVal)){foundIdx=i;break}
     }
-    if(foundIdx<0)return false;
+    if(foundIdx<0){console.warn(`deletePerRowTab: key ${keyVal} not found in ${tabName}`);return false}
     const sheetRow=foundIdx+1; // 0-indexed for deleteRange (header is row 0)
     await gapi.client.sheets.spreadsheets.batchUpdate({
       spreadsheetId:S.sheetId,
-      resource:{requests:[{deleteDimension:{range:{sheetId:tabMeta.id,dimension:'ROWS',startIndex:sheetRow,endIndex:sheetRow+1}}}]}
+      resource:{requests:[{deleteDimension:{range:{sheetId,dimension:'ROWS',startIndex:sheetRow,endIndex:sheetRow+1}}}]}
     });
+    console.log(`Deleted row from ${tabName} where ${keyCol}=${keyVal}`);
     return true;
   }catch(e){
     console.error(`Failed to delete from ${tabName}:`,e);
