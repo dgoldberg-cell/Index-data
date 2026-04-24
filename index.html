@@ -5952,6 +5952,16 @@ function rTools(){
     h+=`<button class="btn btn-sm" id="merge-upload" style="font-size:11px;border-color:var(--amber);color:var(--ink);background:var(--amber)">📥 Merge & Save</button>`;
     h+='</div>';
     h+='</div>';
+
+    // Review data merge card — separate since it's a different structure (flat rv entries keyed by tagName|segType|rowIdx)
+    h+='<div class="card" style="margin-bottom:16px;border:1px dashed #7a5c9e;background:#faf7ff"><h4 style="margin-bottom:8px">🛡️ Merge Review Data from File</h4>';
+    h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Upload a JSON file with review entries (keys like <code>"TagName|Segment|rowIdx"</code>). For each entry: keeps whichever version has a newer <code>editedAt</code> timestamp. Never overwrites a reviewed entry with an unreviewed one. Writes per-row to the _Review tab.</p>';
+    h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+    h+='<input type="file" id="merge-review-file" accept=".json,application/json" style="font-size:11px;font-family:var(--font)">';
+    h+=`<button class="btn btn-sm" id="merge-review-upload" style="font-size:11px;border-color:#7a5c9e;color:#fff;background:#7a5c9e">🛡️ Merge Review Data</button>`;
+    h+='</div>';
+    h+='<div id="merge-review-status" style="font-size:11px;color:var(--tx-3);margin-top:8px"></div>';
+    h+='</div>';
   }
 
   // ── Daily Backups ──
@@ -6900,6 +6910,32 @@ function bindAll(){
   });
   // Baseline-recovery button
   on('#run-baseline-recovery','click',()=>openBaselineRecoveryPreview());
+  // Merge Review Data from JSON file
+  on('#merge-review-upload','click',async()=>{
+    const input=$('#merge-review-file');
+    const statusEl=$('#merge-review-status');
+    if(!input||!input.files||!input.files[0]){
+      toast('Pick a JSON file first','error');
+      return;
+    }
+    const file=input.files[0];
+    try{
+      const text=await file.text();
+      if(statusEl)statusEl.textContent='Parsing...';
+      toast('Starting review data merge...','info');
+      const result=await mergeReviewDataFromFile(text);
+      if(result){
+        const msg=`Merged: added ${result.added}, updated ${result.updated}, skipped ${result.skipped}, errors ${result.errors}`;
+        if(statusEl)statusEl.textContent=msg;
+        toast(msg,'success');
+        logActivity(`Merged review data from file: ${result.added} added, ${result.updated} updated`);
+      }
+    }catch(e){
+      console.error('Review merge failed:',e);
+      toast('Merge failed: '+(e?.message||e),'error');
+      if(statusEl)statusEl.textContent='Failed: '+(e?.message||e);
+    }
+  });
   // Merge Notes/Team from JSON file — ONLY ADDS, NEVER OVERWRITES
   on('#merge-upload','click',async()=>{
     const input=$('#merge-file');
