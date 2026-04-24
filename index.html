@@ -1023,7 +1023,8 @@ function saveBM(){
 }
 function saveNotes(){localStorage.setItem('jw_notes',JSON.stringify(S.idxNotes));syncSharedDataToSheet()}
 function saveRQ(){localStorage.setItem('jw_rq',JSON.stringify(S.reviewQueue))}
-function saveRV(){localStorage.setItem('jw_rv',JSON.stringify(S.reviewData));syncSharedDataToSheet()}
+function saveRV(){localStorage.setItem('jw_rv',JSON.stringify(S.reviewData))}
+// setRV updated to persist the specific key via per-row, no full-blob rewrite
 
 // ═══════════════════════════════════════════════════════════════
 // SHARED DATA — stored in a hidden _ReviewData tab in the Google Sheet
@@ -1032,6 +1033,20 @@ const SHARED_TAB='_ReviewData';
 const BASELINE_TAB='_OriginalsBaseline';
 const BACKUP_TAB_PREFIX='_ReviewData_Backup_'; // followed by YYYY-MM-DD
 const BACKUP_MAX_DAYS=14; // keep rolling 14-day history
+// Per-row tabs — these replace the fragile JSON-blob storage in _ReviewData.
+// Each entry = one row. Writes are append/update-specific-row. No full rewrites.
+// A wipe bug can only destroy one row per bug instance, not all entries.
+// Concurrent users writing different items = no lost updates.
+const NOTES_TAB='_Notes';
+const TEAM_TAB='_Team';
+const ACTIVITY_TAB='_Activity';
+const REVIEW_TAB='_Review';
+const NOTES_HEADERS=['id','timestamp','tagName','segType','rowIdx','user','text','resolved','parentId','editedAt'];
+const TEAM_HEADERS=['email','name','joinedAt','lastSeen','role'];
+const ACTIVITY_HEADERS=['timestamp','user','action','details'];
+// reviewData per-row: one row per rv entry keyed by entryName|segType|rowIdx
+// JSON stored in 'data' column because rv has flexible schema (suggestions[], deniedHistory[], ruleViolations[])
+const REVIEW_HEADERS=['key','entryName','segType','rowIdx','status','reviewed','editedBy','editedAt','data'];
 const ADMIN_EMAILS=['dgoldberg@jemedia.org','es@jemedia.org'];
 let _syncTimer=null;
 let _syncPending=false;
@@ -1039,6 +1054,462 @@ let _syncDebounce=null;
 let _lastSyncTime=0;
 
 // Debounced write — waits 2 seconds after last change before writing to sheet
+// ═══════════════════════════════════════════════════════════════
+// PER-ROW STORAGE — individual rows per item, no blob rewrites.
+// Used for: notes, team, activity log. Prevents mass-wipe bugs and concurrent-write data loss.
+// ═══════════════════════════════════════════════════════════════
+
+// Ensure a per-row tab exists with the given headers. Idempotent.
+async function ensurePerRowTab(tabName,headers){
+  if(!S.connected)return false;
+  if(!S.sheetMeta)return false;
+  const exists=(S.sheetMeta?.tabs||[]).some(t=>t.title===tabName);
+  if(!exists){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:tabName,hidden:false}}}]}
+      });
+      // Write header row
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${tabName}'!A1:${String.fromCharCode(64+headers.length)}1`,
+        valueInputOption:'RAW',
+        resource:{values:[headers]}
+      });
+      // Refresh sheet metadata to pick up new tab
+      const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+      S.sheetMeta={tabs:meta.result.sheets.map(s=>({title:s.properties.title,id:s.properties.sheetId}))};
+      console.log(`Created per-row tab: ${tabName}`);
+    }catch(e){
+      console.error(`Failed to create ${tabName}:`,e);
+      return false;
+    }
+  }
+  return true;
+}
+
+// Read all rows from a per-row tab. Returns array of objects keyed by headers.
+async function readPerRowTab(tabName,headers){
+  if(!S.connected)return [];
+  try{
+    await ensurePerRowTab(tabName,headers);
+    const lastCol=String.fromCharCode(64+headers.length);
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${tabName}'!A2:${lastCol}10000`
+    });
+    const rows=r.result.values||[];
+    return rows.map(row=>{
+      const obj={};
+      headers.forEach((h,i)=>{obj[h]=row[i]!==undefined?row[i]:''});
+      return obj;
+    }).filter(o=>Object.values(o).some(v=>v)); // drop fully-empty rows
+  }catch(e){
+    console.error(`Failed to read ${tabName}:`,e);
+    return [];
+  }
+}
+
+// Append one row to a per-row tab. Safe for concurrent writes — Sheets API handles atomicity.
+async function appendPerRowTab(tabName,headers,obj){
+  if(!S.connected)return false;
+  try{
+    await ensurePerRowTab(tabName,headers);
+    const row=headers.map(h=>obj[h]!==undefined?String(obj[h]):'');
+    const lastCol=String.fromCharCode(64+headers.length);
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${tabName}'!A2:${lastCol}`,
+      valueInputOption:'RAW',
+      insertDataOption:'INSERT_ROWS',
+      resource:{values:[row]}
+    });
+    return true;
+  }catch(e){
+    console.error(`Failed to append to ${tabName}:`,e);
+    return false;
+  }
+}
+
+// Update a specific row by matching a key column (e.g. 'id' or 'email').
+// If no match found, appends. Returns true on success.
+async function upsertPerRowTab(tabName,headers,keyCol,obj){
+  if(!S.connected)return false;
+  try{
+    await ensurePerRowTab(tabName,headers);
+    const lastCol=String.fromCharCode(64+headers.length);
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${tabName}'!A2:${lastCol}10000`
+    });
+    const rows=r.result.values||[];
+    const keyIdx=headers.indexOf(keyCol);
+    if(keyIdx<0){console.error('upsert: key not in headers',keyCol);return false}
+    const keyVal=String(obj[keyCol]||'');
+    let foundIdx=-1;
+    for(let i=0;i<rows.length;i++){
+      if((rows[i][keyIdx]||'')===keyVal){foundIdx=i;break}
+    }
+    const row=headers.map(h=>obj[h]!==undefined?String(obj[h]):'');
+    if(foundIdx>=0){
+      // Update that specific row
+      const sheetRow=foundIdx+2; // +1 for header, +1 for 0-based
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${tabName}'!A${sheetRow}:${lastCol}${sheetRow}`,
+        valueInputOption:'RAW',
+        resource:{values:[row]}
+      });
+    }else{
+      // Append new
+      await gapi.client.sheets.spreadsheets.values.append({
+        spreadsheetId:S.sheetId,
+        range:`'${tabName}'!A2:${lastCol}`,
+        valueInputOption:'RAW',
+        insertDataOption:'INSERT_ROWS',
+        resource:{values:[row]}
+      });
+    }
+    return true;
+  }catch(e){
+    console.error(`Failed to upsert ${tabName}:`,e);
+    return false;
+  }
+}
+
+// Delete a specific row by matching a key column value. Physically removes the row.
+async function deletePerRowTab(tabName,headers,keyCol,keyVal){
+  if(!S.connected)return false;
+  try{
+    const tabMeta=(S.sheetMeta?.tabs||[]).find(t=>t.title===tabName);
+    if(!tabMeta){console.warn(`Tab ${tabName} doesn't exist for delete`);return false}
+    const lastCol=String.fromCharCode(64+headers.length);
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${tabName}'!A2:${lastCol}10000`
+    });
+    const rows=r.result.values||[];
+    const keyIdx=headers.indexOf(keyCol);
+    if(keyIdx<0)return false;
+    let foundIdx=-1;
+    for(let i=0;i<rows.length;i++){
+      if((rows[i][keyIdx]||'')===String(keyVal)){foundIdx=i;break}
+    }
+    if(foundIdx<0)return false;
+    const sheetRow=foundIdx+1; // 0-indexed for deleteRange (header is row 0)
+    await gapi.client.sheets.spreadsheets.batchUpdate({
+      spreadsheetId:S.sheetId,
+      resource:{requests:[{deleteDimension:{range:{sheetId:tabMeta.id,dimension:'ROWS',startIndex:sheetRow,endIndex:sheetRow+1}}}]}
+    });
+    return true;
+  }catch(e){
+    console.error(`Failed to delete from ${tabName}:`,e);
+    return false;
+  }
+}
+
+// Generate a short unique ID for per-row items
+function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+
+// ─── NOTE-SPECIFIC PER-ROW SYNC ───
+// In memory: S.descNotes[key].thread[] where key = "entryName|segType|rowIdx"
+// On disk: _Notes tab with one row per individual note (each thread entry = one row)
+// Row fields: id, timestamp, tagName, segType, rowIdx, user, text, resolved, parentId, editedAt
+// parentId: groups notes belonging to the same "key" (thread). First note's id becomes the thread id.
+
+// Append a single note row. Assigns id if missing. Returns the id.
+async function persistNote(key,noteEntry,parentId){
+  const [tagName,segType,rowIdx]=key.split('|');
+  const id=noteEntry.id||genId();
+  noteEntry.id=id; // mutate in-memory so caller can reference
+  const row={
+    id,
+    timestamp:noteEntry.timestamp||Date.now(),
+    tagName,
+    segType,
+    rowIdx,
+    user:noteEntry.user||'Unknown',
+    text:noteEntry.text||'',
+    resolved:noteEntry.resolved?'1':'',
+    parentId:parentId||id,
+    editedAt:Date.now(),
+  };
+  const ok=await appendPerRowTab(NOTES_TAB,NOTES_HEADERS,row);
+  if(!ok)console.warn('persistNote: append failed for',key);
+  return id;
+}
+
+// Update one note (text edit, resolved toggle). Finds by id.
+async function updateNotePersist(noteId,updates){
+  // Need to read first to preserve other fields
+  const rows=await readPerRowTab(NOTES_TAB,NOTES_HEADERS);
+  const existing=rows.find(r=>r.id===noteId);
+  if(!existing){console.warn('updateNotePersist: id not found',noteId);return false}
+  const merged={...existing,...updates,editedAt:Date.now()};
+  if(merged.resolved===true)merged.resolved='1';
+  if(merged.resolved===false)merged.resolved='';
+  return await upsertPerRowTab(NOTES_TAB,NOTES_HEADERS,'id',merged);
+}
+
+// Delete a note by id
+async function deleteNotePersist(noteId){
+  return await deletePerRowTab(NOTES_TAB,NOTES_HEADERS,'id',noteId);
+}
+
+// Rebuild in-memory S.descNotes from the _Notes tab.
+async function loadNotesFromPerRowTab(){
+  const rows=await readPerRowTab(NOTES_TAB,NOTES_HEADERS);
+  const out={};
+  // Group by key = tagName|segType|rowIdx (not parentId — parentId is per-thread but key is per-row-position)
+  rows.forEach(r=>{
+    const key=`${r.tagName}|${r.segType}|${r.rowIdx}`;
+    if(!out[key])out[key]={thread:[]};
+    out[key].thread.push({
+      id:r.id,
+      user:r.user,
+      text:r.text,
+      timestamp:parseInt(r.timestamp,10)||Date.now(),
+      resolved:r.resolved==='1',
+    });
+    // If any note in thread is resolved, mark the key resolved
+    if(r.resolved==='1')out[key].resolved=true;
+  });
+  // Sort threads by timestamp
+  Object.keys(out).forEach(k=>{
+    out[k].thread.sort((a,b)=>a.timestamp-b.timestamp);
+  });
+  return out;
+}
+
+// ─── TEAM-SPECIFIC PER-ROW SYNC ───
+async function persistTeamMember(member){
+  const row={
+    email:member.email,
+    name:member.name||'',
+    joinedAt:member.joinedAt||Date.now(),
+    lastSeen:member.lastSeen||Date.now(),
+    role:member.role||'member',
+  };
+  return await upsertPerRowTab(TEAM_TAB,TEAM_HEADERS,'email',row);
+}
+
+async function loadTeamFromPerRowTab(){
+  const rows=await readPerRowTab(TEAM_TAB,TEAM_HEADERS);
+  return rows.map(r=>({
+    email:r.email,
+    name:r.name,
+    joinedAt:parseInt(r.joinedAt,10)||Date.now(),
+    lastSeen:parseInt(r.lastSeen,10)||Date.now(),
+    role:r.role||'member',
+  })).filter(m=>m.email);
+}
+
+// ─── ACTIVITY-SPECIFIC PER-ROW SYNC ───
+async function persistActivity(entry){
+  const row={
+    timestamp:entry.timestamp||Date.now(),
+    user:entry.user||'Unknown',
+    action:entry.action||'',
+    details:entry.details||'',
+  };
+  return await appendPerRowTab(ACTIVITY_TAB,ACTIVITY_HEADERS,row);
+}
+
+async function loadActivityFromPerRowTab(limit){
+  const rows=await readPerRowTab(ACTIVITY_TAB,ACTIVITY_HEADERS);
+  const out=rows.map(r=>({
+    timestamp:parseInt(r.timestamp,10)||0,
+    user:r.user,
+    action:r.action,
+    details:r.details,
+  })).filter(e=>e.timestamp);
+  out.sort((a,b)=>b.timestamp-a.timestamp); // newest first
+  return limit?out.slice(0,limit):out;
+}
+
+// ─── REVIEWDATA PER-ROW SYNC ───
+// rv entries keyed by entryName|segType|rowIdx. Each row stores:
+//   key (unique), entryName, segType, rowIdx (for queryability), status/reviewed/editedBy/editedAt (for merge logic),
+//   data (JSON blob with full rv including suggestions[], deniedHistory[], ruleViolations[], etc.)
+// This gives mass-wipe protection (one row per entry) while keeping schema flexibility.
+// Writes are debounced per-key so rapid edits of same row don't fire many API calls.
+const _reviewPersistQueue=new Map(); // key → setTimeout handle
+const REVIEW_PERSIST_DEBOUNCE=600; // ms
+function persistReviewEntry(key,rv){
+  // Debounce per-key so rapid edits collapse into one write
+  if(_reviewPersistQueue.has(key))clearTimeout(_reviewPersistQueue.get(key));
+  const t=setTimeout(async()=>{
+    _reviewPersistQueue.delete(key);
+    try{
+      const parts=key.split('|');
+      const entryName=parts[0]||'';
+      const segType=parts[1]||'';
+      const rowIdx=parts[2]||'';
+      const row={
+        key,
+        entryName,
+        segType,
+        rowIdx,
+        status:rv?.status||'',
+        reviewed:rv?.reviewed?'1':'',
+        editedBy:rv?.editedBy||'',
+        editedAt:rv?.editedAt||'',
+        data:JSON.stringify(rv||{}),
+      };
+      await upsertPerRowTab(REVIEW_TAB,REVIEW_HEADERS,'key',row);
+    }catch(e){
+      console.error('Review persist failed for '+key+':',e);
+    }
+  },REVIEW_PERSIST_DEBOUNCE);
+  _reviewPersistQueue.set(key,t);
+}
+
+async function deleteReviewEntry(key){
+  if(_reviewPersistQueue.has(key)){clearTimeout(_reviewPersistQueue.get(key));_reviewPersistQueue.delete(key)}
+  return await deletePerRowTab(REVIEW_TAB,REVIEW_HEADERS,'key',key);
+}
+
+async function loadReviewFromPerRowTab(){
+  const rows=await readPerRowTab(REVIEW_TAB,REVIEW_HEADERS);
+  const out={};
+  rows.forEach(r=>{
+    if(!r.key)return;
+    try{
+      const rv=r.data?JSON.parse(r.data):{};
+      out[r.key]=rv;
+    }catch(e){
+      console.warn('Failed to parse review data for '+r.key+':',e);
+    }
+  });
+  return out;
+}
+
+// ─── MIGRATION: ONE-TIME MOVE FROM BLOB TO PER-ROW TABS ───
+// Reads _ReviewData, writes notes/team/activity to their per-row tabs.
+// Idempotent: safe to run multiple times. Only writes if target tab is empty.
+async function migrateBlobToPerRow(){
+  if(!S.connected)return {status:'not-connected'};
+  const report={notes:0,team:0,activity:0,errors:[]};
+  try{
+    // Read current blob
+    const blob=await readChunkedTab(SHARED_TAB);
+    if(!blob){return {status:'no-blob',report}}
+
+    // Migrate notes — only if target tab has no data
+    const existingNotes=await readPerRowTab(NOTES_TAB,NOTES_HEADERS);
+    if(existingNotes.length===0){
+      const descNotes=blob.descNotes||{};
+      for(const key of Object.keys(descNotes)){
+        const [tagName,segType,rowIdx]=key.split('|');
+        const n=descNotes[key];
+        if(!n||!n.thread||!n.thread.length)continue;
+        const parentId=genId();
+        for(const entry of n.thread){
+          const row={
+            id:genId(),
+            timestamp:entry.timestamp||Date.now(),
+            tagName,segType,rowIdx,
+            user:entry.user||'Unknown',
+            text:entry.text||'',
+            resolved:n.resolved?'1':'',
+            parentId,
+            editedAt:Date.now(),
+          };
+          try{
+            await appendPerRowTab(NOTES_TAB,NOTES_HEADERS,row);
+            report.notes++;
+          }catch(e){report.errors.push('note: '+e.message)}
+        }
+      }
+    }else{
+      console.log(`_Notes tab already has ${existingNotes.length} rows — skipping migration`);
+    }
+
+    // Migrate team
+    const existingTeam=await readPerRowTab(TEAM_TAB,TEAM_HEADERS);
+    if(existingTeam.length===0){
+      const team=blob.teamMembers||[];
+      for(const m of team){
+        if(!m||!m.email)continue;
+        try{
+          await persistTeamMember(m);
+          report.team++;
+        }catch(e){report.errors.push('team: '+e.message)}
+      }
+    }else{
+      console.log(`_Team tab already has ${existingTeam.length} rows — skipping migration`);
+    }
+
+    // Migrate activity
+    const existingAct=await readPerRowTab(ACTIVITY_TAB,ACTIVITY_HEADERS);
+    if(existingAct.length===0){
+      const log=blob.activityLog||[];
+      for(const a of log){
+        if(!a||!a.timestamp)continue;
+        try{
+          await persistActivity(a);
+          report.activity++;
+        }catch(e){report.errors.push('activity: '+e.message)}
+      }
+    }else{
+      console.log(`_Activity tab already has ${existingAct.length} rows — skipping migration`);
+    }
+
+    // Migrate reviewData — 836+ entries, use batched append for speed
+    const existingReview=await readPerRowTab(REVIEW_TAB,REVIEW_HEADERS);
+    if(existingReview.length===0){
+      const rd=blob.reviewData||{};
+      const keys=Object.keys(rd);
+      if(keys.length){
+        // Ensure tab exists before batch write
+        await ensurePerRowTab(REVIEW_TAB,REVIEW_HEADERS);
+        // Batch in chunks of 500 rows per API call
+        const BATCH=500;
+        const lastCol=String.fromCharCode(64+REVIEW_HEADERS.length);
+        for(let i=0;i<keys.length;i+=BATCH){
+          const chunk=keys.slice(i,i+BATCH);
+          const values=chunk.map(k=>{
+            const rv=rd[k]||{};
+            const parts=k.split('|');
+            return [
+              k,
+              parts[0]||'',
+              parts[1]||'',
+              parts[2]||'',
+              rv.status||'',
+              rv.reviewed?'1':'',
+              rv.editedBy||'',
+              String(rv.editedAt||''),
+              JSON.stringify(rv),
+            ];
+          });
+          try{
+            await gapi.client.sheets.spreadsheets.values.append({
+              spreadsheetId:S.sheetId,
+              range:`'${REVIEW_TAB}'!A2:${lastCol}`,
+              valueInputOption:'RAW',
+              insertDataOption:'INSERT_ROWS',
+              resource:{values}
+            });
+            report.review=(report.review||0)+chunk.length;
+          }catch(e){
+            report.errors.push('review batch '+i+': '+e.message);
+          }
+        }
+      }
+    }else{
+      console.log(`_Review tab already has ${existingReview.length} rows — skipping migration`);
+    }
+
+    return {status:'success',report};
+  }catch(e){
+    console.error('Migration failed:',e);
+    return {status:'error',error:String(e),report};
+  }
+}
+window.migrateBlobToPerRow=migrateBlobToPerRow; // expose for manual triggering
+
 // ═══════════════════════════════════════════════════════════════
 // UNDO & ACTIVITY LOG
 // ═══════════════════════════════════════════════════════════════
@@ -1136,7 +1607,8 @@ function logActivity(action){
   const entry={timestamp:Date.now(),user:S.user?.name||'Unknown',action};
   S.activityLog.push(entry);
   if(S.activityLog.length>200)S.activityLog=S.activityLog.slice(-200);
-  syncSharedDataToSheet();
+  // PERSIST: single-row append to _Activity tab — no blob rewrite
+  persistActivity({timestamp:entry.timestamp,user:entry.user,action,details:''}).catch(e=>console.error('Activity persist failed:',e));
 }
 
 function syncSharedDataToSheet(){
@@ -1263,16 +1735,13 @@ async function doSyncToSheet(){
         }
       }
     }
+    // Blob excludes reviewData, descNotes, teamMembers, activityLog, idxNotes — all live in per-row tabs or have been removed.
+    // The blob only holds bookmarks, notifications, sectionOverrides, tagRenames, rules.
     const data={
-      reviewData:S.reviewData,
       bookmarks_by_user:S._allBookmarks||{},
-      notes:S.idxNotes,
-      descNotes:S.descNotes,
-      teamMembers:S.teamMembers,
       notifications:S.notifications,
       sectionOverrides:S.sectionOverrides,
       tagRenames:S.tagRenames||{},
-      activityLog:S.activityLog,
       rules:{tagDesc:RULES.tagDesc,consistency:RULES.consistency,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults},
       lastUpdated:Date.now(),
       updatedBy:S.user?.name||'unknown'
@@ -1532,7 +2001,60 @@ async function loadSharedDataFromSheet(){
     localStorage.setItem('jw_bm',JSON.stringify(S.idxBookmarks));
     localStorage.setItem('jw_notes',JSON.stringify(S.idxNotes));
     _lastSyncTime=Date.now();
-    console.log(`Loaded shared data: ${json.length} chars, updated by:`,data.updatedBy);
+    console.log(`Loaded shared data (blob): ${json.length} chars, updated by:`,data.updatedBy);
+
+    // ─── PER-ROW OVERRIDE ───
+    // If per-row tabs have data, they OVERWRITE what came from the blob.
+    // This makes per-row tabs the authoritative source for notes/team/activity/reviewData going forward.
+    try{
+      const [notesRows,teamRows,activityRows,reviewRows]=await Promise.all([
+        readPerRowTab(NOTES_TAB,NOTES_HEADERS),
+        readPerRowTab(TEAM_TAB,TEAM_HEADERS),
+        readPerRowTab(ACTIVITY_TAB,ACTIVITY_HEADERS),
+        readPerRowTab(REVIEW_TAB,REVIEW_HEADERS),
+      ]);
+      if(notesRows.length){
+        S.descNotes=await loadNotesFromPerRowTab();
+        console.log(`Per-row load: ${notesRows.length} note rows, ${Object.keys(S.descNotes).length} threads`);
+      }
+      if(teamRows.length){
+        const merged=new Map();
+        // Start with local
+        (S.teamMembers||[]).forEach(m=>{if(m.email)merged.set(m.email,m)});
+        // Per-row wins
+        const fromSheet=await loadTeamFromPerRowTab();
+        fromSheet.forEach(m=>{
+          if(!m.email)return;
+          const ex=merged.get(m.email);
+          if(!ex||(m.lastSeen||0)>=(ex.lastSeen||0))merged.set(m.email,m);
+        });
+        S.teamMembers=[...merged.values()];
+        console.log(`Per-row load: ${teamRows.length} team members`);
+      }
+      if(activityRows.length){
+        S.activityLog=await loadActivityFromPerRowTab(200);
+        console.log(`Per-row load: ${activityRows.length} activity rows`);
+      }
+      if(reviewRows.length){
+        // Per-row reviewData replaces whatever came from blob
+        const fromSheet=await loadReviewFromPerRowTab();
+        // Merge with local: per-entry, whichever has newer editedAt wins
+        const merged={};
+        Object.keys(fromSheet).forEach(k=>{merged[k]=fromSheet[k]});
+        Object.keys(S.reviewData||{}).forEach(k=>{
+          const lv=S.reviewData[k], rv=merged[k];
+          if(!rv){merged[k]=lv;return}
+          const lt=lv?.editedAt||0, rt=rv?.editedAt||0;
+          if(lt>rt)merged[k]=lv;
+        });
+        S.reviewData=merged;
+        console.log(`Per-row load: ${reviewRows.length} review entries`);
+      }
+    }catch(perRowErr){
+      console.warn('Per-row load failed (falling back to blob data):',perRowErr);
+    }
+    // ─── END PER-ROW OVERRIDE ───
+
     // Record last-loaded counts — used as a loss-prevention baseline for future syncs
     _lastLoadedCounts={
       reviewData:Object.keys(S.reviewData||{}).length,
@@ -1999,11 +2521,12 @@ function registerTeamMember(){
   if(!S.user?.email)return;
   if(!Array.isArray(S.teamMembers))S.teamMembers=[];
   const existing=S.teamMembers.find(m=>m.email===S.user.email);
-  if(existing){existing.name=S.user.name;existing.lastSeen=Date.now()}
-  else{S.teamMembers.push({name:S.user.name,email:S.user.email,lastSeen:Date.now()})}
+  const member={name:S.user.name,email:S.user.email,lastSeen:Date.now(),joinedAt:existing?.joinedAt||Date.now(),role:existing?.role||'member'};
+  if(existing){existing.name=S.user.name;existing.lastSeen=member.lastSeen}
+  else{S.teamMembers.push(member)}
   console.log('Team members registered:',S.teamMembers.map(m=>m.name));
-  // Force immediate sync (bypass debounce) so team members are persisted
-  doSyncToSheet();
+  // PERSIST: single-row upsert to _Team tab — no blob rewrite
+  persistTeamMember(member).catch(e=>console.error('Team persist failed:',e));
 }
 
 function getMyNotifications(){
@@ -2100,8 +2623,8 @@ function rebuildTeamFromActivityLog(){
   });
   const rebuilt=[...seen.values()];
   S.teamMembers=rebuilt;
-  // Force a sync so the rebuilt list is saved to the sheet
-  syncSharedDataToSheet();
+  // PERSIST each member to _Team tab — no blob rewrite
+  rebuilt.forEach(m=>{persistTeamMember(m).catch(()=>{})});
   console.log('Rebuilt team from activity log:',rebuilt);
   return rebuilt;
 }
@@ -2132,7 +2655,8 @@ function restoreKnownTeam(){
     }
   });
   S.teamMembers=[...byEmail.values()];
-  syncSharedDataToSheet();
+  // PERSIST each member to _Team tab — no blob rewrite
+  S.teamMembers.forEach(m=>{persistTeamMember(m).catch(()=>{})});
   console.log('Restored known team:',S.teamMembers);
   toast('Team restored — '+S.teamMembers.length+' members','success');
   render();
@@ -2541,7 +3065,11 @@ async function forgetEditHistory(entryName,segType,rowIdx){
 // Review data key: entryName|segType|rowIdx
 function rvKey(entryName,segType,rowIdx){return entryName+'|'+segType+'|'+rowIdx}
 function getRV(key){return S.reviewData[key]||null}
-function setRV(key,data){S.reviewData[key]=data;saveRV()}
+function setRV(key,data){
+  S.reviewData[key]=data;
+  saveRV(); // writes to localStorage only
+  persistReviewEntry(key,data); // writes single row to _Review tab (debounced)
+}
 function delRV(key){delete S.reviewData[key];saveRV()}
 
 // Check if a description-level item is reviewed
@@ -3509,6 +4037,17 @@ function buildAuditRulesText(){
 async function generateIndexTab(sectionName){
   if(!S.indexData||!S.indexData.sections[sectionName]){toast('No data for '+sectionName,'error');return}
   const tabName='Index - '+sectionName;
+
+  // Ensure baseline is loaded — retry if missing. Baseline is used to populate
+  // "Original Description" column. Without it, that column comes out blank.
+  if(!S.originalsBaseline||!S.originalsBaseline.byClipId){
+    console.log('Baseline not in memory — retrying load before export');
+    try{await loadBaselineFromSheet()}catch(e){console.warn('Baseline load retry failed:',e)}
+    if(!S.originalsBaseline||!S.originalsBaseline.byClipId){
+      const ok=await customConfirm('⚠ Baseline data is not loaded. The "Original Description" column will be blank.\n\nContinue anyway?');
+      if(!ok)return;
+    }
+  }
   
   // If tab already exists, delete it first
   const existingTabs=(S.sheetMeta?.tabs||[]).map(t=>t.title);
@@ -4959,8 +5498,12 @@ function rDash(){
   h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">📋 Activity Log</h4>';
   const isAdmin=ADMIN_EMAILS.includes(S.user?.email?.toLowerCase());
   const myName=S.user?.name||'Unknown';
-  const myActivity=[...S.activityLog].filter(e=>e.user===myName).reverse().slice(0,50);
-  const allActivity=[...S.activityLog].reverse().slice(0,50);
+  // Initial limit shown — user can "Load more" to see older. Default 50, expandable.
+  if(!S.activityShowLimit)S.activityShowLimit=50;
+  const myFull=[...S.activityLog].filter(e=>e.user===myName).reverse();
+  const allFull=[...S.activityLog].reverse();
+  const myActivity=myFull.slice(0,S.activityShowLimit);
+  const allActivity=allFull.slice(0,S.activityShowLimit);
   if(isAdmin){
     h+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
     h+=`<button class="btn btn-sm ${!S.showAllActivity?'btn-gold':''}" id="activity-mine" style="font-size:9px">My Activity</button>`;
@@ -4968,6 +5511,7 @@ function rDash(){
     h+=`</div>`;
   }
   const displayLog=isAdmin&&S.showAllActivity?allActivity:myActivity;
+  const fullLen=(isAdmin&&S.showAllActivity?allFull:myFull).length;
   if(displayLog.length){
     h+='<div style="max-height:250px;overflow-y:auto;font-size:10px">';
     displayLog.forEach(entry=>{
@@ -4980,6 +5524,16 @@ function rDash(){
       h+=`</div>`;
     });
     h+='</div>';
+    h+=`<div style="display:flex;gap:6px;margin-top:6px;align-items:center;font-size:10px;color:var(--tx-3)">`;
+    h+=`<span>Showing ${displayLog.length} of ${fullLen} loaded.</span>`;
+    if(displayLog.length<fullLen){
+      h+=`<button class="btn btn-sm" id="activity-load-more" style="font-size:9px;padding:2px 8px">Load more (+200)</button>`;
+    }
+    // Offer "Load older from sheet" if we may have more on the server than in memory
+    if(S.connected){
+      h+=`<button class="btn btn-sm" id="activity-load-sheet" style="font-size:9px;padding:2px 8px" title="Fetch older entries from _Activity sheet">Load older from sheet</button>`;
+    }
+    h+=`</div>`;
   }else{
     h+='<div style="font-size:11px;color:var(--tx-3)">No activity yet.</div>';
   }
@@ -5252,7 +5806,6 @@ function rIndex(){
 
     entries.forEach(e=>{
       const isBM=S.idxBookmarks[e.name];
-      const note=S.idxNotes[e.name];
       const hasEmpty=e.results.some(r=>!r.desc?.trim());
       const tooMany=e.results.length>=12;
       const entryDone=isEntryReviewed(e);
@@ -5817,7 +6370,8 @@ function rSetup(app){
   <div style="text-align:left;margin-top:14px"><label style="font-size:11px;color:var(--tx-3);font-weight:500">Code <span style="color:var(--tx-4);font-weight:400">(optional — leave blank to work without AI features)</span></label><input class="s-input" id="ik" type="password" placeholder="Enter team code (optional)" value="${esc(S.claudeKey)}" style="margin-top:4px"></div>
   <div class="setup-err" id="se"></div>
   <button class="btn btn-gold" id="btn-con" style="width:100%;height:42px;font-size:14px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center">Sign In</button></div></div>`;
-  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadBaselineFromSheet();await loadTab(0);registerTeamMember();startAutoRefresh();render();runDailyBackupIfDue().then(res=>{if(res.status==='success')console.log('Daily backup created:',res.tabName);});if(!k)toast('Signed in without AI features. Add a code in settings to enable AI.','info')}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
+  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadBaselineFromSheet();await loadTab(0);registerTeamMember();startAutoRefresh();render();runDailyBackupIfDue().then(res=>{if(res.status==='success')console.log('Daily backup created:',res.tabName);});// Run migration in background — idempotent, only writes to empty tabs
+migrateBlobToPerRow().then(res=>{if(res.status==='success'&&(res.report.notes||res.report.team||res.report.activity)){console.log('Migration complete:',res.report);toast(`Migrated ${res.report.notes} notes, ${res.report.team} team, ${res.report.activity} activity entries to per-row tabs`,'success')}});if(!k)toast('Signed in without AI features. Add a code in settings to enable AI.','info')}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -6010,18 +6564,31 @@ function bindAll(){
       const msg=`Merge will ADD:\n  ${newNoteKeys.length} new notes\n  ${newTeamEmails.length} new team members\n  ${newLogEntries.length} new activity log entries\n\nExisting entries will NOT be changed. OK to proceed?`;
       const ok=await customConfirm(msg);
       if(!ok)return;
-      // Merge notes — only add keys that don't exist
+      // Merge notes — only add keys that don't exist; persist each one to _Notes tab
       if(!S.descNotes)S.descNotes={};
-      newNoteKeys.forEach(k=>{S.descNotes[k]=incomingNotes[k]});
+      for(const k of newNoteKeys){
+        S.descNotes[k]=incomingNotes[k];
+        // Persist each individual note in the thread
+        const thread=incomingNotes[k]?.thread||[];
+        const parentId=genId();
+        for(const entry of thread){
+          persistNote(k,entry,parentId).catch(e=>console.error('Merge note persist failed:',e));
+        }
+      }
       // Merge team — only add emails that don't exist
       if(!Array.isArray(S.teamMembers))S.teamMembers=[];
-      newTeamEmails.forEach(m=>{S.teamMembers.push(m)});
+      for(const m of newTeamEmails){
+        S.teamMembers.push(m);
+        persistTeamMember(m).catch(e=>console.error('Merge team persist failed:',e));
+      }
       // Merge activity log — append new entries, re-sort chronologically
       if(!Array.isArray(S.activityLog))S.activityLog=[];
-      newLogEntries.forEach(e=>{S.activityLog.push(e)});
+      for(const e of newLogEntries){
+        S.activityLog.push(e);
+        persistActivity({timestamp:e.timestamp,user:e.user||'Unknown',action:e.action||'',details:e.details||''}).catch(err=>console.error('Merge activity persist failed:',err));
+      }
       S.activityLog.sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
-      // Also, crucially, update _lastLoadedCounts to include the merged content so the guard
-      // doesn't falsely trigger on the sync that will follow
+      // Update _lastLoadedCounts so the blob-sync guard doesn't falsely trigger
       _lastLoadedCounts={
         reviewData:Object.keys(S.reviewData||{}).length,
         descNotes:Object.keys(S.descNotes||{}).length,
@@ -6030,9 +6597,6 @@ function bindAll(){
         activityLog:(S.activityLog||[]).length,
         bookmarks:Object.keys(S._allBookmarks||{}).length,
       };
-      // Force sync
-      syncSharedDataToSheet();
-      flushSyncImmediate();
       toast(`Merged: ${newNoteKeys.length} notes, ${newTeamEmails.length} team, ${newLogEntries.length} log entries`,'success');
       logActivity(`Merged from file: ${newNoteKeys.length} notes, ${newTeamEmails.length} team, ${newLogEntries.length} log entries`);
       render();
@@ -6096,6 +6660,36 @@ function bindAll(){
   // Activity log toggle (admin)
   on('#activity-mine','click',()=>{const sc=$('.content')?.scrollTop;S.showAllActivity=false;render();requestAnimationFrame(()=>{const c=$('.content');if(c&&sc)c.scrollTop=sc})});
   on('#activity-all','click',()=>{const sc=$('.content')?.scrollTop;S.showAllActivity=true;render();requestAnimationFrame(()=>{const c=$('.content');if(c&&sc)c.scrollTop=sc})});
+  on('#activity-load-more','click',()=>{
+    const sc=$('.content')?.scrollTop;
+    S.activityShowLimit=(S.activityShowLimit||50)+200;
+    render();
+    requestAnimationFrame(()=>{const c=$('.content');if(c&&sc)c.scrollTop=sc});
+  });
+  on('#activity-load-sheet','click',async()=>{
+    const btn=$('#activity-load-sheet');
+    if(btn){btn.disabled=true;btn.textContent='Loading…';}
+    try{
+      // Read ALL activity rows from sheet (no limit)
+      const all=await loadActivityFromPerRowTab(0);
+      if(all&&all.length){
+        S.activityLog=all;
+        // Also bump display limit so user sees more
+        S.activityShowLimit=Math.max(S.activityShowLimit||50,all.length);
+        toast(`Loaded ${all.length} activity entries from sheet`,'success');
+        const sc=$('.content')?.scrollTop;
+        render();
+        requestAnimationFrame(()=>{const c=$('.content');if(c&&sc)c.scrollTop=sc});
+      }else{
+        toast('No additional activity entries on sheet','info');
+        if(btn){btn.disabled=false;btn.textContent='Load older from sheet';}
+      }
+    }catch(e){
+      console.error('Load sheet activity failed:',e);
+      toast('Load failed: '+(e?.message||e),'error');
+      if(btn){btn.disabled=false;btn.textContent='Load older from sheet';}
+    }
+  });
   on('#rerun-consistency','click',()=>runConsistencyCheck());
   if(!S.consistencyDismissed)S.consistencyDismissed={};
   $$('[data-dismiss-issue]').forEach(el=>el.onclick=()=>{
@@ -6696,7 +7290,13 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
         if(pattern.test(text))mentions.push(tm);
       });
     }
-    S.descNotes[key].thread.push({user:S.user?.name||'Unknown',text,timestamp:Date.now(),mentions:mentions.map(m=>m.email)});
+    const noteEntry={user:S.user?.name||'Unknown',text,timestamp:Date.now(),mentions:mentions.map(m=>m.email)};
+    S.descNotes[key].thread.push(noteEntry);
+    // PERSIST: write to _Notes tab as a single new row — no blob rewrite
+    persistNote(key,noteEntry).then(id=>{
+      noteEntry.id=id;
+      render(); // refresh UI with assigned id
+    }).catch(e=>console.error('Note persist failed:',e));
     // Send notifications for each mention
     console.log('Mentions detected:',mentions.map(m=>m.name+' ('+m.email+')'));
     mentions.forEach(member=>{
@@ -6704,7 +7304,6 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
         sendMention(member.email,S.user?.name||'Unknown',key,S.notePopup.title,text);
       }
     });
-    syncSharedDataToSheet();
     render();
     setTimeout(()=>{const i=$('#note-input');if(i)i.focus();const b=$('#note-body');if(b)b.scrollTop=b.scrollHeight},50);
   });
@@ -6778,9 +7377,13 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
     const idx=+el.dataset.notedelIdx;
     const key=S.notePopup.key;
     if(!S.descNotes[key]||!S.descNotes[key].thread)return;
+    const deletedNote=S.descNotes[key].thread[idx];
     S.descNotes[key].thread.splice(idx,1);
     if(S.descNotes[key].thread.length===0)delete S.descNotes[key];
-    syncSharedDataToSheet();
+    // PERSIST: remove single note row — no blob rewrite
+    if(deletedNote&&deletedNote.id){
+      deleteNotePersist(deletedNote.id).catch(e=>console.error('Note delete persist failed:',e));
+    }
     render();
   });
 
@@ -6836,9 +7439,13 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
     const key=raw.slice(0,lastPipe);
     const idx=+raw.slice(lastPipe+1);
     if(!S.descNotes[key]||!S.descNotes[key].thread)return;
+    const deletedNote=S.descNotes[key].thread[idx];
     S.descNotes[key].thread.splice(idx,1);
     if(S.descNotes[key].thread.length===0)delete S.descNotes[key];
-    syncSharedDataToSheet();
+    // PERSIST: delete single row — no blob rewrite
+    if(deletedNote&&deletedNote.id){
+      deleteNotePersist(deletedNote.id).catch(e=>console.error('Note delete persist failed:',e));
+    }
     render();
   });
   // Resolve entire comment thread
@@ -6848,7 +7455,11 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
     S.descNotes[key].resolved=true;
     S.descNotes[key].resolvedBy=S.user?.name||'Unknown';
     S.descNotes[key].resolvedAt=Date.now();
-    syncSharedDataToSheet();
+    // PERSIST: update each row in this thread to set resolved=1
+    const thread=S.descNotes[key].thread||[];
+    thread.forEach(n=>{
+      if(n.id)updateNotePersist(n.id,{resolved:'1'}).catch(e=>console.error('Resolve persist failed:',e));
+    });
     render();
   });
   // Reopen resolved comment
@@ -6858,15 +7469,23 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
     delete S.descNotes[key].resolved;
     delete S.descNotes[key].resolvedBy;
     delete S.descNotes[key].resolvedAt;
-    syncSharedDataToSheet();
+    // PERSIST: update each row in this thread to clear resolved
+    const thread=S.descNotes[key].thread||[];
+    thread.forEach(n=>{
+      if(n.id)updateNotePersist(n.id,{resolved:''}).catch(e=>console.error('Reopen persist failed:',e));
+    });
     render();
   });
   // Delete entire comment thread
   $$('[data-note-delete]').forEach(el=>el.onclick=async()=>{
     const key=el.dataset.noteDelete;
     if(!await customConfirm('Delete this entire comment thread?'))return;
+    const thread=(S.descNotes[key]?.thread)||[];
     delete S.descNotes[key];
-    syncSharedDataToSheet();
+    // PERSIST: delete each row in this thread individually
+    thread.forEach(n=>{
+      if(n.id)deleteNotePersist(n.id).catch(e=>console.error('Thread delete persist failed:',e));
+    });
     render();
   });
   // Bookmark sidebar jump — switch to index view, search for the entry
