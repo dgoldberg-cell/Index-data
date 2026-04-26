@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JEM Clip Summary Editor</title>
+<style>
+  :root {
+    --bg: #f5f0e8;
+    --bg2: #ede8dc;
+    --bg3: #e4ddd0;
+    --panel: #faf7f2;
+    --panel2: #f0ece3;
+    --border: #d4c9b5;
+    --border2: #c4b89f;
+    --tx: #2a2118;
+    --tx2: #5a4e3a;
+    --tx3: #8a7a62;
+    --tx4: #b0a088;
+    --accent: #8b4513;
+    --accent2: #a0522d;
+    --accent-light: #f0e0d0;
+    --green: #4a7c59;
+    --green-light: #e0f0e4;
+    --yellow: #c8960a;
+    --yellow-light: #fdf3d0;
+    --red: #9b3a2a;
+    --red-light: #fbe8e4;
+    --blue: #2a5a8b;
+    --blue-light: #e0eaf8;
+    --shadow: 0 2px 8px rgba(42,33,24,0.10);
+    --shadow2: 0 4px 20px rgba(42,33,24,0.15);
+    --radius: 8px;
+    --radius2: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; background: var(--bg); color: var(--tx); min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* ── AUTH SCREEN ── */
+  #authScreen {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; align-items: center; justify-content: center; z-index: 1000;
+    flex-direction: column;
+  }
+  .auth-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius2);
+    padding: 40px 48px; text-align: center; box-shadow: var(--shadow2); max-width: 400px; width: 100%;
+  }
+  .auth-jem-logo { width: 120px; height: auto; display: block; margin: 0 auto 20px; border-radius: 8px; }
+  .auth-title { font-size: 21px; color: var(--tx); font-weight: normal; margin-bottom: 4px; }
+  .auth-sub { font-size: 11px; color: var(--tx3); margin-bottom: 24px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .auth-divider { height: 1px; background: var(--border); margin: 0 0 24px; }
+  .auth-btn {
+    background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
+    padding: 11px 26px; font-size: 13px; cursor: pointer; font-family: inherit;
+    transition: background 0.15s; display: inline-flex; align-items: center; gap: 10px;
+    box-shadow: 0 2px 6px rgba(139,69,19,0.25);
+  }
+  .auth-btn:hover { background: var(--accent2); }
+  .auth-error { color: var(--red); font-size: 12px; margin-top: 14px; }
+
+  /* ── TOP BAR ── */
+  #topBar {
+    display: none; background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 0 20px; height: 52px; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 1px 4px rgba(42,33,24,0.08);
+  }
+  .topbar-logo { font-size: 11px; letter-spacing: 2px; color: var(--tx3); text-transform: uppercase; white-space: nowrap; }
+  .topbar-title { font-size: 15px; color: var(--tx); font-weight: normal; }
+  .topbar-sep { width: 1px; height: 20px; background: var(--border); }
+  .topbar-nav { display: flex; gap: 2px; }
+  .topbar-nav-btn {
+    padding: 5px 12px; border-radius: 6px; border: none; background: none;
+    font-size: 13px; font-family: inherit; color: var(--tx2); cursor: pointer; transition: all 0.15s;
+  }
+  .topbar-nav-btn:hover { background: var(--bg2); }
+  .topbar-nav-btn.active { background: var(--accent-light); color: var(--accent); font-weight: bold; }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .user-chip { font-size: 12px; color: var(--tx3); display: flex; align-items: center; gap: 6px; }
+  .user-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--accent-light); color: var(--accent); font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+  .btn { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); font-size: 12px; font-family: inherit; cursor: pointer; color: var(--tx2); transition: all 0.15s; }
+  .btn:hover { background: var(--bg2); border-color: var(--border2); }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { background: var(--accent2); border-color: var(--accent2); }
+  .btn-green { background: var(--green); color: #fff; border-color: var(--green); }
+  .btn-green:hover { background: #3d6b4a; border-color: #3d6b4a; }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+  /* ── MAIN LAYOUT ── */
+  #appShell { display: none; flex: 1; flex-direction: column; }
+
+  /* ── QUEUE VIEW ── */
+  #queueView { flex: 1; display: flex; gap: 0; overflow: hidden; height: calc(100vh - 52px); }
+
+  .queue-sidebar {
+    width: 320px; min-width: 280px; background: var(--panel); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .queue-controls { padding: 14px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+  .search-input {
+    width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; font-family: inherit; background: var(--bg); color: var(--tx);
+    outline: none; transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .filter-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .filter-chip {
+    padding: 3px 9px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg2);
+    font-size: 11px; font-family: inherit; cursor: pointer; color: var(--tx2); transition: all 0.15s; white-space: nowrap;
+  }
+  .filter-chip:hover { border-color: var(--border2); }
+  .filter-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .batch-bar { display: flex; gap: 6px; align-items: center; }
+  .clip-count { font-size: 11px; color: var(--tx3); margin-left: auto; }
+
+  .queue-list { flex: 1; overflow-y: auto; }
+  .queue-item {
+    padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
+    transition: background 0.12s; display: flex; gap: 10px; align-items: flex-start;
+  }
+  .queue-item:hover { background: var(--bg2); }
+  .queue-item.selected { background: var(--accent-light); border-left: 3px solid var(--accent); }
+  .queue-item-thumb { width: 56px; height: 36px; border-radius: 4px; object-fit: cover; background: var(--bg3); flex-shrink: 0; }
+  .queue-item-thumb-placeholder { width: 56px; height: 36px; border-radius: 4px; background: var(--bg3); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--tx4); }
+  .queue-item-body { flex: 1; min-width: 0; }
+  .queue-item-title { font-size: 12px; font-weight: bold; color: var(--tx); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .queue-item-meta { font-size: 10px; color: var(--tx3); margin-top: 2px; }
+  .queue-item-preview { font-size: 11px; color: var(--tx2); margin-top: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 10px; font-size: 10px; white-space: nowrap; flex-shrink: 0;
+  }
+  .status-unprocessed { background: var(--bg3); color: var(--tx3); }
+  .status-flagged { background: var(--red-light); color: var(--red); }
+  .status-draft { background: var(--yellow-light); color: var(--yellow); }
+  .status-approved { background: var(--green-light); color: var(--green); }
+  .queue-item-cb { margin-top: 2px; accent-color: var(--accent); flex-shrink: 0; }
+
+  /* ── DETAIL PANEL ── */
+  .detail-panel {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg);
+  }
+  .detail-empty {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 12px; color: var(--tx4);
+  }
+  .detail-empty-icon { font-size: 48px; opacity: 0.4; }
+  .detail-content { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  .detail-header { display: flex; gap: 18px; align-items: flex-start; }
+  .detail-thumb { width: 140px; height: 90px; border-radius: 6px; object-fit: cover; background: var(--bg3); flex-shrink: 0; box-shadow: var(--shadow); }
+  .detail-thumb-placeholder { width: 140px; height: 90px; border-radius: 6px; background: var(--bg3); flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--tx4); font-size: 12px; }
+  .detail-meta { flex: 1; }
+  .detail-title { font-size: 18px; color: var(--tx); line-height: 1.3; margin-bottom: 6px; }
+  .detail-meta-row { font-size: 12px; color: var(--tx3); display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+  .detail-meta-item { display: flex; align-items: center; gap: 4px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius2);
+    overflow: hidden; box-shadow: var(--shadow);
+  }
+  .card-header {
+    padding: 10px 16px; background: var(--panel2); border-bottom: 1px solid var(--border);
+    font-size: 12px; font-weight: bold; color: var(--tx2); letter-spacing: 0.5px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-body { padding: 16px; }
+
+  .orig-text { font-size: 13px; color: var(--tx2); line-height: 1.7; background: var(--bg2); border-radius: 6px; padding: 12px; }
+  .draft-textarea {
+    width: 100%; min-height: 120px; font-size: 13px; font-family: 'Georgia', serif; color: var(--tx);
+    line-height: 1.7; border: 1px solid var(--border); border-radius: 6px; padding: 12px;
+    background: var(--bg); resize: vertical; outline: none; transition: border-color 0.15s;
+  }
+  .draft-textarea:focus { border-color: var(--accent); }
+  .word-count { font-size: 11px; color: var(--tx4); text-align: right; margin-top: 4px; }
+  .word-count.over { color: var(--red); }
+
+  .action-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 12px 16px; background: var(--panel2); border-top: 1px solid var(--border); }
+  .action-bar-right { margin-left: auto; display: flex; gap: 8px; }
+
+  .flag-banner { background: var(--red-light); border: 1px solid var(--red); border-radius: 8px; padding: 12px 16px; font-size: 13px; color: var(--red); display: flex; gap: 10px; align-items: flex-start; }
+  .flag-icon { font-size: 18px; flex-shrink: 0; }
+
+  /* ── AI CHAT ── */
+  .chat-panel { display: flex; flex-direction: column; }
+  .chat-messages { min-height: 120px; max-height: 280px; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .chat-msg { display: flex; gap: 8px; }
+  .chat-msg-avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--accent-light); color: var(--accent); font-size: 10px; font-weight: bold; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .chat-msg-avatar.ai { background: var(--blue-light); color: var(--blue); }
+  .chat-msg-body { flex: 1; font-size: 13px; color: var(--tx); line-height: 1.6; background: var(--bg2); border-radius: 8px; padding: 8px 12px; }
+  .chat-msg-body.ai { background: var(--blue-light); }
+  .chat-input-row { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
+  .chat-input { flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; background: var(--bg); color: var(--tx); outline: none; }
+  .chat-input:focus { border-color: var(--accent); }
+  .use-as-draft-btn { font-size: 11px; color: var(--accent); cursor: pointer; border: 1px solid var(--accent); border-radius: 4px; padding: 2px 6px; background: var(--accent-light); display: inline-block; margin-top: 6px; }
+  .use-as-draft-btn:hover { background: var(--accent); color: #fff; }
+  .transcript-note { font-size: 11px; color: var(--green); margin-top: 4px; }
+
+  /* ── PROGRESS BAR ── */
+  .progress-bar-wrap { background: var(--bg3); border-radius: 4px; height: 6px; overflow: hidden; margin: 8px 0; }
+  .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s; }
+  .progress-label { font-size: 11px; color: var(--tx3); }
+
+  /* ── ATTENTION QUEUE ── */
+  #attentionView { flex: 1; overflow-y: auto; padding: 24px; }
+  .attention-grid { display: flex; flex-direction: column; gap: 12px; max-width: 900px; margin: 0 auto; }
+  .attention-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius2);
+    padding: 16px; display: flex; gap: 14px; align-items: flex-start; cursor: pointer;
+    transition: box-shadow 0.15s; box-shadow: var(--shadow);
+  }
+  .attention-card:hover { box-shadow: var(--shadow2); }
+  .attention-thumb { width: 80px; height: 52px; border-radius: 6px; object-fit: cover; background: var(--bg3); flex-shrink: 0; }
+  .attention-body { flex: 1; }
+  .attention-title { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
+  .attention-flag { font-size: 12px; color: var(--red); margin-bottom: 6px; }
+  .attention-orig { font-size: 12px; color: var(--tx3); font-style: italic; }
+
+  /* ── EXPORT VIEW ── */
+  #exportView { flex: 1; overflow-y: auto; padding: 24px; }
+  .export-header { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; max-width: 1000px; margin-left: auto; margin-right: auto; }
+  .export-title { font-size: 20px; color: var(--tx); }
+  .export-list { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  .export-item { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius2); padding: 16px; display: flex; gap: 16px; box-shadow: var(--shadow); }
+  .export-thumb { width: 100px; height: 64px; border-radius: 6px; object-fit: cover; background: var(--bg3); flex-shrink: 0; }
+  .export-body { flex: 1; }
+  .export-clip-title { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
+  .export-meta { font-size: 11px; color: var(--tx3); margin-bottom: 8px; }
+  .export-summary { font-size: 13px; color: var(--tx); line-height: 1.7; margin-bottom: 10px; font-style: italic; }
+  .tag-bubbles { display: flex; gap: 5px; flex-wrap: wrap; }
+  .tag-bubble { padding: 2px 9px; border-radius: 20px; background: var(--bg3); border: 1px solid var(--border); font-size: 10px; color: var(--tx2); }
+
+  /* ── BOOK VIEW ── */
+  #bookView { flex: 1; overflow-y: auto; background: var(--bg2); padding: 32px; }
+  .book-controls { display: flex; gap: 10px; align-items: center; margin-bottom: 24px; justify-content: center; }
+  .book-pages { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 0; }
+  .book-page {
+    background: #fefcf7; border: 1px solid #d4c9b5; box-shadow: 0 4px 24px rgba(42,33,24,0.18), 0 1px 4px rgba(42,33,24,0.08);
+    padding: 60px 60px 80px; margin-bottom: 40px; border-radius: 2px; position: relative;
+    min-height: 700px;
+  }
+  .book-page::before { content: ''; position: absolute; inset: 3px; border: 0.5px solid #e0d8c8; border-radius: 1px; pointer-events: none; }
+  .book-page-header { text-align: center; border-bottom: 2px solid var(--accent); padding-bottom: 12px; margin-bottom: 28px; }
+  .book-page-header-title { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--tx3); }
+  .book-entries { columns: 2; column-gap: 36px; }
+  .book-entry { break-inside: avoid; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+  .book-entry:last-child { border-bottom: none; }
+  .book-entry-inner { display: flex; gap: 10px; }
+  .book-entry-thumb { width: 72px; height: 46px; border-radius: 4px; object-fit: cover; background: var(--bg3); flex-shrink: 0; }
+  .book-entry-content { flex: 1; }
+  .book-entry-title { font-size: 11px; font-weight: bold; color: var(--tx); margin-bottom: 3px; line-height: 1.3; }
+  .book-entry-meta { font-size: 9px; color: var(--tx3); margin-bottom: 6px; }
+  .book-entry-summary { font-size: 10px; color: var(--tx); line-height: 1.6; font-family: 'Georgia', serif; }
+  .book-entry-tags { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 6px; }
+  .book-tag { font-size: 8px; padding: 1px 6px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--border); color: var(--tx3); }
+  .book-page-footer { position: absolute; bottom: 24px; left: 60px; right: 60px; display: flex; justify-content: space-between; font-size: 9px; color: var(--tx4); border-top: 0.5px solid var(--border); padding-top: 8px; }
+
+  /* ── LOADING OVERLAY ── */
+  #loadingOverlay {
+    position: fixed; inset: 0; background: rgba(245,240,232,0.92); z-index: 500;
+    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+  }
+  .loading-spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 14px; color: var(--tx3); }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--tx); color: var(--bg); padding: 10px 20px; border-radius: 8px;
+    font-size: 13px; z-index: 999; transition: transform 0.25s; pointer-events: none;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { background: var(--green); }
+  #toast.error { background: var(--red); }
+
+  /* ── MISC ── */
+  .divider { height: 1px; background: var(--border); margin: 4px 0; }
+  .empty-state { text-align: center; padding: 40px; color: var(--tx4); font-size: 14px; }
+  .spinning { animation: spin 0.8s linear infinite; display: inline-block; }
+
+  @media print {
+    #topBar, .queue-sidebar, .book-controls { display: none !important; }
+    #bookView { padding: 0; background: none; }
+    .book-page { box-shadow: none; border: none; margin: 0; page-break-after: always; }
+  }
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="authScreen">
+  <div class="auth-card">
+    <img class="auth-jem-logo" src="data:image/png;base64,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" alt="JEM">
+    <div class="auth-title">Clip Summary Editor</div>
+    <div class="auth-sub">Sichos Rewriting Workspace</div>
+    <div class="auth-divider"></div>
+    <div style="text-align:left;margin-bottom:18px">
+      <label style="font-size:11px;color:var(--tx3);letter-spacing:0.5px;display:block;margin-bottom:5px">
+        Code <span style="color:var(--tx4);font-weight:normal">(optional — leave blank to work without AI features)</span>
+      </label>
+      <input id="teamCodeInput" type="password" placeholder="Enter team code"
+        style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--bg);color:var(--tx);outline:none;transition:border-color 0.15s"
+        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+    </div>
+    <button class="auth-btn" onclick="startAuth()" style="width:100%;justify-content:center;">Sign In</button>
+    <div id="authError" class="auth-error"></div>
+  </div>
+</div>
+
+<!-- LOADING OVERLAY -->
+<div id="loadingOverlay" style="display:none;">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loadingText">Loading clips…</div>
+</div>
+
+<!-- TOP BAR -->
+<div id="topBar">
+  <div class="topbar-logo">JEM</div>
+  <div class="topbar-sep"></div>
+  <div class="topbar-title">Clip Summary Editor</div>
+  <div class="topbar-sep"></div>
+  <div class="topbar-nav">
+    <button class="topbar-nav-btn active" data-view="queue" onclick="switchView('queue',this)">📋 Queue</button>
+    <button class="topbar-nav-btn" data-view="attention" onclick="switchView('attention',this)">🚩 Needs Attention <span id="attentionCount" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:0 5px;font-size:10px;margin-left:2px"></span></button>
+    <button class="topbar-nav-btn" data-view="export" onclick="switchView('export',this)">📄 Export</button>
+    <button class="topbar-nav-btn" data-view="book" onclick="switchView('book',this)">📖 Book View</button>
+  </div>
+  <div class="topbar-right">
+    <div class="user-chip">
+      <div class="user-avatar" id="userAvatar">?</div>
+      <span id="userEmail" style="font-size:11px;color:var(--tx3)"></span>
+    </div>
+    <button class="btn btn-sm" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<!-- APP SHELL -->
+<div id="appShell">
+
+  <!-- QUEUE VIEW -->
+  <div id="queueView" style="display:none;">
+    <div class="queue-sidebar">
+      <div class="queue-controls">
+        <input class="search-input" id="searchInput" placeholder="Search clips…" oninput="filterQueue()">
+        <div class="filter-row" id="filterRow">
+          <button class="filter-chip active" data-status="all" onclick="setFilter('all',this)">All</button>
+          <button class="filter-chip" data-status="unprocessed" onclick="setFilter('unprocessed',this)">⬜ Unprocessed</button>
+          <button class="filter-chip" data-status="flagged" onclick="setFilter('flagged',this)">🚩 Flagged</button>
+          <button class="filter-chip" data-status="draft" onclick="setFilter('draft',this)">🟡 Draft</button>
+          <button class="filter-chip" data-status="approved" onclick="setFilter('approved',this)">✅ Approved</button>
+        </div>
+        <div class="batch-bar">
+          <button class="btn btn-sm" onclick="selectAll()">Select All</button>
+          <button class="btn btn-sm btn-primary" onclick="runBatch()" id="batchBtn">▶ Run AI on Selected</button>
+          <span class="clip-count" id="clipCount"></span>
+        </div>
+        <div id="batchProgress" style="display:none;">
+          <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+          <div class="progress-label" id="progressLabel"></div>
+        </div>
+      </div>
+      <div class="queue-list" id="queueList"></div>
+    </div>
+    <div class="detail-panel" id="detailPanel">
+      <div class="detail-empty" id="detailEmpty">
+        <div class="detail-empty-icon">🎬</div>
+        <div style="font-size:14px;color:var(--tx3)">Select a clip to begin editing</div>
+      </div>
+      <div id="detailContent" style="display:none; flex:1; overflow-y:auto; padding:24px; flex-direction:column; gap:20px;"></div>
+    </div>
+  </div>
+
+  <!-- ATTENTION VIEW -->
+  <div id="attentionView" style="display:none;">
+    <div class="attention-grid" id="attentionGrid"></div>
+  </div>
+
+  <!-- EXPORT VIEW -->
+  <div id="exportView" style="display:none;">
+    <div class="export-header">
+      <div class="export-title">Export — Sichos Summaries</div>
+      <button class="btn btn-primary" onclick="exportHTML()">⬇ Export as HTML</button>
+      <button class="btn" onclick="window.print()">🖨 Print</button>
+      <span id="exportStats" style="font-size:12px;color:var(--tx3);margin-left:8px;"></span>
+    </div>
+    <div class="export-list" id="exportList"></div>
+  </div>
+
+  <!-- BOOK VIEW -->
+  <div id="bookView" style="display:none;">
+    <div class="book-controls">
+      <span style="font-size:13px;color:var(--tx3)">Magazine Preview — Approved summaries</span>
+      <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 Print / PDF</button>
+    </div>
+    <div class="book-pages" id="bookPages"></div>
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════════
+const CONFIG = {
+  CLIENT_ID: '681634638154-h4tpr65ka07m23j39b1i9rnb33p6o26e.apps.googleusercontent.com',
+  SHEET_ID: '1xrSKAuAqKmzYX7qbU3AH3KiMq1mgLh1BBo4jUUR8hPY',
+  MAIN_TAB: 'Algolia Media Export Feb 17 2026',
+  REVIEW_TAB: 'Clip Review Data',
+  SCOPES: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email',
+  // Column indices (0-based from col A)
+  COL: {
+    DESCRIPTION: 0,   // A - original description
+    THUMBNAIL: 4,     // E
+    KEYWORDS: 6,      // G
+    PROGRAM_NUM: 15,  // P
+    DATE: 16,         // Q
+    REWRITE: 24,      // Y - approved rewrite goes here
+    TRANSCRIPT: 28,   // AC
+    CLIP_TYPE: 29,    // AD
+  },
+  CLIP_TYPE_FILTER: 'LT Sicha',
+  ENTRIES_PER_PAGE: 10, // book view
+};
+
+// Editorial prompt (rules)
+const EDITORIAL_PROMPT = `You are an editor rewriting Jewish educational video summaries for the back of the JEM Video Index book. Rewrite the summary provided according to the rules below. Output only the rewritten summary — no preamble, no explanation, no notes about what was changed.
+
+## 1. Length and structure
+Target: 90 words. Maximum: 110 words. This is a hard cap, not a guideline.
+- The output length does NOT depend on the length of the input.
+- If your draft exceeds 110 words, cut it further.
+- Short inputs may produce shorter outputs (45–70 words is fine if the source is genuinely brief). Never pad.
+- Break into short paragraphs of 2–4 sentences. No bullets, no headers.
+- Never open with a scene-setting clause like "While discussing...," "In modern times...," "During the year of..."
+- Remove closing sentences that only restate what was just said.
+
+### Flow and rhythm
+Short sentences are fine, but do not stack many 5–8 word sentences in a row.
+When two sentences express a linked idea, join them using semicolons, em dashes, colons, appositives, or participial phrases.
+Cut transitions that only announce a shift: "Furthermore," "Moreover," "In addition," "As a result," "Consequently," "That being said," "Needless to say."
+
+## 2. Voice
+- When content is addressed to the audience, shift to direct second-person ("You must...").
+- When content is narrative or explanatory, keep third-person.
+- Cut hedging filler: "of course," "similarly," "needless to say," "it goes without saying," "as we know," "in truth," "indeed."
+- Do not announce that a lesson will be drawn — just state the lesson.
+
+## 3. Cuts to make
+- Cut meta-commentary about the source text.
+- Cut parenthetical gender pairs — use a single pronoun or rephrase.
+- Cut extended analogies down to their punchline.
+- Cut redundant intensifiers.
+- When a verse repeats what is said immediately before or after it, remove the verse.
+
+## 4. Terminology and spelling
+### 4a. Sephardic spelling — mandatory conversions
+- Shabbat (not Shabbos), mitzvot (not mitzvos), Mashiach (not Moshiach)
+- Shavuot, Sukkot, Simchat Torah, bat, Beit Hamikdash, Beit Midrash, Tzemach Tzedek
+- Any Hebrew word ending "-s"/"-os" → "-t"/"-ot"
+
+### 4b. G-d
+- G-d, G-d's (never God); L-rd (never Lord); A-lmighty (never Almighty)
+
+### 4c. Other spelling
+- Torah always capitalized
+- The Rebbe, Alter Rebbe, Mitteler Rebbe, Tzemach Tzedek, Previous Rebbe
+
+### 4d. Italicization — whitelist only
+Italicize ONLY: mitzvah, mitzvot, shofar, tzaddik, tzaddikim, farbrengen, sicha, sichot, maamar, maamarim, niggun, niggunim, teshuvah, chinuch, shlichut, shliach, shluchim, yeshivah, cheder, nekudah, avodah, kabbalah, Chassid, Chassidim, Anochi, Kumatz, Aleph, bet din, halacha, halachot
+Do NOT italicize: Torah, Mashiach, Shabbat, Rebbe, Chassidus, Chassidic, Kohen, Levi, and all proper nouns.
+
+### 4e. Punctuation
+Em dash (—) only for emphasis or interruption.
+
+## 5. Tone and fidelity
+- Warm and direct.
+- Preserve all theological and halachic specifics.
+- Keep names and specific texts if the original has them.
+- Do not introduce names, texts, dates, or claims not in the source.
+
+## 6. Output format
+Output only the rewritten summary. No preamble, no explanation, no headers, no word count. Plain prose in short paragraphs. Italics with markdown asterisks (*term*).
+
+## 7. Final self-check
+1. Any word ending "-os" or "-us" that should be "-ot"? (Shabbos→Shabbat, mitzvos→mitzvot)
+2. Any "Moshiach"? → Mashiach.
+3. Any "God"? → G-d.
+4. Any italicized term not on the whitelist? → remove italics.
+5. Any whitelist term left plain? → add italics.
+6. Any "bas" in a name? → bat.
+
+## FINAL STEP — two-pass length enforcement
+Pass 1: write the draft, aim for ~90 words.
+Pass 2: if over 110 words, cut transition-only sentences, delete last sentence if it only restates, cut verbose phrases, merge short related sentences, delete parenthetical asides, then if still long delete least-central sentence.
+Output only the result of Pass 2.`;
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let S = {
+  token: null,
+  claudeKey: localStorage.getItem('jem_cse_key') || '',
+  user: null,
+  clips: [],        // all sicha clips from main tab
+  reviewData: {},   // keyed by row index: {status, originalBackup, flagReason, approvedBy, approvedAt}
+  selectedIdx: null,
+  currentView: 'queue',
+  filter: 'all',
+  search: '',
+  chatHistory: {},  // keyed by rowIdx
+  transcriptLoaded: {}, // rowIdx -> text
+  batchRunning: false,
+};
+
+// ══════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════
+function startAuth() {
+  const code = document.getElementById('teamCodeInput')?.value?.trim();
+  if (code) {
+    localStorage.setItem('jem_cse_key', code);
+    S.claudeKey = code;
+  } else {
+    localStorage.removeItem('jem_cse_key');
+    S.claudeKey = '';
+  }
+  const params = new URLSearchParams({
+    client_id: CONFIG.CLIENT_ID,
+    redirect_uri: location.origin + location.pathname,
+    response_type: 'token',
+    scope: CONFIG.SCOPES,
+    prompt: 'select_account',
+  });
+  location.href = 'https://accounts.google.com/o/oauth2/auth?' + params;
+}
+
+function handleAuthCallback() {
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const token = hash.get('access_token');
+  if (token) {
+    S.token = token;
+    history.replaceState(null, '', location.pathname);
+    return true;
+  }
+  return false;
+}
+
+async function fetchUserInfo() {
+  const r = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: 'Bearer ' + S.token }
+  });
+  if (!r.ok) throw new Error('Auth failed');
+  return r.json();
+}
+
+function signOut() {
+  S.token = null; S.user = null; S.clips = []; S.reviewData = {};
+  document.getElementById('authScreen').style.display = 'flex';
+  document.getElementById('topBar').style.display = 'none';
+  document.getElementById('appShell').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════
+// SHEETS API
+// ══════════════════════════════════════════════
+async function sheetsGet(range) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(range)}`;
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + S.token } });
+  if (r.status === 401) { signOut(); throw new Error('Session expired — please sign in again'); }
+  if (!r.ok) throw new Error('Sheets read error: ' + r.status);
+  return r.json();
+}
+
+async function sheetsSet(range, values) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
+  const r = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ range, majorDimension: 'ROWS', values })
+  });
+  if (r.status === 401) { signOut(); throw new Error('Session expired'); }
+  if (!r.ok) throw new Error('Sheets write error: ' + r.status);
+  return r.json();
+}
+
+async function sheetsBatchSet(data) {
+  // data = [{range, values}]
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values:batchUpdate`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ valueInputOption: 'RAW', data })
+  });
+  if (r.status === 401) { signOut(); throw new Error('Session expired'); }
+  if (!r.ok) throw new Error('Sheets batch write error: ' + r.status);
+  return r.json();
+}
+
+function colLetter(n) { // 0-based to A, B, ...
+  let s = '';
+  n++;
+  while (n > 0) { n--; s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26); }
+  return s;
+}
+
+function rowNum(clip) { return clip._rowNum; } // 1-based sheet row
+
+// ══════════════════════════════════════════════
+// REVIEW TAB
+// ══════════════════════════════════════════════
+const REVIEW_COLS = { ID: 0, STATUS: 1, ORIGINAL_BACKUP: 2, FLAG_REASON: 3, APPROVED_BY: 4, APPROVED_AT: 5 };
+
+async function ensureReviewTab() {
+  // Check if tab exists
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`;
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + S.token } });
+  const meta = await r.json();
+  const exists = meta.sheets?.some(s => s.properties.title === CONFIG.REVIEW_TAB);
+  if (!exists) {
+    // Create tab
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: CONFIG.REVIEW_TAB } } }] })
+    });
+    // Write header
+    await sheetsSet(`'${CONFIG.REVIEW_TAB}'!A1:F1`, [['clip_id','status','original_backup','flag_reason','approved_by','approved_at']]);
+  }
+}
+
+async function loadReviewData() {
+  try {
+    const data = await sheetsGet(`'${CONFIG.REVIEW_TAB}'!A:F`);
+    const rows = data.values || [];
+    S.reviewData = {};
+    rows.slice(1).forEach(row => {
+      if (!row[0]) return;
+      S.reviewData[row[0]] = {
+        status: row[1] || 'unprocessed',
+        originalBackup: row[2] || '',
+        flagReason: row[3] || '',
+        approvedBy: row[4] || '',
+        approvedAt: row[5] || '',
+      };
+    });
+  } catch(e) { console.warn('Review data load error:', e); }
+}
+
+async function saveReviewRow(clip) {
+  const id = String(clip._rowNum);
+  const rd = S.reviewData[id] || {};
+  // Find existing row or append
+  const data = await sheetsGet(`'${CONFIG.REVIEW_TAB}'!A:A`);
+  const rows = data.values || [];
+  let sheetRow = -1;
+  rows.forEach((r, i) => { if (r[0] === id) sheetRow = i + 1; });
+  const values = [[id, rd.status||'unprocessed', rd.originalBackup||'', rd.flagReason||'', rd.approvedBy||'', rd.approvedAt||'']];
+  if (sheetRow > 0) {
+    await sheetsSet(`'${CONFIG.REVIEW_TAB}'!A${sheetRow}:F${sheetRow}`, values);
+  } else {
+    // Append
+    const nextRow = rows.length + 1;
+    await sheetsSet(`'${CONFIG.REVIEW_TAB}'!A${nextRow}:F${nextRow}`, values);
+  }
+}
+
+// ══════════════════════════════════════════════
+// DATA LOADING
+// ══════════════════════════════════════════════
+async function loadAllData() {
+  showLoading('Loading clips…');
+  try {
+    await ensureReviewTab();
+    showLoading('Reading sheet data…');
+    // Load main tab — all columns up to AD (col 29)
+    const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!A:AD`);
+    const rows = data.values || [];
+    if (rows.length < 2) throw new Error('No data found in sheet');
+    const header = rows[0];
+    showLoading('Loading review data…');
+    await loadReviewData();
+    // Filter to Sicha clips only
+    S.clips = [];
+    rows.slice(1).forEach((row, i) => {
+      const clipType = (row[CONFIG.COL.CLIP_TYPE] || '').trim();
+      if (clipType !== CONFIG.CLIP_TYPE_FILTER) return;
+      S.clips.push({
+        _rowNum: i + 2, // 1-based, +1 for header
+        description: row[CONFIG.COL.DESCRIPTION] || '',
+        thumbnail: row[CONFIG.COL.THUMBNAIL] || '',
+        keywords: row[CONFIG.COL.KEYWORDS] || '',
+        programNum: row[CONFIG.COL.PROGRAM_NUM] || '',
+        date: row[CONFIG.COL.DATE] || '',
+        rewrite: row[CONFIG.COL.REWRITE] || '',
+        clipType: clipType,
+        // Title: try to construct from available data
+        title: row[1] || row[2] || row[3] || ('Clip #' + (i+2)),
+      });
+    });
+    hideLoading();
+    renderQueue();
+    updateAttentionCount();
+  } catch(e) {
+    hideLoading();
+    showToast('Error loading data: ' + e.message, 'error');
+    console.error(e);
+  }
+}
+
+// ══════════════════════════════════════════════
+// CLIP HELPERS
+// ══════════════════════════════════════════════
+function getStatus(clip) {
+  const rd = S.reviewData[String(clip._rowNum)];
+  return rd?.status || 'unprocessed';
+}
+
+function getReviewField(clip, field) {
+  return S.reviewData[String(clip._rowNum)]?.[field] || '';
+}
+
+function setReviewField(clip, field, val) {
+  const id = String(clip._rowNum);
+  if (!S.reviewData[id]) S.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '' };
+  S.reviewData[id][field] = val;
+}
+
+function parseTags(clip) {
+  try {
+    const raw = clip.keywords;
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.map(t => typeof t === 'object' ? (t.name || t.value || JSON.stringify(t)) : String(t)).slice(0, 20);
+    if (typeof parsed === 'object') return Object.keys(parsed).slice(0, 20);
+    return [];
+  } catch { return []; }
+}
+
+function wordCount(text) {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function statusBadgeHTML(status) {
+  const map = {
+    unprocessed: ['status-unprocessed', '⬜ Unprocessed'],
+    flagged: ['status-flagged', '🚩 Needs Attention'],
+    draft: ['status-draft', '🟡 Draft'],
+    approved: ['status-approved', '✅ Approved'],
+  };
+  const [cls, label] = map[status] || map.unprocessed;
+  return `<span class="status-badge ${cls}">${label}</span>`;
+}
+
+// ══════════════════════════════════════════════
+// QUEUE RENDER
+// ══════════════════════════════════════════════
+function filteredClips() {
+  let clips = S.clips;
+  if (S.filter !== 'all') clips = clips.filter(c => getStatus(c) === S.filter);
+  if (S.search) {
+    const q = S.search.toLowerCase();
+    clips = clips.filter(c => c.title.toLowerCase().includes(q) || c.description.toLowerCase().includes(q) || c.date.toLowerCase().includes(q) || c.programNum.toLowerCase().includes(q));
+  }
+  return clips;
+}
+
+function renderQueue() {
+  const clips = filteredClips();
+  const el = document.getElementById('queueList');
+  document.getElementById('clipCount').textContent = clips.length + ' clips';
+  el.innerHTML = clips.map(clip => {
+    const status = getStatus(clip);
+    const thumbHTML = clip.thumbnail
+      ? `<img class="queue-item-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
+      : `<div class="queue-item-thumb-placeholder">🎬</div>`;
+    const preview = (clip.rewrite || clip.description || '').substring(0, 80);
+    return `<div class="queue-item ${S.selectedIdx === clip._rowNum ? 'selected' : ''}" onclick="selectClip(${clip._rowNum})">
+      <input type="checkbox" class="queue-item-cb" data-row="${clip._rowNum}" onclick="event.stopPropagation()" onchange="updateBatchBtn()">
+      ${thumbHTML}
+      <div class="queue-item-body">
+        <div class="queue-item-title">${esc(clip.title)}</div>
+        <div class="queue-item-meta">LT ${esc(clip.programNum)} · ${esc(clip.date)}</div>
+        <div class="queue-item-preview">${esc(preview)}…</div>
+        <div style="margin-top:4px">${statusBadgeHTML(status)}</div>
+      </div>
+    </div>`;
+  }).join('') || `<div class="empty-state">No clips match current filter</div>`;
+}
+
+function filterQueue() {
+  S.search = document.getElementById('searchInput').value;
+  renderQueue();
+}
+
+function setFilter(f, btn) {
+  S.filter = f;
+  document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderQueue();
+}
+
+function selectAll() {
+  const clips = filteredClips().filter(c => getStatus(c) === 'unprocessed');
+  document.querySelectorAll('.queue-item-cb').forEach(cb => {
+    const row = parseInt(cb.dataset.row);
+    const clip = S.clips.find(c => c._rowNum === row);
+    if (clip && getStatus(clip) === 'unprocessed') cb.checked = true;
+  });
+  updateBatchBtn();
+}
+
+function updateBatchBtn() {
+  const checked = document.querySelectorAll('.queue-item-cb:checked').length;
+  document.getElementById('batchBtn').textContent = checked > 0 ? `▶ Run AI on ${checked} Selected` : '▶ Run AI on Selected';
+}
+
+function updateAttentionCount() {
+  const n = S.clips.filter(c => getStatus(c) === 'flagged').length;
+  const el = document.getElementById('attentionCount');
+  if (n > 0) { el.textContent = n; el.style.display = 'inline'; }
+  else el.style.display = 'none';
+}
+
+// ══════════════════════════════════════════════
+// DETAIL PANEL
+// ══════════════════════════════════════════════
+function selectClip(rowNum) {
+  S.selectedIdx = rowNum;
+  renderQueue();
+  renderDetail();
+}
+
+function renderDetail() {
+  const clip = S.clips.find(c => c._rowNum === S.selectedIdx);
+  if (!clip) return;
+  document.getElementById('detailEmpty').style.display = 'none';
+  const dc = document.getElementById('detailContent');
+  dc.style.display = 'flex';
+  const status = getStatus(clip);
+  const flagReason = getReviewField(clip, 'flagReason');
+  const originalBackup = getReviewField(clip, 'originalBackup');
+  const currentDraft = clip._draft || clip.rewrite || '';
+  const tags = parseTags(clip);
+  const wc = wordCount(currentDraft);
+  const wcClass = wc > 110 ? 'over' : '';
+  const thumbHTML = clip.thumbnail
+    ? `<img class="detail-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
+    : `<div class="detail-thumb-placeholder">🎬</div>`;
+
+  dc.innerHTML = `
+    <div class="detail-header">
+      ${thumbHTML}
+      <div class="detail-meta">
+        <div class="detail-title">${esc(clip.title)}</div>
+        <div class="detail-meta-row">
+          <span class="detail-meta-item">📺 LT ${esc(clip.programNum)}</span>
+          <span class="detail-meta-item">📅 ${esc(clip.date)}</span>
+          <span class="detail-meta-item">${statusBadgeHTML(status)}</span>
+        </div>
+        ${tags.length ? `<div class="tag-bubbles">${tags.map(t=>`<span class="tag-bubble">${esc(t)}</span>`).join('')}</div>` : ''}
+      </div>
+    </div>
+
+    ${status === 'flagged' ? `<div class="flag-banner"><div class="flag-icon">🚩</div><div><strong>Needs Attention:</strong> ${esc(flagReason)}<br><small>Use the AI chat below to provide more context, then regenerate.</small></div></div>` : ''}
+
+    <div class="card">
+      <div class="card-header">Original Description</div>
+      <div class="card-body">
+        <div class="orig-text">${esc(clip.description) || '<em style="color:var(--tx4)">No description</em>'}</div>
+        ${originalBackup ? `<div style="font-size:11px;color:var(--tx3);margin-top:6px">📦 Original backup saved</div>` : ''}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        AI Draft
+        <div style="margin-left:auto;display:flex;gap:6px;">
+          <button class="btn btn-sm" onclick="regenerateClip(${clip._rowNum})">🔄 Regenerate</button>
+          ${!S.transcriptLoaded[clip._rowNum] ? `<button class="btn btn-sm" onclick="loadTranscript(${clip._rowNum})">🔍 Pull Transcript</button>` : `<span style="font-size:11px;color:var(--green)">✓ Transcript loaded</span>`}
+        </div>
+      </div>
+      <div class="card-body">
+        <textarea class="draft-textarea" id="draftTA_${clip._rowNum}" oninput="onDraftInput(${clip._rowNum})">${esc(currentDraft)}</textarea>
+        <div class="word-count ${wcClass}" id="wc_${clip._rowNum}">${wc} words${wc > 110 ? ' — over limit!' : wc > 90 ? ' ✓' : ''}</div>
+      </div>
+      <div class="action-bar">
+        <button class="btn btn-sm" onclick="revertClip(${clip._rowNum})">↩ Revert to Original</button>
+        <div class="action-bar-right">
+          <button class="btn btn-sm btn-green" onclick="approveClip(${clip._rowNum})">✅ Approve & Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card chat-panel">
+      <div class="card-header">💬 AI Chat <span style="font-size:10px;color:var(--tx4);font-weight:normal;margin-left:6px">Ask AI to revise, clarify, or try a different angle</span></div>
+      <div class="chat-messages" id="chatMessages_${clip._rowNum}"></div>
+      <div class="chat-input-row">
+        <input class="chat-input" id="chatInput_${clip._rowNum}" placeholder="Type a message…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat(${clip._rowNum})}">
+        <button class="btn btn-sm btn-primary" onclick="sendChat(${clip._rowNum})">Send</button>
+      </div>
+    </div>
+  `;
+
+  renderChatMessages(clip._rowNum);
+}
+
+function onDraftInput(rowNum) {
+  const clip = S.clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  const val = document.getElementById('draftTA_' + rowNum)?.value || '';
+  clip._draft = val;
+  const wc = wordCount(val);
+  const wcEl = document.getElementById('wc_' + rowNum);
+  if (wcEl) {
+    wcEl.textContent = wc + ' words' + (wc > 110 ? ' — over limit!' : wc > 90 ? ' ✓' : '');
+    wcEl.className = 'word-count' + (wc > 110 ? ' over' : '');
+  }
+}
+
+// ══════════════════════════════════════════════
+// TRANSCRIPT
+// ══════════════════════════════════════════════
+async function loadTranscript(rowNum) {
+  const clip = S.clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  showToast('Loading transcript…');
+  try {
+    const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!AC${rowNum}:AC${rowNum}`);
+    const transcript = data.values?.[0]?.[0] || '';
+    S.transcriptLoaded[rowNum] = transcript;
+    showToast('Transcript loaded ✓', 'success');
+    renderDetail();
+  } catch(e) { showToast('Failed to load transcript', 'error'); }
+}
+
+// ══════════════════════════════════════════════
+// AI PROCESSING
+// ══════════════════════════════════════════════
+function buildAIPrompt(clip, extraContext) {
+  const transcript = S.transcriptLoaded[clip._rowNum];
+  let prompt = EDITORIAL_PROMPT + '\n\n---\n\nNow rewrite this summary:\n\n' + clip.description;
+  if (transcript) prompt += '\n\n---\n\nAdditional context from transcript:\n' + transcript.substring(0, 3000);
+  if (extraContext) prompt += '\n\n---\n\nAdditional guidance: ' + extraContext;
+  return prompt;
+}
+
+async function callAI(messages) {
+  if (!S.claudeKey) throw new Error('No API key — please sign out and add your Anthropic key');
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': S.claudeKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      messages,
+    })
+  });
+  const data = await r.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.content?.find(b => b.type === 'text')?.text || '';
+}
+
+async function evaluateAndDraft(clip) {
+  // First pass: evaluate if description is sufficient
+  const evalPrompt = `You are evaluating a video description to decide if it has enough content to rewrite as a 90-word summary.
+
+Description: "${clip.description}"
+
+Respond with ONLY a JSON object like:
+{"ok": true} if the description is sufficient (20+ words with specific content),
+{"ok": false, "reason": "brief reason"} if it is too short or too vague to rewrite.
+
+Do not include any other text.`;
+
+  let evalResult;
+  try {
+    const evalText = await callAI([{ role: 'user', content: evalPrompt }]);
+    const clean = evalText.replace(/```json|```/g, '').trim();
+    evalResult = JSON.parse(clean);
+  } catch { evalResult = { ok: true }; } // default to trying
+
+  if (!evalResult.ok) return { flagged: true, reason: evalResult.reason || 'Description too short or vague' };
+
+  // Second pass: rewrite
+  const draft = await callAI([{ role: 'user', content: buildAIPrompt(clip) }]);
+  return { flagged: false, draft };
+}
+
+async function processClip(clip) {
+  const result = await evaluateAndDraft(clip);
+  const id = String(clip._rowNum);
+  if (result.flagged) {
+    if (!S.reviewData[id]) S.reviewData[id] = {};
+    S.reviewData[id].status = 'flagged';
+    S.reviewData[id].flagReason = result.reason;
+    await saveReviewRow(clip);
+  } else {
+    clip._draft = result.draft;
+    if (!S.reviewData[id]) S.reviewData[id] = {};
+    S.reviewData[id].status = 'draft';
+    S.reviewData[id].flagReason = '';
+    await saveReviewRow(clip);
+  }
+}
+
+async function regenerateClip(rowNum) {
+  const clip = S.clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  const btn = document.querySelector(`[onclick="regenerateClip(${rowNum})"]`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generating…'; }
+  try {
+    const result = await evaluateAndDraft(clip);
+    if (result.flagged) {
+      setReviewField(clip, 'status', 'flagged');
+      setReviewField(clip, 'flagReason', result.reason);
+    } else {
+      clip._draft = result.draft;
+      setReviewField(clip, 'status', 'draft');
+      setReviewField(clip, 'flagReason', '');
+    }
+    await saveReviewRow(clip);
+    renderDetail();
+    renderQueue();
+    updateAttentionCount();
+  } catch(e) { showToast('AI error: ' + e.message, 'error'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '🔄 Regenerate'; } }
+}
+
+async function runBatch() {
+  if (S.batchRunning) return;
+  const checked = [...document.querySelectorAll('.queue-item-cb:checked')].map(cb => parseInt(cb.dataset.row));
+  if (!checked.length) { showToast('Select clips first'); return; }
+  S.batchRunning = true;
+  document.getElementById('batchProgress').style.display = 'block';
+  let done = 0, drafted = 0, flagged = 0;
+  for (const rowNum of checked) {
+    const clip = S.clips.find(c => c._rowNum === rowNum);
+    if (!clip) { done++; continue; }
+    document.getElementById('progressLabel').textContent = `Processing ${done+1}/${checked.length} — ${clip.title.substring(0,40)}…`;
+    document.getElementById('progressFill').style.width = ((done/checked.length)*100) + '%';
+    try {
+      await processClip(clip);
+      if (getStatus(clip) === 'flagged') flagged++; else drafted++;
+    } catch(e) { console.error('Batch error on row', rowNum, e); }
+    done++;
+    renderQueue();
+    updateAttentionCount();
+  }
+  document.getElementById('progressFill').style.width = '100%';
+  document.getElementById('progressLabel').textContent = `Done — ${drafted} drafted, ${flagged} flagged`;
+  S.batchRunning = false;
+  showToast(`Batch complete: ${drafted} drafted, ${flagged} flagged`, 'success');
+  setTimeout(() => { document.getElementById('batchProgress').style.display = 'none'; }, 4000);
+}
+
+// ══════════════════════════════════════════════
+// APPROVE / REVERT
+// ══════════════════════════════════════════════
+async function approveClip(rowNum) {
+  const clip = S.clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  const draft = document.getElementById('draftTA_' + rowNum)?.value || clip._draft || '';
+  if (!draft.trim()) { showToast('Nothing to save — draft is empty', 'error'); return; }
+  showLoading('Saving to sheet…');
+  try {
+    const id = String(rowNum);
+    // Save original backup if not already saved
+    if (!S.reviewData[id]?.originalBackup) {
+      setReviewField(clip, 'originalBackup', clip.description);
+    }
+    // Update clip rewrite in memory
+    clip.rewrite = draft;
+    clip._draft = draft;
+    // Set status
+    setReviewField(clip, 'status', 'approved');
+    setReviewField(clip, 'approvedBy', S.user?.email || '');
+    setReviewField(clip, 'approvedAt', new Date().toISOString());
+    // Write col Y on main tab
+    const colY = colLetter(CONFIG.COL.REWRITE);
+    await sheetsSet(`'${CONFIG.MAIN_TAB}'!${colY}${rowNum}:${colY}${rowNum}`, [[draft]]);
+    // Write review row
+    await saveReviewRow(clip);
+    hideLoading();
+    renderDetail();
+    renderQueue();
+    updateAttentionCount();
+    showToast('Saved ✅', 'success');
+  } catch(e) { hideLoading(); showToast('Save failed: ' + e.message, 'error'); }
+}
+
+async function revertClip(rowNum) {
+  const clip = S.clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  const backup = getReviewField(clip, 'originalBackup');
+  const restoreTo = backup || clip.description;
+  if (!confirm('Revert to original description? This cannot be undone.')) return;
+  showLoading('Reverting…');
+  try {
+    // Restore col Y to original
+    const colY = colLetter(CONFIG.COL.REWRITE);
+    await sheetsSet(`'${CONFIG.MAIN_TAB}'!${colY}${rowNum}:${colY}${rowNum}`, [[restoreTo]]);
+    clip.rewrite = restoreTo;
+    clip._draft = '';
+    setReviewField(clip, 'status', 'unprocessed');
+    setReviewField(clip, 'flagReason', '');
+    await saveReviewRow(clip);
+    hideLoading();
+    renderDetail();
+    renderQueue();
+    updateAttentionCount();
+    showToast('Reverted to original', 'success');
+  } catch(e) { hideLoading(); showToast('Revert failed: ' + e.message, 'error'); }
+}
+
+// ══════════════════════════════════════════════
+// CHAT
+// ══════════════════════════════════════════════
+function renderChatMessages(rowNum) {
+  const el = document.getElementById('chatMessages_' + rowNum);
+  if (!el) return;
+  const history = S.chatHistory[rowNum] || [];
+  if (!history.length) { el.innerHTML = `<div style="font-size:12px;color:var(--tx4);padding:8px">Ask the AI to revise the draft, explain a choice, or try a different angle.</div>`; return; }
+  el.innerHTML = history.map((m, i) => {
+    const isAI = m.role === 'assistant';
+    return `<div class="chat-msg">
+      <div class="chat-msg-avatar ${isAI ? 'ai' : ''}">${isAI ? 'AI' : 'You'}</div>
+      <div class="chat-msg-body ${isAI ? 'ai' : ''}">
+        ${m.content.replace(/\n/g, '<br>')}
+        ${isAI ? `<div><span class="use-as-draft-btn" onclick="useAsDraft(${rowNum}, ${i})">Use as Draft</span></div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+async function sendChat(rowNum) {
+  const clip = S.clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  const input = document.getElementById('chatInput_' + rowNum);
+  const msg = input?.value?.trim();
+  if (!msg) return;
+  input.value = '';
+  if (!S.chatHistory[rowNum]) S.chatHistory[rowNum] = [];
+  // Build context system message
+  const ctx = `You are helping edit a Jewish educational video summary. 
+Clip: ${clip.title}
+Program: LT ${clip.programNum}
+Date: ${clip.date}
+Original description: ${clip.description}
+Current draft: ${clip._draft || clip.rewrite || '(none yet)'}
+${S.transcriptLoaded[rowNum] ? 'Transcript excerpt: ' + S.transcriptLoaded[rowNum].substring(0, 1500) : ''}
+
+Follow the same editorial rules as before (90 words target, max 110, Sephardic spellings, G-d, italics whitelist, etc.). If the user asks for a rewrite, output only the rewritten summary with no preamble.`;
+
+  S.chatHistory[rowNum].push({ role: 'user', content: msg });
+  renderChatMessages(rowNum);
+  // Build messages for API — inject system as first user message
+  const messages = [
+    { role: 'user', content: ctx + '\n\nUser says: ' + S.chatHistory[rowNum][0].content },
+    ...S.chatHistory[rowNum].slice(1).map(m => ({ role: m.role, content: m.content })),
+  ];
+  // If more than 1 message in history, rebuild properly
+  const apiMessages = [{ role: 'user', content: ctx }];
+  S.chatHistory[rowNum].forEach(m => apiMessages.push({ role: m.role, content: m.content }));
+  // Remove consecutive same-role messages (shouldn't happen but safety)
+  const cleanMessages = [apiMessages[0]];
+  // Actually just send system context + full chat
+  try {
+    const reply = await callAI([
+      { role: 'user', content: ctx + '\n\n---\n\n' + S.chatHistory[rowNum].slice(0,-1).map(m => (m.role==='user'?'User: ':'AI: ') + m.content).join('\n') + '\n\nUser: ' + msg }
+    ]);
+    S.chatHistory[rowNum].push({ role: 'assistant', content: reply });
+    renderChatMessages(rowNum);
+  } catch(e) {
+    S.chatHistory[rowNum].push({ role: 'assistant', content: 'Error: ' + e.message });
+    renderChatMessages(rowNum);
+  }
+}
+
+function useAsDraft(rowNum, msgIdx) {
+  const clip = S.clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  const msg = S.chatHistory[rowNum]?.[msgIdx];
+  if (!msg) return;
+  clip._draft = msg.content;
+  setReviewField(clip, 'status', 'draft');
+  renderDetail();
+  showToast('Draft updated from chat ✓', 'success');
+}
+
+// ══════════════════════════════════════════════
+// ATTENTION VIEW
+// ══════════════════════════════════════════════
+function renderAttentionView() {
+  const flagged = S.clips.filter(c => getStatus(c) === 'flagged');
+  const el = document.getElementById('attentionGrid');
+  if (!flagged.length) { el.innerHTML = `<div class="empty-state">No flagged clips 🎉</div>`; return; }
+  el.innerHTML = `<h2 style="font-size:18px;color:var(--tx);margin-bottom:8px">🚩 Needs Attention (${flagged.length})</h2>` +
+    flagged.map(clip => {
+      const thumbHTML = clip.thumbnail
+        ? `<img class="attention-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
+        : `<div class="attention-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--tx4)">🎬</div>`;
+      return `<div class="attention-card" onclick="goToClip(${clip._rowNum})">
+        ${thumbHTML}
+        <div class="attention-body">
+          <div class="attention-title">${esc(clip.title)}</div>
+          <div style="font-size:11px;color:var(--tx3);margin-bottom:4px">LT ${esc(clip.programNum)} · ${esc(clip.date)}</div>
+          <div class="attention-flag">🚩 ${esc(getReviewField(clip, 'flagReason'))}</div>
+          <div class="attention-orig">${esc((clip.description||'').substring(0,120))}…</div>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();goToClip(${clip._rowNum})">Open →</button>
+      </div>`;
+    }).join('');
+}
+
+function goToClip(rowNum) {
+  switchView('queue', document.querySelector('[data-view="queue"]'));
+  S.selectedIdx = rowNum;
+  renderQueue();
+  renderDetail();
+}
+
+// ══════════════════════════════════════════════
+// EXPORT VIEW
+// ══════════════════════════════════════════════
+function renderExportView() {
+  const approved = S.clips.filter(c => getStatus(c) === 'approved');
+  document.getElementById('exportStats').textContent = `${approved.length} approved clips`;
+  const el = document.getElementById('exportList');
+  el.innerHTML = approved.map(clip => {
+    const tags = parseTags(clip);
+    const summary = clip.rewrite || clip._draft || clip.description || '';
+    const thumbHTML = clip.thumbnail
+      ? `<img class="export-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
+      : `<div class="export-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--tx4)">🎬</div>`;
+    return `<div class="export-item">
+      ${thumbHTML}
+      <div class="export-body">
+        <div class="export-clip-title">${esc(clip.title)}</div>
+        <div class="export-meta">LT ${esc(clip.programNum)} · ${esc(clip.date)}</div>
+        <div class="export-summary">${esc(summary)}</div>
+        <div class="tag-bubbles">${tags.map(t=>`<span class="tag-bubble">${esc(t)}</span>`).join('')}</div>
+      </div>
+    </div>`;
+  }).join('') || `<div class="empty-state">No approved clips yet</div>`;
+}
+
+function exportHTML() {
+  const approved = S.clips.filter(c => getStatus(c) === 'approved');
+  const rows = approved.map(clip => {
+    const tags = parseTags(clip);
+    const summary = clip.rewrite || clip.description || '';
+    return `<tr>
+      <td><img src="${clip.thumbnail}" style="width:80px;height:52px;object-fit:cover;border-radius:4px"></td>
+      <td>${clip.title}</td>
+      <td>LT ${clip.programNum}</td>
+      <td>${clip.date}</td>
+      <td>${summary}</td>
+      <td>${tags.join(', ')}</td>
+    </tr>`;
+  }).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>JEM Sichos Summaries Export</title>
+<style>body{font-family:Georgia,serif;padding:24px;background:#faf7f2}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d4c9b5;padding:8px;vertical-align:top;font-size:12px}th{background:#f0ece3;font-weight:bold}</style></head>
+<body><h1 style="font-size:20px;margin-bottom:16px">JEM Sichos Summaries — ${approved.length} clips</h1>
+<table><thead><tr><th>Thumb</th><th>Title</th><th>Program</th><th>Date</th><th>Summary</th><th>Tags</th></tr></thead>
+<tbody>${rows}</tbody></table></body></html>`;
+  const blob = new Blob([html], { type: 'text/html' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'JEM_Sichos_Summaries_' + new Date().toISOString().slice(0,10) + '.html';
+  a.click();
+}
+
+// ══════════════════════════════════════════════
+// BOOK VIEW
+// ══════════════════════════════════════════════
+function renderBookView() {
+  const approved = S.clips.filter(c => getStatus(c) === 'approved');
+  const el = document.getElementById('bookPages');
+  if (!approved.length) { el.innerHTML = `<div class="empty-state">No approved summaries yet</div>`; return; }
+  // Chunk into pages
+  const perPage = CONFIG.ENTRIES_PER_PAGE;
+  const pages = [];
+  for (let i = 0; i < approved.length; i += perPage) pages.push(approved.slice(i, i + perPage));
+  el.innerHTML = pages.map((pageClips, pi) => {
+    const entries = pageClips.map(clip => {
+      const tags = parseTags(clip).slice(0, 8);
+      const summary = clip.rewrite || clip.description || '';
+      const thumbHTML = clip.thumbnail
+        ? `<img class="book-entry-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
+        : `<div class="book-entry-thumb" style="display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--tx4)">🎬</div>`;
+      return `<div class="book-entry">
+        <div class="book-entry-inner">
+          ${thumbHTML}
+          <div class="book-entry-content">
+            <div class="book-entry-title">${esc(clip.title)}</div>
+            <div class="book-entry-meta">LT ${esc(clip.programNum)} · ${esc(clip.date)}</div>
+            <div class="book-entry-summary">${esc(summary)}</div>
+            ${tags.length ? `<div class="book-entry-tags">${tags.map(t=>`<span class="book-tag">${esc(t)}</span>`).join('')}</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="book-page">
+      <div class="book-page-header"><div class="book-page-header-title">JEM Video Index · Sichos</div></div>
+      <div class="book-entries">${entries}</div>
+      <div class="book-page-footer"><span>JEM · Jewish Educational Media</span><span>${pi + 1}</span><span>Sichos</span></div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+// VIEW SWITCHING
+// ══════════════════════════════════════════════
+function switchView(view, btn) {
+  S.currentView = view;
+  document.querySelectorAll('.topbar-nav-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const views = ['queueView','attentionView','exportView','bookView'];
+  views.forEach(v => document.getElementById(v).style.display = 'none');
+  if (view === 'queue') { document.getElementById('queueView').style.display = 'flex'; }
+  else if (view === 'attention') { document.getElementById('attentionView').style.display = 'block'; renderAttentionView(); }
+  else if (view === 'export') { document.getElementById('exportView').style.display = 'block'; renderExportView(); }
+  else if (view === 'book') { document.getElementById('bookView').style.display = 'block'; renderBookView(); }
+}
+
+// ══════════════════════════════════════════════
+// UI UTILS
+// ══════════════════════════════════════════════
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function showLoading(txt) {
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  document.getElementById('loadingText').textContent = txt || 'Loading…';
+}
+function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
+let _toastTimer;
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (type ? ' ' + type : '');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.className = '', 3000);
+}
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+async function init() {
+  const gotToken = handleAuthCallback();
+  const savedCode = localStorage.getItem('jem_cse_key');
+  if (savedCode) {
+    const inp = document.getElementById('teamCodeInput');
+    if (inp) inp.value = savedCode;
+  }
+  if (gotToken || S.token) {
+    document.getElementById('authScreen').style.display = 'none';
+    showLoading('Verifying account…');
+    try {
+      S.user = await fetchUserInfo();
+      document.getElementById('userEmail').textContent = S.user.email || '';
+      document.getElementById('userAvatar').textContent = (S.user.email || '?')[0].toUpperCase();
+      document.getElementById('topBar').style.display = 'flex';
+      document.getElementById('appShell').style.display = 'flex';
+      switchView('queue', document.querySelector('[data-view="queue"]'));
+      hideLoading();
+      await loadAllData();
+    } catch(e) {
+      hideLoading();
+      document.getElementById('authError').textContent = 'Sign-in failed: ' + e.message;
+      document.getElementById('authScreen').style.display = 'flex';
+    }
+  }
+}
+
+init();
+</script>
+</body>
+</html>
