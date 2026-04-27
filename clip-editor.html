@@ -444,6 +444,41 @@
   .chapter-meta { font-size: 11px; color: var(--tx3); margin-top: 2px; }
   .chapter-status { flex-shrink: 0; }
 
+  /* Notes */
+  .note-card {
+    background: var(--bg2); border-radius: var(--radius);
+    padding: 10px 14px; margin-bottom: 8px; box-shadow: var(--shadow-inner);
+    transition: opacity 0.2s;
+  }
+  .note-card.note-resolved { opacity: 0.55; }
+  .note-card.note-resolved .note-text { text-decoration: line-through; color: var(--tx3); }
+  .note-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11px; }
+  .note-avatar {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: linear-gradient(180deg, var(--accent-light), var(--accent-soft));
+    color: var(--accent2); font-size: 9px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .note-user { font-weight: 600; color: var(--tx2); }
+  .note-time { color: var(--tx4); font-size: 10px; }
+  .note-actions { margin-left: auto; display: flex; gap: 2px; }
+  .note-action-btn {
+    border: none; background: transparent; cursor: pointer;
+    padding: 2px 6px; border-radius: 4px; font-size: 12px; color: var(--tx3);
+    transition: all 0.12s; font-family: var(--font-sans);
+  }
+  .note-action-btn:hover { background: var(--bg3); color: var(--tx); }
+  .note-action-btn.note-delete:hover { background: var(--red-light); color: var(--red); }
+  .note-text { font-size: 13px; color: var(--tx); line-height: 1.55; white-space: pre-wrap; }
+  .note-context {
+    font-size: 10px; font-weight: 600; color: var(--tx3);
+    text-transform: uppercase; letter-spacing: 1px;
+    padding: 4px 12px; background: var(--bg2); border-radius: var(--radius-pill);
+    display: inline-block; margin-bottom: 6px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .note-context:hover { background: var(--accent-light); color: var(--accent2); }
+
   /* ── ATTENTION QUEUE ── */
   .attention-grid { display: flex; flex-direction: column; gap: 14px; max-width: 960px; margin: 0 auto; }
   .attention-card {
@@ -788,6 +823,9 @@
       <button class="sb-item" id="sbFullBookBtn" onclick="switchView('fullbook', null)">
         <span class="sb-label">Full Book View</span>
       </button>
+      <button class="sb-item" id="sbNotesBtn" onclick="switchView('notes', null)">
+        <span class="sb-label">Notes <span id="notesBadge" style="display:none;background:var(--accent-light);color:var(--accent2);font-size:10px;padding:1px 7px;border-radius:var(--radius-pill);margin-left:4px;font-weight:600"></span></span>
+      </button>
     </div>
     <div class="sb-section">
       <div class="sb-section-title">Clip Types</div>
@@ -828,6 +866,32 @@
         </div>
         <div class="dash-team-list" id="overallTeamList"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- NOTES VIEW -->
+  <div id="notesView" style="display:none;">
+    <div class="dash-wrap">
+      <div class="dash-header">
+        <div>
+          <h1 class="dash-title">Notes</h1>
+          <p class="dash-sub">General workspace notes plus all per-clip notes across every section</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:18px">
+        <button class="btn filter-chip active" id="notesFilterAll" onclick="setNotesFilter('all',this)">All</button>
+        <button class="btn filter-chip" id="notesFilterGeneral" onclick="setNotesFilter('general',this)">General</button>
+        <button class="btn filter-chip" id="notesFilterClip" onclick="setNotesFilter('clip',this)">Per-Clip</button>
+        <button class="btn filter-chip" id="notesFilterUnresolved" onclick="setNotesFilter('unresolved',this)">Unresolved</button>
+      </div>
+      <div style="background:var(--panel);border-radius:var(--radius2);padding:14px 16px;box-shadow:var(--shadow-clay);margin-bottom:18px">
+        <div style="font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">Add a general note</div>
+        <textarea id="newGeneralNoteInput" placeholder="Type a note for the team…" style="width:100%;min-height:60px;padding:10px 12px;border:none;border-radius:var(--radius);background:var(--bg2);color:var(--tx);font-family:var(--font-sans);font-size:13px;outline:none;box-shadow:var(--shadow-inner);resize:vertical" oninput="document.getElementById('addGeneralNoteBtn').disabled = !this.value.trim()"></textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px">
+          <button class="btn btn-sm btn-primary" id="addGeneralNoteBtn" onclick="submitGeneralNote()" disabled>Add Note</button>
+        </div>
+      </div>
+      <div id="notesList"></div>
     </div>
   </div>
 
@@ -1044,6 +1108,7 @@ const CONFIG = {
     CLIP_TYPE: 29,    // AD
   },
   TEAM_TAB: '_Team',
+  NOTES_TAB: '_Notes',
   ADMIN_EMAILS: ['dgoldberg@jemedia.org', 'es@jemedia.org'],
   ENTRIES_PER_PAGE: 10, // book view
 };
@@ -1209,6 +1274,7 @@ let S = {
   rangeStart: 0,
   rangeSize: 50,
   team: [],
+  notes: [],
   isAdmin: false,
   userFilter: '',
 };
@@ -1668,6 +1734,112 @@ async function registerTeamMember() {
   // Update local
   const idx = S.team.findIndex(m => m.email === email);
   if (idx >= 0) S.team[idx] = member; else S.team.push(member);
+}
+
+// ══════════════════════════════════════════════
+// NOTES (general + per-clip, stored in _Notes tab)
+// ══════════════════════════════════════════════
+const NOTES_HEADERS = ['id','timestamp','scope','clip_row','type_key','user','text','resolved','parent_id','edited_at'];
+
+async function ensureNotesTab() {
+  const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
+    { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+  const exists = meta.sheets?.some(s => s.properties.title === CONFIG.NOTES_TAB);
+  if (!exists) {
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: CONFIG.NOTES_TAB, gridProperties: { frozenRowCount: 1 } } } }] })
+    });
+    await sheetsSet(`'${CONFIG.NOTES_TAB}'!A1:J1`, [NOTES_HEADERS]);
+  }
+}
+
+async function loadNotes() {
+  try {
+    const data = await sheetsGet(`'${CONFIG.NOTES_TAB}'!A:J`);
+    const rows = data.values || [];
+    S.notes = rows.slice(1).filter(r => r[0]).map(r => ({
+      id: r[0], timestamp: r[1] || '', scope: r[2] || 'general',
+      clipRow: r[3] || '', typeKey: r[4] || '', user: r[5] || '',
+      text: r[6] || '', resolved: r[7] === 'TRUE', parentId: r[8] || '',
+      editedAt: r[9] || ''
+    }));
+  } catch(e) { console.warn('Notes load failed:', e); S.notes = []; }
+}
+
+async function addNote(scope, text, opts = {}) {
+  if (!text?.trim()) return;
+  await ensureNotesTab();
+  const id = 'n_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  const note = {
+    id, timestamp: new Date().toISOString(), scope,
+    clipRow: opts.clipRow ? String(opts.clipRow) : '',
+    typeKey: opts.typeKey || (scope === 'clip' ? S.activeType : ''),
+    user: S.user?.email || '', text: text.trim(),
+    resolved: false, parentId: opts.parentId || '', editedAt: ''
+  };
+  // Append row
+  const data = await sheetsGet(`'${CONFIG.NOTES_TAB}'!A:A`);
+  const rows = data.values || [];
+  const nextRow = rows.length + 1;
+  const values = [[note.id, note.timestamp, note.scope, note.clipRow, note.typeKey, note.user, note.text, note.resolved ? 'TRUE' : 'FALSE', note.parentId, note.editedAt]];
+  await sheetsSet(`'${CONFIG.NOTES_TAB}'!A${nextRow}:J${nextRow}`, values);
+  S.notes.push(note);
+  return note;
+}
+
+async function deleteNote(id) {
+  const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
+    { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+  const sheetId = meta.sheets?.find(s => s.properties.title === CONFIG.NOTES_TAB)?.properties.sheetId;
+  if (sheetId === undefined) return;
+  const data = await sheetsGet(`'${CONFIG.NOTES_TAB}'!A:A`);
+  const rows = data.values || [];
+  let sheetRow = -1;
+  rows.forEach((r, i) => { if (r[0] === id) sheetRow = i + 1; });
+  if (sheetRow < 1) return;
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: sheetRow - 1, endIndex: sheetRow } } }] })
+  });
+  S.notes = S.notes.filter(n => n.id !== id);
+}
+
+async function updateNote(id, newText) {
+  const data = await sheetsGet(`'${CONFIG.NOTES_TAB}'!A:A`);
+  const rows = data.values || [];
+  let sheetRow = -1;
+  rows.forEach((r, i) => { if (r[0] === id) sheetRow = i + 1; });
+  if (sheetRow < 1) return;
+  const note = S.notes.find(n => n.id === id);
+  if (!note) return;
+  note.text = newText.trim();
+  note.editedAt = new Date().toISOString();
+  const values = [[note.id, note.timestamp, note.scope, note.clipRow, note.typeKey, note.user, note.text, note.resolved ? 'TRUE' : 'FALSE', note.parentId, note.editedAt]];
+  await sheetsSet(`'${CONFIG.NOTES_TAB}'!A${sheetRow}:J${sheetRow}`, values);
+}
+
+async function toggleNoteResolved(id) {
+  const note = S.notes.find(n => n.id === id);
+  if (!note) return;
+  note.resolved = !note.resolved;
+  const data = await sheetsGet(`'${CONFIG.NOTES_TAB}'!A:A`);
+  const rows = data.values || [];
+  let sheetRow = -1;
+  rows.forEach((r, i) => { if (r[0] === id) sheetRow = i + 1; });
+  if (sheetRow < 1) return;
+  const values = [[note.id, note.timestamp, note.scope, note.clipRow, note.typeKey, note.user, note.text, note.resolved ? 'TRUE' : 'FALSE', note.parentId, note.editedAt]];
+  await sheetsSet(`'${CONFIG.NOTES_TAB}'!A${sheetRow}:J${sheetRow}`, values);
+}
+
+function getNotesForClip(clip) {
+  return S.notes.filter(n => n.scope === 'clip' && n.clipRow === String(clip._rowNum));
+}
+
+function getGeneralNotes() {
+  return S.notes.filter(n => n.scope === 'general');
 }
 
 // ══════════════════════════════════════════════
@@ -2253,6 +2425,20 @@ function renderDetail() {
       </div>
     </div>
 
+    <div class="card">
+      <div class="card-header">
+        Notes
+        <span id="clipNotesCount_${clip._rowNum}" style="font-size:10px;color:var(--tx4);font-weight:normal;margin-left:4px"></span>
+      </div>
+      <div class="card-body" id="clipNotesBody_${clip._rowNum}"></div>
+      <div style="padding:0 22px 14px">
+        <textarea id="newClipNoteInput_${clip._rowNum}" placeholder="Add a note about this clip…" style="width:100%;min-height:50px;padding:9px 12px;border:none;border-radius:var(--radius);background:var(--bg2);color:var(--tx);font-family:var(--font-sans);font-size:12.5px;outline:none;box-shadow:var(--shadow-inner);resize:vertical" oninput="document.getElementById('addClipNoteBtn_${clip._rowNum}').disabled = !this.value.trim()"></textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:6px">
+          <button class="btn btn-sm" id="addClipNoteBtn_${clip._rowNum}" onclick="submitClipNote(${clip._rowNum})" disabled>Add Note</button>
+        </div>
+      </div>
+    </div>
+
     <div class="card chat-panel">
       <div class="card-header">💬 AI Chat <span style="font-size:10px;color:var(--tx4);font-weight:normal;margin-left:6px">Ask AI to revise, clarify, or try a different angle</span></div>
       <div class="chat-messages" id="chatMessages_${clip._rowNum}"></div>
@@ -2264,6 +2450,168 @@ function renderDetail() {
   `;
 
   renderChatMessages(clip._rowNum);
+  renderClipNotes(clip);
+}
+
+function renderClipNotes(clip) {
+  const body = document.getElementById('clipNotesBody_' + clip._rowNum);
+  const countEl = document.getElementById('clipNotesCount_' + clip._rowNum);
+  if (!body) return;
+  const notes = getNotesForClip(clip);
+  if (countEl) countEl.textContent = notes.length ? `(${notes.length})` : '';
+  if (!notes.length) {
+    body.innerHTML = '<div style="font-size:12px;color:var(--tx4);font-style:italic;padding:6px 0">No notes for this clip yet.</div>';
+    return;
+  }
+  body.innerHTML = notes.sort((a, b) => a.timestamp.localeCompare(b.timestamp)).map(n => renderNoteCard(n)).join('');
+}
+
+function renderNoteCard(n) {
+  const when = n.timestamp ? new Date(n.timestamp).toLocaleString() : '';
+  const isMine = n.user === S.user?.email;
+  const initials = (n.user || '?').substring(0, 2).toUpperCase();
+  const userShort = n.user.split('@')[0];
+  return `<div class="note-card ${n.resolved ? 'note-resolved' : ''}" data-note-id="${esc(n.id)}">
+    <div class="note-header">
+      <div class="note-avatar">${esc(initials)}</div>
+      <span class="note-user">${esc(userShort)}</span>
+      <span class="note-time">${esc(when)}${n.editedAt ? ' (edited)' : ''}</span>
+      <div class="note-actions">
+        <button class="note-action-btn" onclick="toggleNoteResolvedUI('${esc(n.id)}')" title="${n.resolved ? 'Mark unresolved' : 'Mark resolved'}">${n.resolved ? '↺' : '✓'}</button>
+        ${isMine ? `<button class="note-action-btn" onclick="editNoteUI('${esc(n.id)}')" title="Edit">✎</button>` : ''}
+        ${isMine ? `<button class="note-action-btn note-delete" onclick="deleteNoteUI('${esc(n.id)}')" title="Delete">×</button>` : ''}
+      </div>
+    </div>
+    <div class="note-text">${esc(n.text)}</div>
+  </div>`;
+}
+
+async function submitClipNote(rowNum) {
+  const ta = document.getElementById('newClipNoteInput_' + rowNum);
+  const btn = document.getElementById('addClipNoteBtn_' + rowNum);
+  const text = ta?.value?.trim();
+  if (!text) return;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+    await addNote('clip', text, { clipRow: rowNum, typeKey: clip.typeKey });
+    ta.value = '';
+    btn.disabled = true; btn.textContent = 'Add Note';
+    renderClipNotes(clip);
+    updateNotesBadge();
+  } catch(e) { btn.disabled = false; btn.textContent = 'Add Note'; showToast('Save failed: ' + e.message, 'error'); }
+}
+
+async function submitGeneralNote() {
+  const ta = document.getElementById('newGeneralNoteInput');
+  const btn = document.getElementById('addGeneralNoteBtn');
+  const text = ta?.value?.trim();
+  if (!text) return;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await addNote('general', text);
+    ta.value = '';
+    btn.disabled = true; btn.textContent = 'Add Note';
+    renderNotesView();
+    updateNotesBadge();
+  } catch(e) { btn.disabled = false; btn.textContent = 'Add Note'; showToast('Save failed: ' + e.message, 'error'); }
+}
+
+async function deleteNoteUI(id) {
+  if (!confirm('Delete this note?')) return;
+  try {
+    await deleteNote(id);
+    if (S.currentView === 'notes') renderNotesView();
+    else if (S.currentView === 'queue' && S.selectedIdx) {
+      const clip = activeBucket().clips.find(c => c._rowNum === S.selectedIdx);
+      if (clip) renderClipNotes(clip);
+    }
+    updateNotesBadge();
+    showToast('Note deleted', 'success');
+  } catch(e) { showToast('Delete failed: ' + e.message, 'error'); }
+}
+
+async function toggleNoteResolvedUI(id) {
+  try {
+    await toggleNoteResolved(id);
+    if (S.currentView === 'notes') renderNotesView();
+    else if (S.currentView === 'queue' && S.selectedIdx) {
+      const clip = activeBucket().clips.find(c => c._rowNum === S.selectedIdx);
+      if (clip) renderClipNotes(clip);
+    }
+    updateNotesBadge();
+  } catch(e) { showToast('Update failed: ' + e.message, 'error'); }
+}
+
+function editNoteUI(id) {
+  const note = S.notes.find(n => n.id === id);
+  if (!note) return;
+  const newText = prompt('Edit note:', note.text);
+  if (newText === null || !newText.trim()) return;
+  updateNote(id, newText).then(() => {
+    if (S.currentView === 'notes') renderNotesView();
+    else if (S.currentView === 'queue' && S.selectedIdx) {
+      const clip = activeBucket().clips.find(c => c._rowNum === S.selectedIdx);
+      if (clip) renderClipNotes(clip);
+    }
+    showToast('Note updated', 'success');
+  }).catch(e => showToast('Update failed: ' + e.message, 'error'));
+}
+
+let _notesFilter = 'all';
+function setNotesFilter(f, btn) {
+  _notesFilter = f;
+  document.querySelectorAll('#notesFilterAll, #notesFilterGeneral, #notesFilterClip, #notesFilterUnresolved').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderNotesView();
+}
+
+function renderNotesView() {
+  const el = document.getElementById('notesList');
+  if (!el) return;
+  let notes = [...S.notes];
+  if (_notesFilter === 'general') notes = notes.filter(n => n.scope === 'general');
+  else if (_notesFilter === 'clip') notes = notes.filter(n => n.scope === 'clip');
+  else if (_notesFilter === 'unresolved') notes = notes.filter(n => !n.resolved);
+  notes.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+  if (!notes.length) { el.innerHTML = '<div class="empty-state">No notes yet.</div>'; return; }
+  el.innerHTML = notes.map(n => {
+    let context = '';
+    if (n.scope === 'clip' && n.clipRow) {
+      const tCfg = getTypeByKey(n.typeKey);
+      const bucket = S.byType[n.typeKey];
+      const clip = bucket?.clips.find(c => String(c._rowNum) === n.clipRow);
+      if (clip && tCfg) {
+        context = `<div class="note-context" onclick="jumpToClipFromNote('${n.typeKey}', ${clip._rowNum})">${esc(tCfg.displayName)} · ${esc(clip.title)} →</div>`;
+      } else {
+        context = `<div class="note-context" style="opacity:0.6">${esc(tCfg?.displayName || 'Unknown')} · Clip #${esc(n.clipRow)}</div>`;
+      }
+    } else {
+      context = `<div class="note-context" style="background:var(--accent-light);color:var(--accent2)">General</div>`;
+    }
+    return `<div style="margin-bottom:12px">${context}${renderNoteCard(n)}</div>`;
+  }).join('');
+}
+
+function jumpToClipFromNote(typeKey, rowNum) {
+  S.activeType = typeKey;
+  localStorage.setItem('jem_cse_active_type', typeKey);
+  S.selectedIdx = rowNum;
+  S.filter = 'all';
+  S.search = '';
+  S.rangeStart = 0;
+  const all = S.byType[typeKey]?.clips || [];
+  const idx = all.findIndex(c => c._rowNum === rowNum);
+  if (idx >= 0) S.rangeStart = Math.floor(idx / S.rangeSize) * S.rangeSize;
+  switchView('queue', null);
+}
+
+function updateNotesBadge() {
+  const badge = document.getElementById('notesBadge');
+  if (!badge) return;
+  const unresolved = S.notes.filter(n => !n.resolved).length;
+  if (unresolved > 0) { badge.textContent = unresolved; badge.style.display = 'inline'; }
+  else badge.style.display = 'none';
 }
 
 function onDraftInput(rowNum) {
@@ -2857,6 +3205,7 @@ function renderSidebar() {
   };
   setActive('sbOverallBtn', S.currentView === 'overall');
   setActive('sbFullBookBtn', S.currentView === 'fullbook');
+  setActive('sbNotesBtn', S.currentView === 'notes');
   setActive('sbRulesBtn', S.currentView === 'rules');
   if (teamBtn) teamBtn.classList.toggle('active', S.currentView === 'team');
 
@@ -3922,13 +4271,13 @@ async function reloadRulesFromSheet() {
 // ══════════════════════════════════════════════
 function switchView(view, btn, opts) {
   S.currentView = view;
-  const views = ['overallView','teamView','dashboardView','queueView','attentionView','exportView','bookView','fullBookView','rulesView','filmsView'];
+  // Reset member detail state if leaving team view
+  if (view !== 'team') { _selectedMember = null; }
+  const views = ['overallView','teamView','notesView','dashboardView','queueView','attentionView','exportView','bookView','fullBookView','rulesView','filmsView'];
   views.forEach(v => { const el = document.getElementById(v); if (el) el.style.display = 'none'; });
   if (view === 'overall') { document.getElementById('overallView').style.display = 'block'; renderOverallDashboard(); }
   else if (view === 'fullbook') { document.getElementById('fullBookView').style.display = 'block'; renderFullBookView(); }
   else if (view === 'team') { document.getElementById('teamView').style.display = 'block'; renderTeamView(); }
-  // Reset member detail state if leaving team view
-  if (view !== 'team') { _selectedMember = null; }
   else if (view === 'dashboard') { document.getElementById('dashboardView').style.display = 'block'; renderDashboard(); }
   else if (view === 'queue') {
     document.getElementById('queueView').style.display = 'flex';
@@ -3940,6 +4289,7 @@ function switchView(view, btn, opts) {
   else if (view === 'book') { document.getElementById('bookView').style.display = 'block'; renderBookView(); }
   else if (view === 'films') { document.getElementById('filmsView').style.display = 'block'; renderFilmsView(); }
   else if (view === 'rules') { document.getElementById('rulesView').style.display = 'block'; renderRulesView(); }
+  else if (view === 'notes') { document.getElementById('notesView').style.display = 'block'; renderNotesView(); }
   renderSidebar();
   // Push browser history state so back button works
   if (!opts || !opts.skipHistory) {
@@ -4014,6 +4364,7 @@ async function init() {
       hideLoading();
       await loadAllData();
       try { await registerTeamMember(); } catch(e) { console.warn('Team register failed:', e); }
+      try { await ensureNotesTab(); await loadNotes(); updateNotesBadge(); } catch(e) { console.warn('Notes load failed:', e); }
       // Re-render dashboard now that we know admin status
       if (S.currentView === 'dashboard') renderDashboard();
     } catch(e) {
