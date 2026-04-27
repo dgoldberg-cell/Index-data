@@ -785,6 +785,9 @@
       <button class="sb-item" id="sbOverallBtn" onclick="switchView('overall', null)">
         <span class="sb-label">General Dashboard</span>
       </button>
+      <button class="sb-item" id="sbFullBookBtn" onclick="switchView('fullbook', null)">
+        <span class="sb-label">Full Book View</span>
+      </button>
     </div>
     <div class="sb-section">
       <div class="sb-section-title">Clip Types</div>
@@ -2837,10 +2840,14 @@ function renderSidebar() {
   const teamBtn = document.getElementById('sbTeamBtn');
   if (teamBtn) teamBtn.style.display = S.isAdmin ? 'flex' : 'none';
 
-  // Update overall + rules buttons active state
-  document.getElementById('sbOverallBtn').classList.toggle('active', S.currentView === 'overall');
-  document.getElementById('sbFullBookBtn').classList.toggle('active', S.currentView === 'fullbook');
-  document.getElementById('sbRulesBtn').classList.toggle('active', S.currentView === 'rules');
+  // Update overall + rules buttons active state (defensive — skip if any element is missing)
+  const setActive = (id, isActive) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', isActive);
+  };
+  setActive('sbOverallBtn', S.currentView === 'overall');
+  setActive('sbFullBookBtn', S.currentView === 'fullbook');
+  setActive('sbRulesBtn', S.currentView === 'rules');
   if (teamBtn) teamBtn.classList.toggle('active', S.currentView === 'team');
 
   // Build types list
