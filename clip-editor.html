@@ -2240,7 +2240,7 @@ function statusBadgeHTML(status) {
 // QUEUE RENDER
 // ══════════════════════════════════════════════
 function allMatchingClips() {
-  let clips = activeBucket().clips;
+  let clips = [...activeBucket().clips];
   if (S.filter !== 'all') clips = clips.filter(c => getStatus(c) === S.filter);
   if (S.search) {
     const q = S.search.toLowerCase();
@@ -2250,6 +2250,32 @@ function allMatchingClips() {
     clips = clips.filter(c => {
       const rd = activeBucket().reviewData[String(c._rowNum)];
       return rd?.approvedBy === S.userFilter;
+    });
+  }
+  // Default sort: by program number numerically (LT 1, LT 2, LT 3…), then by row number.
+  // Film Chapters have no meaningful program number — sort by film name then clip ID.
+  if (S.activeType === 'film_chapter') {
+    clips.sort((a, b) => {
+      const fa = (a.filmName || '').toLowerCase();
+      const fb = (b.filmName || '').toLowerCase();
+      if (fa !== fb) return fa.localeCompare(fb);
+      return a._rowNum - b._rowNum;
+    });
+  } else {
+    clips.sort((a, b) => {
+      const na = parseInt(a.programNum);
+      const nb = parseInt(b.programNum);
+      const aNum = !isNaN(na);
+      const bNum = !isNaN(nb);
+      if (aNum && bNum && na !== nb) return na - nb;
+      if (aNum && !bNum) return -1;
+      if (!aNum && bNum) return 1;
+      if (!aNum && !bNum) {
+        const sa = (a.programNum || '').toString();
+        const sb = (b.programNum || '').toString();
+        if (sa !== sb) return sa.localeCompare(sb);
+      }
+      return a._rowNum - b._rowNum;
     });
   }
   return clips;
