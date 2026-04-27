@@ -619,30 +619,30 @@
     overflow: hidden; box-shadow: var(--shadow);
   }
   .team-row {
-    display: flex; gap: 14px; align-items: center; padding: 14px 20px;
-    border-bottom: 1px solid var(--border); font-size: 13px;
+    display: flex; gap: 10px; align-items: center; padding: 8px 14px;
+    border-bottom: 1px solid var(--border); font-size: 12.5px;
   }
   .team-row:last-child { border-bottom: none; }
   .team-row:hover { background: var(--bg2); }
   .team-row.you { background: var(--accent-light); }
   .team-avatar {
-    width: 38px; height: 38px; border-radius: 50%;
+    width: 28px; height: 28px; border-radius: 50%;
     background: linear-gradient(180deg, var(--accent-light), var(--accent-soft));
-    color: var(--accent2); font-size: 13px; font-weight: 600;
+    color: var(--accent2); font-size: 11px; font-weight: 600;
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     box-shadow: var(--shadow-clay);
   }
-  .team-info { flex: 1; min-width: 0; }
-  .team-name { font-weight: 600; color: var(--tx); }
-  .team-email { font-size: 11px; color: var(--tx3); margin-top: 1px; }
-  .team-meta { font-size: 10.5px; color: var(--tx4); flex-shrink: 0; text-align: right; line-height: 1.4; }
+  .team-info { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+  .team-name { font-weight: 600; color: var(--tx); font-size: 12.5px; flex-shrink: 0; }
+  .team-email { font-size: 10.5px; color: var(--tx3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .team-meta { font-size: 10px; color: var(--tx4); flex-shrink: 0; text-align: right; line-height: 1.3; }
   .team-role {
-    font-size: 9.5px; padding: 3px 10px; border-radius: var(--radius-pill);
+    font-size: 9px; padding: 2px 8px; border-radius: var(--radius-pill);
     background: var(--bg2); color: var(--tx3); text-transform: uppercase;
-    letter-spacing: 0.8px; flex-shrink: 0; font-weight: 600;
+    letter-spacing: 0.6px; flex-shrink: 0; font-weight: 600;
   }
   .team-role.admin { background: var(--accent-light); color: var(--accent2); }
-  .team-stat { font-size: 11px; color: var(--tx3); margin-left: 8px; font-weight: 500; }
+  .team-stat { font-size: 11px; color: var(--tx3); margin-left: 4px; font-weight: 600; flex-shrink: 0; }
   .dash-team-list {
     background: var(--panel); border-radius: var(--radius2);
     overflow: hidden; box-shadow: var(--shadow-clay);
@@ -794,9 +794,6 @@
       <div id="sbTypesList"></div>
     </div>
     <div class="sb-section sb-bottom">
-      <button class="sb-item" id="sbRulesBtn" onclick="switchView('rules', null)">
-        <span class="sb-label">Rules</span>
-      </button>
       <button class="sb-item" id="sbTeamBtn" onclick="switchView('team', null)" style="display:none">
         <span class="sb-label">Team</span>
       </button>
@@ -873,12 +870,12 @@
   <div id="dashboardView" style="display:none;">
     <div class="dash-wrap">
       <div class="dash-header">
-        <div>
-          <h1 class="dash-title">Sichos Summary Editor</h1>
-          <p class="dash-sub">Overview of all <strong id="dashTotal">…</strong> Sicha clips and current progress</p>
+        <div style="flex:1">
+          <h1 class="dash-title" id="dashTitle">Dashboard</h1>
+          <p class="dash-sub" id="dashSub">Overview of <strong id="dashTotal">…</strong> clips and current progress</p>
         </div>
         <div class="dash-actions">
-          <button class="btn btn-primary" onclick="switchView('queue', document.querySelector('[data-view=&quot;queue&quot;]'))">▶ Continue in Queue</button>
+          <button class="btn btn-primary" onclick="selectTypeView(S.activeType,'queue')">▶ Continue in Queue</button>
         </div>
       </div>
 
@@ -898,7 +895,19 @@
           <span class="dash-legend-item"><span class="dash-dot dash-dot-unprocessed"></span> Unprocessed</span>
         </div>
       </div>
-      <div class="dash-program-grid" id="dashProgramGrid"></div>
+      <div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap">
+        <div style="flex:2;min-width:0">
+          <div class="dash-program-grid" id="dashProgramGrid"></div>
+          <div style="text-align:center;margin-top:10px"><button class="btn btn-sm" id="dashProgramExpandBtn" onclick="togglePrograms()" style="display:none">Show all</button></div>
+        </div>
+        <div id="dashMissingPanel" style="flex:1;min-width:240px;max-width:320px;display:none">
+          <div style="background:var(--panel);border-radius:var(--radius2);padding:14px 16px;box-shadow:var(--shadow-clay)">
+            <div style="font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">Missing Programs</div>
+            <div id="dashMissingList" style="font-family:monospace;font-size:12px;line-height:1.7;color:var(--tx2);max-height:280px;overflow-y:auto"></div>
+            <div id="dashMissingCount" style="font-size:10px;color:var(--tx4);margin-top:8px;font-style:italic"></div>
+          </div>
+        </div>
+      </div>
 
       <div id="dashTeamSection" style="display:none;margin-top:32px;">
         <div class="dash-section-header">
@@ -1634,7 +1643,8 @@ async function registerTeamMember() {
   const email = S.user.email;
   const now = new Date().toISOString();
   const existing = S.team.find(m => m.email === email);
-  const role = CONFIG.ADMIN_EMAILS.includes(email) ? 'admin' : (existing?.role || 'editor');
+  // Always check the canonical admin list — don't trust stored role for admin status
+  const role = CONFIG.ADMIN_EMAILS.includes(email) ? 'admin' : (existing?.role && existing.role !== 'admin' ? existing.role : 'editor');
   const member = {
     email,
     name: S.user.name || existing?.name || email.split('@')[0],
@@ -2878,6 +2888,7 @@ function renderSidebar() {
         <div class="sb-sub-item ${isActiveType && S.currentView === 'attention' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','attention')">Attention</div>
         <div class="sb-sub-item ${isActiveType && S.currentView === 'export' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','export')">Export</div>
         <div class="sb-sub-item ${isActiveType && S.currentView === 'book' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','book')">Book View</div>
+        <div class="sb-sub-item ${isActiveType && S.currentView === 'rules' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','rules')">AI Rules</div>
       </div>
     </div>`;
   }).join('');
@@ -3356,13 +3367,13 @@ function renderOverallDashboard() {
       const last = m.lastSeen ? new Date(m.lastSeen).toLocaleString() : '—';
       const initials = (m.name || m.email).substring(0, 2).toUpperCase();
       const s = stats2[m.email] || { approvals: 0 };
-      return `<div class="team-row ${isMe ? 'you' : ''}">
+      return `<div class="team-row ${isMe ? 'you' : ''}" style="cursor:pointer" onclick="viewMember('${esc(m.email).replace(/'/g, "\\'")}')">
         <div class="team-avatar">${esc(initials)}</div>
         <div class="team-info">
           <div class="team-name">${esc(m.name || m.email)}${isMe ? ' <span style="color:var(--tx4);font-weight:normal;font-size:10px">(you)</span>' : ''}</div>
           <div class="team-email">${esc(m.email)}</div>
         </div>
-        <span class="team-stat">✅ ${s.approvals}</span>
+        <span class="team-stat">✓ ${s.approvals}</span>
         <span class="team-role ${m.role === 'admin' ? 'admin' : ''}">${esc(m.role)}</span>
         <div class="team-meta">last seen<br>${esc(last)}</div>
       </div>`;
@@ -3370,33 +3381,197 @@ function renderOverallDashboard() {
   } else { teamSect.style.display = 'none'; }
 }
 
+// Track which member is being viewed in detail (null = list view)
+let _selectedMember = null;
+let _memberSectionFilter = 'all'; // 'all' or a typeKey
+
 function renderTeamView() {
+  if (_selectedMember) {
+    renderMemberDetail(_selectedMember);
+    return;
+  }
   const el = document.getElementById('teamFullList');
   if (!S.team?.length) { el.innerHTML = '<div class="empty-state">No team members yet</div>'; return; }
   const me = S.user?.email;
+  // Compute approval counts across ALL types for each team member
+  const approvalCounts = {};
+  S.team.forEach(m => { approvalCounts[m.email] = 0; });
+  CLIP_TYPES.forEach(t => {
+    const bucket = S.byType[t.key];
+    if (!bucket) return;
+    Object.values(bucket.reviewData).forEach(rd => {
+      if (rd.approvedBy && approvalCounts[rd.approvedBy] !== undefined) approvalCounts[rd.approvedBy]++;
+    });
+  });
   const sorted = [...S.team].sort((a, b) => (b.lastSeen || '').localeCompare(a.lastSeen || ''));
   el.innerHTML = sorted.map(m => {
     const isMe = m.email === me;
     const last = m.lastSeen ? new Date(m.lastSeen).toLocaleString() : '—';
     const initials = (m.name || m.email).substring(0, 2).toUpperCase();
-    return `<div class="team-row ${isMe ? 'you' : ''}">
+    const apr = approvalCounts[m.email] || 0;
+    return `<div class="team-row ${isMe ? 'you' : ''}" onclick="viewMember('${esc(m.email).replace(/'/g, "\\'")}')" style="cursor:pointer">
       <div class="team-avatar">${esc(initials)}</div>
       <div class="team-info">
         <div class="team-name">${esc(m.name || m.email)}${isMe ? ' (you)' : ''}</div>
         <div class="team-email">${esc(m.email)}</div>
       </div>
+      <span class="team-stat" style="font-size:11px;color:var(--tx3);font-weight:500;">✓ ${apr}</span>
       <span class="team-role ${m.role === 'admin' ? 'admin' : ''}">${esc(m.role)}</span>
       <div class="team-meta">last seen<br>${esc(last)}</div>
     </div>`;
   }).join('');
 }
 
+function viewMember(email) {
+  _selectedMember = email;
+  _memberSectionFilter = 'all';
+  if (S.currentView !== 'team') {
+    switchView('team', null);
+  } else {
+    renderMemberDetail(email);
+  }
+}
+
+function backToTeamList() {
+  _selectedMember = null;
+  renderTeamView();
+}
+
+function renderMemberDetail(email) {
+  const el = document.getElementById('teamFullList');
+  const member = S.team.find(m => m.email === email);
+  if (!member) { _selectedMember = null; renderTeamView(); return; }
+
+  // Gather all clips this member has approved/edited, grouped by type
+  const clipsByType = {};
+  CLIP_TYPES.forEach(t => {
+    const bucket = S.byType[t.key];
+    if (!bucket) return;
+    const found = [];
+    bucket.clips.forEach(c => {
+      const rd = bucket.reviewData[String(c._rowNum)];
+      if (rd?.approvedBy === email) found.push(c);
+    });
+    if (found.length) clipsByType[t.key] = found;
+  });
+
+  const totalCount = Object.values(clipsByType).reduce((s, arr) => s + arr.length, 0);
+  const initials = (member.name || member.email).substring(0, 2).toUpperCase();
+
+  // Section filter dropdown — only show types where this member did work
+  const filterOptions = ['<option value="all">All sections</option>']
+    .concat(CLIP_TYPES.filter(t => clipsByType[t.key])
+      .map(t => `<option value="${t.key}" ${_memberSectionFilter === t.key ? 'selected' : ''}>${esc(t.displayName)} (${clipsByType[t.key].length})</option>`));
+
+  // Build list — filtered by section
+  const types = _memberSectionFilter === 'all' ? Object.keys(clipsByType) : [_memberSectionFilter];
+  let listHTML = '';
+  types.forEach(typeKey => {
+    const clips = clipsByType[typeKey] || [];
+    if (!clips.length) return;
+    const t = getTypeByKey(typeKey);
+    listHTML += `<div style="margin-bottom:24px">
+      <h3 style="font-family:var(--font-serif);font-size:18px;font-weight:500;margin-bottom:10px;color:var(--tx2)">${esc(t.displayName)} <span style="font-size:12px;color:var(--tx3);font-weight:400">(${clips.length})</span></h3>
+      <div class="dash-team-list">`;
+    clips.forEach(c => {
+      const bucket = S.byType[typeKey];
+      const rd = bucket.reviewData[String(c._rowNum)];
+      const when = rd?.approvedAt ? new Date(rd.approvedAt).toLocaleString() : '—';
+      const thumb = c.thumbnail
+        ? `<img src="${esc(c.thumbnail)}" style="width:60px;height:38px;object-fit:cover;border-radius:8px;flex-shrink:0" onerror="this.style.display='none'">`
+        : `<div style="width:60px;height:38px;background:var(--bg3);border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--tx4);font-size:10px">—</div>`;
+      listHTML += `<div class="team-row" style="cursor:pointer" onclick="openClipFromMember('${typeKey}', ${c._rowNum})">
+        ${thumb}
+        <div class="team-info">
+          <div class="team-name">${esc(c.title)}</div>
+          <div class="team-email">${c.programNum ? 'LT ' + esc(c.programNum) + ' · ' : ''}Clip #${c._rowNum}</div>
+        </div>
+        <div class="team-meta">approved<br>${esc(when)}</div>
+      </div>`;
+    });
+    listHTML += `</div></div>`;
+  });
+  if (!listHTML) listHTML = '<div class="empty-state">No work yet by this member.</div>';
+
+  el.innerHTML = `<button class="btn btn-sm" onclick="backToTeamList()" style="margin-bottom:16px">← Back to team</button>
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:18px;background:var(--panel);border-radius:var(--radius2);padding:18px 22px;box-shadow:var(--shadow-clay)">
+      <div class="team-avatar" style="width:54px;height:54px;font-size:18px">${esc(initials)}</div>
+      <div style="flex:1">
+        <div style="font-family:var(--font-serif);font-size:22px;font-weight:500;color:var(--tx)">${esc(member.name || member.email)}</div>
+        <div style="font-size:12px;color:var(--tx3);margin-top:2px">${esc(member.email)} · <span style="color:var(--accent2);font-weight:600">${totalCount} approval${totalCount === 1 ? '' : 's'} across ${Object.keys(clipsByType).length} section${Object.keys(clipsByType).length === 1 ? '' : 's'}</span></div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--tx3);margin-right:6px">Filter section:</label>
+        <select onchange="setMemberSectionFilter(this.value)" style="font-size:12px;padding:6px 10px;border:none;border-radius:var(--radius-pill);background:var(--bg2);color:var(--tx);font-family:var(--font-sans);box-shadow:var(--shadow-inner)">
+          ${filterOptions.join('')}
+        </select>
+      </div>
+    </div>
+    ${listHTML}`;
+}
+
+function setMemberSectionFilter(val) {
+  _memberSectionFilter = val;
+  if (_selectedMember) renderMemberDetail(_selectedMember);
+}
+
+function openClipFromMember(typeKey, rowNum) {
+  S.activeType = typeKey;
+  localStorage.setItem('jem_cse_active_type', typeKey);
+  S.selectedIdx = rowNum;
+  S.filter = 'all';
+  S.search = '';
+  S.rangeStart = 0;
+  // Find page that contains this clip
+  const all = activeBucket().clips;
+  const idx = all.findIndex(c => c._rowNum === rowNum);
+  if (idx >= 0) S.rangeStart = Math.floor(idx / S.rangeSize) * S.rangeSize;
+  switchView('queue', null);
+}
+
 // ══════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════
+let _dashProgramsExpanded = false;
+function togglePrograms() {
+  _dashProgramsExpanded = !_dashProgramsExpanded;
+  renderDashboard();
+}
+
+// Find missing program numbers in the active type's clip set.
+// Approach: detect the numeric range, then list every integer in that range
+// that has no clip. Skip non-numeric program identifiers.
+function renderMissingPrograms(programs) {
+  const panel = document.getElementById('dashMissingPanel');
+  const list = document.getElementById('dashMissingList');
+  const count = document.getElementById('dashMissingCount');
+  if (!panel || !list) return;
+  // Only show for types with numeric program numbers (Addresses/Sichos and similar LT series)
+  const nums = programs.map(p => parseInt(p.num)).filter(n => !isNaN(n));
+  if (nums.length < 5) { panel.style.display = 'none'; return; }
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  if (max - min < 10) { panel.style.display = 'none'; return; }
+  const have = new Set(nums);
+  const missing = [];
+  for (let i = min; i <= max; i++) if (!have.has(i)) missing.push(i);
+  if (!missing.length) {
+    panel.style.display = 'block';
+    list.innerHTML = `<span style="color:var(--green);font-style:italic;font-family:var(--font-sans)">No gaps — all ${max - min + 1} programs accounted for</span>`;
+    count.textContent = `Range LT ${min}–${max}`;
+    return;
+  }
+  panel.style.display = 'block';
+  // Show as a compressed list with comma separators, click to copy or jump
+  list.innerHTML = missing.map(n => `<span style="display:inline-block;background:var(--bg2);padding:1px 8px;border-radius:var(--radius-pill);margin:1px 2px;font-size:11px">LT ${n}</span>`).join('');
+  count.textContent = `${missing.length} missing in range LT ${min}–${max}`;
+}
+
 function renderDashboard() {
+  const typeCfg = activeTypeCfg();
   const total = activeBucket().clips.length;
-  document.getElementById('dashTotal').textContent = total;
+  document.getElementById('dashTitle').textContent = typeCfg.displayName;
+  document.getElementById('dashSub').innerHTML = `Overview of <strong id="dashTotal">${total}</strong> ${esc(typeCfg.displayName.toLowerCase())} clips and current progress`;
   // Count by status
   const counts = { unprocessed: 0, flagged: 0, draft: 0, approved: 0 };
   activeBucket().clips.forEach(c => { counts[getStatus(c)] = (counts[getStatus(c)] || 0) + 1; });
@@ -3437,7 +3612,14 @@ function renderDashboard() {
     if (isNaN(na)) return 1; if (isNaN(nb)) return -1;
     return na - nb;
   });
-  document.getElementById('dashProgramGrid').innerHTML = programs.map(p => {
+
+  // Collapsible: show only first PROGRAM_PREVIEW_COUNT unless expanded
+  const PROGRAM_PREVIEW_COUNT = 30;
+  const expanded = !!_dashProgramsExpanded;
+  const visiblePrograms = expanded ? programs : programs.slice(0, PROGRAM_PREVIEW_COUNT);
+  const hiddenCount = programs.length - visiblePrograms.length;
+
+  document.getElementById('dashProgramGrid').innerHTML = visiblePrograms.map(p => {
     let cls = 'status-unprocessed';
     if (p.approved === p.total) cls = 'status-approved';
     else if (p.flagged > 0 && p.approved === 0 && p.draft === 0) cls = 'status-flagged';
@@ -3448,6 +3630,17 @@ function renderDashboard() {
       <div class="dash-program-cell-num">${esc(p.num)}</div>
     </div>`;
   }).join('');
+
+  const expandBtn = document.getElementById('dashProgramExpandBtn');
+  if (expandBtn) {
+    if (programs.length > PROGRAM_PREVIEW_COUNT) {
+      expandBtn.style.display = 'inline-flex';
+      expandBtn.textContent = expanded ? 'Show less' : `Show all ${programs.length} (+${hiddenCount} more)`;
+    } else expandBtn.style.display = 'none';
+  }
+
+  // Missing programs panel — find numeric gaps in the sequence
+  renderMissingPrograms(programs);
 
   renderTeamSection();
 }
@@ -3734,6 +3927,8 @@ function switchView(view, btn, opts) {
   if (view === 'overall') { document.getElementById('overallView').style.display = 'block'; renderOverallDashboard(); }
   else if (view === 'fullbook') { document.getElementById('fullBookView').style.display = 'block'; renderFullBookView(); }
   else if (view === 'team') { document.getElementById('teamView').style.display = 'block'; renderTeamView(); }
+  // Reset member detail state if leaving team view
+  if (view !== 'team') { _selectedMember = null; }
   else if (view === 'dashboard') { document.getElementById('dashboardView').style.display = 'block'; renderDashboard(); }
   else if (view === 'queue') {
     document.getElementById('queueView').style.display = 'flex';
