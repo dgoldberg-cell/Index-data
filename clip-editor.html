@@ -1108,7 +1108,7 @@ const CONFIG = {
     CLIP_TYPE: 29,    // AD
   },
   TEAM_TAB: '_Team',
-  NOTES_TAB: '_Notes',
+  NOTES_TAB: '_CSE_Notes',
   ADMIN_EMAILS: ['dgoldberg@jemedia.org', 'es@jemedia.org'],
   ENTRIES_PER_PAGE: 10, // book view
 };
@@ -2262,9 +2262,15 @@ function allMatchingClips() {
       return a._rowNum - b._rowNum;
     });
   } else {
+    // Extract numeric program number (handles 'LT 5', '5', ' 5 ', '5a')
+    const progNum = (s) => {
+      if (s === null || s === undefined) return NaN;
+      const m = String(s).match(/(\d+)/);
+      return m ? parseInt(m[1]) : NaN;
+    };
     clips.sort((a, b) => {
-      const na = parseInt(a.programNum);
-      const nb = parseInt(b.programNum);
+      const na = progNum(a.programNum);
+      const nb = progNum(b.programNum);
       const aNum = !isNaN(na);
       const bNum = !isNaN(nb);
       if (aNum && bNum && na !== nb) return na - nb;
