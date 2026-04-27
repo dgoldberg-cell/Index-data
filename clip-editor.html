@@ -276,6 +276,113 @@
   #toast.success { background: var(--green); }
   #toast.error { background: var(--red); }
 
+  /* ── DASHBOARD ── */
+  #dashboardView { flex: 1; overflow-y: auto; padding: 28px 32px; background: var(--bg); }
+  .dash-wrap { max-width: 1200px; margin: 0 auto; }
+  .dash-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; gap: 18px; flex-wrap: wrap; }
+  .dash-title { font-size: 24px; font-weight: normal; color: var(--tx); margin: 0; letter-spacing: -0.3px; }
+  .dash-sub { font-size: 13px; color: var(--tx3); margin-top: 4px; }
+  .dash-actions { display: flex; gap: 8px; }
+  .dash-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .dash-stat-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius2);
+    padding: 16px 18px; cursor: pointer; transition: all 0.15s; box-shadow: var(--shadow);
+  }
+  .dash-stat-card:hover { border-color: var(--border2); transform: translateY(-1px); box-shadow: var(--shadow2); }
+  .dash-stat-card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--tx4); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .dash-stat-card .value { font-size: 28px; font-weight: normal; color: var(--tx); line-height: 1; }
+  .dash-stat-card .pct { font-size: 12px; color: var(--tx3); margin-top: 4px; }
+  .dash-stat-card.approved { border-left: 4px solid var(--green); }
+  .dash-stat-card.draft { border-left: 4px solid var(--yellow); }
+  .dash-stat-card.flagged { border-left: 4px solid var(--red); }
+  .dash-stat-card.unprocessed { border-left: 4px solid var(--tx4); }
+  .dash-progressbar-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius2); padding: 16px 20px; margin-bottom: 28px; box-shadow: var(--shadow); }
+  .dash-progressbar-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--tx2); margin-bottom: 8px; }
+  .dash-progressbar { background: var(--bg3); border-radius: 8px; height: 14px; overflow: hidden; position: relative; }
+  .dash-progressbar-fill { height: 100%; background: linear-gradient(90deg, var(--green) 0%, #5d9572 100%); border-radius: 8px; transition: width 0.5s; }
+  .dash-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+  .dash-section-title { font-size: 17px; color: var(--tx); font-weight: normal; }
+  .dash-legend { display: flex; gap: 14px; flex-wrap: wrap; }
+  .dash-legend-item { font-size: 11px; color: var(--tx3); display: flex; align-items: center; gap: 5px; }
+  .dash-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .dash-dot-approved { background: var(--green); }
+  .dash-dot-draft { background: var(--yellow); }
+  .dash-dot-flagged { background: var(--red); }
+  .dash-dot-unprocessed { background: var(--tx4); }
+  .dash-program-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
+  .dash-program-cell {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 4px; text-align: center; cursor: pointer; transition: all 0.12s;
+    font-size: 11px; font-family: monospace; color: var(--tx2); position: relative;
+    overflow: hidden;
+  }
+  .dash-program-cell:hover { transform: scale(1.05); border-color: var(--accent); z-index: 2; box-shadow: var(--shadow2); }
+  .dash-program-cell.status-approved { background: var(--green-light); border-color: var(--green); color: var(--green); }
+  .dash-program-cell.status-draft { background: var(--yellow-light); border-color: var(--yellow); color: var(--yellow); }
+  .dash-program-cell.status-flagged { background: var(--red-light); border-color: var(--red); color: var(--red); }
+  .dash-program-cell.status-mixed { background: linear-gradient(135deg, var(--yellow-light) 50%, var(--green-light) 50%); border-color: var(--border2); }
+  .dash-program-cell-num { font-weight: bold; font-size: 12px; }
+  .dash-program-cell-count { font-size: 9px; opacity: 0.7; margin-top: 1px; }
+
+  /* ── RULES VIEW ── */
+  #rulesView { flex: 1; overflow-y: auto; padding: 28px 32px; background: var(--bg); }
+  .rules-wrap { max-width: 980px; margin: 0 auto; }
+  .rules-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; gap: 18px; flex-wrap: wrap; }
+  .rules-meta { font-size: 11px; color: var(--tx3); margin-bottom: 16px; }
+  .rules-cat-section { margin-bottom: 20px; }
+  .rules-cat-header {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px 8px 0 0;
+    font-size: 11px; font-weight: bold; color: var(--tx2); letter-spacing: 1px; text-transform: uppercase;
+    border-bottom: none;
+  }
+  .rules-cat-header-count { font-size: 10px; color: var(--tx4); font-weight: normal; margin-left: auto; letter-spacing: 0.5px; }
+  .rule-card {
+    background: var(--panel); border: 1px solid var(--border); border-top: none;
+    padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start;
+    transition: background 0.12s;
+  }
+  .rule-card:last-child { border-radius: 0 0 8px 8px; }
+  .rule-card:hover { background: var(--bg); }
+  .rule-card.inactive { opacity: 0.55; background: var(--bg2); }
+  .rule-toggle {
+    flex-shrink: 0; width: 36px; height: 20px; background: var(--bg3); border-radius: 10px;
+    position: relative; cursor: pointer; transition: background 0.15s; margin-top: 2px;
+  }
+  .rule-toggle.on { background: var(--green); }
+  .rule-toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    background: #fff; border-radius: 50%; transition: left 0.15s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .rule-toggle.on::after { left: 18px; }
+  .rule-body { flex: 1; min-width: 0; }
+  .rule-title-input {
+    width: 100%; font-size: 13px; font-weight: bold; color: var(--tx);
+    border: none; background: transparent; padding: 2px 4px; margin-bottom: 4px;
+    border-radius: 4px; font-family: inherit; outline: none;
+  }
+  .rule-title-input:hover, .rule-title-input:focus { background: var(--bg2); }
+  .rule-content-input {
+    width: 100%; font-size: 12px; color: var(--tx2); line-height: 1.6;
+    border: 1px solid transparent; background: transparent; padding: 6px 8px;
+    border-radius: 4px; font-family: 'Georgia', serif; outline: none;
+    resize: vertical; min-height: 32px;
+  }
+  .rule-content-input:hover { background: var(--bg2); }
+  .rule-content-input:focus { background: var(--bg); border-color: var(--accent); }
+  .rule-actions { flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+  .rule-action-btn {
+    border: none; background: none; cursor: pointer; padding: 4px 6px; border-radius: 4px;
+    color: var(--tx3); font-size: 11px; transition: all 0.12s; font-family: inherit;
+  }
+  .rule-action-btn:hover { background: var(--bg2); color: var(--tx); }
+  .rule-action-btn.save { color: var(--green); font-weight: bold; }
+  .rule-action-btn.delete:hover { background: var(--red-light); color: var(--red); }
+  .rule-status-saving { font-size: 10px; color: var(--tx4); font-style: italic; }
+  .rule-status-saved { font-size: 10px; color: var(--green); }
+  .rule-id-badge { font-size: 9px; color: var(--tx4); font-family: monospace; }
+
   /* ── MISC ── */
   .divider { height: 1px; background: var(--border); margin: 4px 0; }
   .empty-state { text-align: center; padding: 40px; color: var(--tx4); font-size: 14px; }
@@ -323,10 +430,12 @@
   <div class="topbar-title">Clip Summary Editor</div>
   <div class="topbar-sep"></div>
   <div class="topbar-nav">
-    <button class="topbar-nav-btn active" data-view="queue" onclick="switchView('queue',this)">📋 Queue</button>
-    <button class="topbar-nav-btn" data-view="attention" onclick="switchView('attention',this)">🚩 Needs Attention <span id="attentionCount" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:0 5px;font-size:10px;margin-left:2px"></span></button>
+    <button class="topbar-nav-btn active" data-view="dashboard" onclick="switchView('dashboard',this)">📊 Dashboard</button>
+    <button class="topbar-nav-btn" data-view="queue" onclick="switchView('queue',this)">📋 Queue</button>
+    <button class="topbar-nav-btn" data-view="attention" onclick="switchView('attention',this)">🚩 Attention <span id="attentionCount" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:0 5px;font-size:10px;margin-left:2px"></span></button>
     <button class="topbar-nav-btn" data-view="export" onclick="switchView('export',this)">📄 Export</button>
     <button class="topbar-nav-btn" data-view="book" onclick="switchView('book',this)">📖 Book View</button>
+    <button class="topbar-nav-btn" data-view="rules" onclick="switchView('rules',this)">⚙ Rules</button>
   </div>
   <div class="topbar-right">
     <div class="user-chip">
@@ -339,6 +448,57 @@
 
 <!-- APP SHELL -->
 <div id="appShell">
+
+  <!-- DASHBOARD VIEW -->
+  <div id="dashboardView" style="display:none;">
+    <div class="dash-wrap">
+      <div class="dash-header">
+        <div>
+          <h1 class="dash-title">Sichos Summary Editor</h1>
+          <p class="dash-sub">Overview of all <strong id="dashTotal">…</strong> Sicha clips and current progress</p>
+        </div>
+        <div class="dash-actions">
+          <button class="btn btn-primary" onclick="switchView('queue', document.querySelector('[data-view=&quot;queue&quot;]'))">▶ Continue in Queue</button>
+        </div>
+      </div>
+
+      <div class="dash-stats" id="dashStats"></div>
+
+      <div class="dash-progressbar-wrap">
+        <div class="dash-progressbar-label"><span>Overall progress</span> <span id="dashOverallPct">—</span></div>
+        <div class="dash-progressbar"><div class="dash-progressbar-fill" id="dashProgressFill" style="width:0%"></div></div>
+      </div>
+
+      <div class="dash-section-header">
+        <h2 class="dash-section-title">All Programs</h2>
+        <div class="dash-legend">
+          <span class="dash-legend-item"><span class="dash-dot dash-dot-approved"></span> Approved</span>
+          <span class="dash-legend-item"><span class="dash-dot dash-dot-draft"></span> Draft</span>
+          <span class="dash-legend-item"><span class="dash-dot dash-dot-flagged"></span> Flagged</span>
+          <span class="dash-legend-item"><span class="dash-dot dash-dot-unprocessed"></span> Unprocessed</span>
+        </div>
+      </div>
+      <div class="dash-program-grid" id="dashProgramGrid"></div>
+    </div>
+  </div>
+
+  <!-- RULES VIEW -->
+  <div id="rulesView" style="display:none;">
+    <div class="rules-wrap">
+      <div class="rules-header">
+        <div>
+          <h1 class="dash-title">AI Editorial Rules</h1>
+          <p class="dash-sub">Each rule is its own row in the <strong>"AI Rules"</strong> tab of your sheet. Editing one rule cannot affect any other. Toggle the switch to enable/disable a rule without deleting it.</p>
+        </div>
+        <div class="dash-actions">
+          <button class="btn" onclick="reloadRulesFromSheet()">🔄 Reload from Sheet</button>
+          <button class="btn btn-primary" onclick="addNewRule()">+ Add Rule</button>
+        </div>
+      </div>
+      <div class="rules-meta" id="rulesMeta"></div>
+      <div id="rulesContainer"></div>
+    </div>
+  </div>
 
   <!-- QUEUE VIEW -->
   <div id="queueView" style="display:none;">
@@ -385,10 +545,14 @@
 
   <!-- EXPORT VIEW -->
   <div id="exportView" style="display:none;">
-    <div class="export-header">
+    <div class="export-header" style="flex-wrap:wrap">
       <div class="export-title">Export — Sichos Summaries</div>
-      <button class="btn btn-primary" onclick="exportHTML()">⬇ Export as HTML</button>
+      <button class="btn btn-primary" onclick="generateSheetExport()">📊 Generate Sheet Tab</button>
+      <button class="btn" onclick="exportHTML()">⬇ Export as HTML</button>
       <button class="btn" onclick="window.print()">🖨 Print</button>
+      <label style="font-size:11px;color:var(--tx3);display:flex;align-items:center;gap:5px;margin-left:6px;cursor:pointer">
+        <input type="checkbox" id="exportShowOriginal" onchange="renderExportView()" style="accent-color:var(--accent)"> Show original description column
+      </label>
       <span id="exportStats" style="font-size:12px;color:var(--tx3);margin-left:8px;"></span>
     </div>
     <div class="export-list" id="exportList"></div>
@@ -421,91 +585,84 @@ const CONFIG = {
   // Column indices (0-based from col A)
   COL: {
     DURATION: 1,      // B - duration in milliseconds
-    DESCRIPTION: 7,   // H - original description
+    DESCRIPTION: 7,   // H - original description (read source)
     TITLE: 9,         // J - clip title
     THUMBNAIL: 4,     // E
     KEYWORDS: 6,      // G
     PROGRAM_NUM: 15,  // P
     DATE: 16,         // Q
-    REWRITE: 24,      // Y - approved rewrite goes here
+    REWRITE: 7,       // H - approved rewrite OVERWRITES col H (original lives in review tab backup)
     TRANSCRIPT: 28,   // AC
     CLIP_TYPE: 29,    // AD
   },
   CLIP_TYPE_FILTER: 'LT Sicha',
+  RULES_TAB: 'AI Rules',
   ENTRIES_PER_PAGE: 10, // book view
 };
 
-// Editorial prompt (rules)
-const EDITORIAL_PROMPT = `You are an editor rewriting Jewish educational video summaries for the back of the JEM Video Index book. Rewrite the summary provided according to the rules below. Output only the rewritten summary — no preamble, no explanation, no notes about what was changed.
+// Default rules — used ONLY to seed the AI Rules tab on first sign-in.
+// After that, all rule reads come from the sheet. Each rule is its own row.
+const DEFAULT_RULES = [
+  // category: length
+  { category: 'Length', title: 'Target word count', content: 'Target: 90 words. Maximum: 110 words. This is a hard cap, not a guideline.', active: true },
+  { category: 'Length', title: 'Length independence', content: 'Output length does NOT depend on input length. A 500-word input and a 150-word input both produce a ~90-word output.', active: true },
+  { category: 'Length', title: 'Cut over the cap', content: 'If your draft exceeds 110 words, cut it further — even if that means removing content you think is important. Compress the point; don\'t preserve every detail.', active: true },
+  { category: 'Length', title: 'Short inputs stay short', content: 'Short inputs may produce shorter outputs (45–70 words is fine if the source is genuinely brief). Never pad.', active: true },
+  { category: 'Length', title: 'Paragraph structure', content: 'Break into short paragraphs of 2–4 sentences. No bullets, no headers.', active: true },
+  { category: 'Length', title: 'No scene-setting opener', content: 'Never open with a scene-setting clause like "While discussing...," "In modern times...," "During the year of..." — cut straight to the substance.', active: true },
+  { category: 'Length', title: 'No restatement closers', content: 'Remove closing sentences that only restate what was just said.', active: true },
 
-## 1. Length and structure
-Target: 90 words. Maximum: 110 words. This is a hard cap, not a guideline.
-- The output length does NOT depend on the length of the input.
-- If your draft exceeds 110 words, cut it further.
-- Short inputs may produce shorter outputs (45–70 words is fine if the source is genuinely brief). Never pad.
-- Break into short paragraphs of 2–4 sentences. No bullets, no headers.
-- Never open with a scene-setting clause like "While discussing...," "In modern times...," "During the year of..."
-- Remove closing sentences that only restate what was just said.
+  // category: flow
+  { category: 'Flow & Rhythm', title: 'Vary sentence length', content: 'Short sentences are fine, but do not stack many 5–8 word sentences in a row. The prose should read naturally, not like a bulleted list with periods instead of bullets.', active: true },
+  { category: 'Flow & Rhythm', title: 'Join linked ideas', content: 'When two sentences express a linked idea, join them using semicolons (closely related independent clauses), em dashes (continuation/elaboration), colons (payoff/definition), appositives, or participial phrases.', active: true },
+  { category: 'Flow & Rhythm', title: 'Keep meaningful connectives', content: 'Connective words like "and," "but," "yet," "though," "while" carry meaning when they mark real contrast, sequence, or condition — keep them where they earn their place.', active: true },
+  { category: 'Flow & Rhythm', title: 'Cut empty transitions', content: 'Cut transitions that only announce a shift without adding meaning: "Furthermore," "Moreover," "In addition," "As a result," "Consequently," "That being said," "Needless to say."', active: true },
 
-### Flow and rhythm
-Short sentences are fine, but do not stack many 5–8 word sentences in a row.
-When two sentences express a linked idea, join them using semicolons, em dashes, colons, appositives, or participial phrases.
-Cut transitions that only announce a shift: "Furthermore," "Moreover," "In addition," "As a result," "Consequently," "That being said," "Needless to say."
+  // category: voice
+  { category: 'Voice', title: 'Direct second-person when addressed', content: 'When the content is addressed to the audience (children, students, followers), shift from third-person ("Jewish children must...") to direct second-person ("You must...").', active: true },
+  { category: 'Voice', title: 'Third-person for narrative', content: 'When the content is narrative or explanatory (describing an event, law, or teaching), keep third-person — do not force "you" where it does not fit.', active: true },
+  { category: 'Voice', title: 'Cut hedging filler', content: 'Cut filler words: "of course," "similarly," "needless to say," "it goes without saying," "as we know," "in truth," "indeed."', active: true },
+  { category: 'Voice', title: 'State lessons directly', content: 'Do not announce that a lesson will be drawn — just state the lesson.', active: true },
 
-## 2. Voice
-- When content is addressed to the audience, shift to direct second-person ("You must...").
-- When content is narrative or explanatory, keep third-person.
-- Cut hedging filler: "of course," "similarly," "needless to say," "it goes without saying," "as we know," "in truth," "indeed."
-- Do not announce that a lesson will be drawn — just state the lesson.
+  // category: cuts
+  { category: 'Cuts', title: 'No meta-commentary', content: 'Cut meta-commentary about the source text ("Now, why did he decide to include this here?", "The commentaries explain that...").', active: true },
+  { category: 'Cuts', title: 'No gender pairs', content: 'Cut parenthetical gender pairs ("his or her," "he or she") — use a single pronoun or rephrase.', active: true },
+  { category: 'Cuts', title: 'Compress analogies', content: 'Cut extended analogies or illustrative stories down to their punchline. If the point lands in one sentence, do not use three.', active: true },
+  { category: 'Cuts', title: 'No redundant intensifiers', content: 'Cut redundant intensifiers ("taxing daily schedule he endured" → "taxing daily schedule").', active: true },
+  { category: 'Cuts', title: 'Drop redundant verses', content: 'When a verse or quoted text repeats what is said immediately before or after it, remove the verse — don\'t state the same idea twice. Keep verses that carry the point themselves.', active: true },
 
-## 3. Cuts to make
-- Cut meta-commentary about the source text.
-- Cut parenthetical gender pairs — use a single pronoun or rephrase.
-- Cut extended analogies down to their punchline.
-- Cut redundant intensifiers.
-- When a verse repeats what is said immediately before or after it, remove the verse.
+  // category: spelling
+  { category: 'Spelling — Sephardic', title: 'Convert -s/-os to -t/-ot', content: 'Shabbat (not Shabbos), mitzvot (not mitzvos), Mashiach (not Moshiach), Shavuot, Sukkot, Simchat Torah, bat (not bas), Beit Hamikdash, Beit Midrash, Tzemach Tzedek (single d). General rule: any Hebrew word ending "-s"/"-os" → "-t"/"-ot".', active: true },
+  { category: 'Spelling — G-d', title: 'G-d hyphenation', content: 'G-d, G-d\'s, G-d\'s will (never God). L-rd (never Lord) when referring to G-d. A-lmighty (never Almighty) when referring to G-d.', active: true },
+  { category: 'Spelling — Other', title: 'Capitalization & names', content: 'Torah always capitalized. Use: The Rebbe, Alter Rebbe, Mitteler Rebbe, Tzemach Tzedek, Previous Rebbe. "mitzvah objects" (not "mitzvah-possessions").', active: true },
 
-## 4. Terminology and spelling
-### 4a. Sephardic spelling — mandatory conversions
-- Shabbat (not Shabbos), mitzvot (not mitzvos), Mashiach (not Moshiach)
-- Shavuot, Sukkot, Simchat Torah, bat, Beit Hamikdash, Beit Midrash, Tzemach Tzedek
-- Any Hebrew word ending "-s"/"-os" → "-t"/"-ot"
+  // category: italics
+  { category: 'Italicization', title: 'Whitelist (italicize)', content: 'Italicize ONLY these terms (markdown asterisks *term*): mitzvah, mitzvot, shofar, tzaddik, tzaddikim, farbrengen, sicha, sichot, maamar, maamarim, niggun, niggunim, teshuvah, chinuch, shlichut, shliach, shluchim, yeshivah, cheder, nekudah, avodah, kabbalah, Chassid, Chassidim, Anochi, Kumatz, Aleph, bet din, halacha, halachot.', active: true },
+  { category: 'Italicization', title: 'Do NOT italicize', content: 'Do NOT italicize: Torah, Mashiach, Shabbat, Rebbe, Alter Rebbe, Mitteler Rebbe, Tzemach Tzedek, Chassidus, Chassidic, Kohen, Levi, Jerusalem, Hebron, Talmud, Midrash, Zohar, Tanya, Rashi, Maimonides, names of people, months, holidays, places, books of Tanach. If a term is not on the whitelist and not obviously a proper noun, leave it plain. Under-italicizing beats over-italicizing.', active: true },
 
-### 4b. G-d
-- G-d, G-d's (never God); L-rd (never Lord); A-lmighty (never Almighty)
+  // category: punctuation
+  { category: 'Punctuation', title: 'Em dash usage', content: 'Em dash (—) only for emphasis or interruption, not as a comma or colon substitute. Double hyphen (--) may substitute for em dash.', active: true },
 
-### 4c. Other spelling
-- Torah always capitalized
-- The Rebbe, Alter Rebbe, Mitteler Rebbe, Tzemach Tzedek, Previous Rebbe
+  // category: tone
+  { category: 'Tone & Fidelity', title: 'Warm and direct', content: 'Tone is warm and direct.', active: true },
+  { category: 'Tone & Fidelity', title: 'Preserve specifics', content: 'Preserve all theological and halachic specifics — do not soften.', active: true },
+  { category: 'Tone & Fidelity', title: 'Keep names and texts', content: 'Keep names (Maimonides, Mordechai, Tzemach Tzedek) and specific texts (Guide for the Perplexed, Tanya) if the original has them.', active: true },
+  { category: 'Tone & Fidelity', title: 'No invented content', content: 'Do not introduce names, texts, dates, or claims not in the source. If the original hedges on a date or source, preserve the hedge.', active: true },
 
-### 4d. Italicization — whitelist only
-Italicize ONLY: mitzvah, mitzvot, shofar, tzaddik, tzaddikim, farbrengen, sicha, sichot, maamar, maamarim, niggun, niggunim, teshuvah, chinuch, shlichut, shliach, shluchim, yeshivah, cheder, nekudah, avodah, kabbalah, Chassid, Chassidim, Anochi, Kumatz, Aleph, bet din, halacha, halachot
-Do NOT italicize: Torah, Mashiach, Shabbat, Rebbe, Chassidus, Chassidic, Kohen, Levi, and all proper nouns.
+  // category: output
+  { category: 'Output', title: 'Output only the summary', content: 'Output only the rewritten summary. No preamble, no explanation, no headers, no word count. Plain prose in short paragraphs. Italics with markdown asterisks (*term*).', active: true },
 
-### 4e. Punctuation
-Em dash (—) only for emphasis or interruption.
+  // category: self-check
+  { category: 'Final Self-Check', title: 'Spelling sweep', content: 'Before output: Any "-os"/"-us" that should be "-ot"/"-ut"? Any "Moshiach"? → Mashiach. Any "God"? → G-d. Any "bas" in a name? → bat.', active: true },
+  { category: 'Final Self-Check', title: 'Italics sweep', content: 'Any italicized term not on the whitelist? Remove italics. Any whitelist term left plain? Add italics.', active: true },
 
-## 5. Tone and fidelity
-- Warm and direct.
-- Preserve all theological and halachic specifics.
-- Keep names and specific texts if the original has them.
-- Do not introduce names, texts, dates, or claims not in the source.
+  // category: length enforcement
+  { category: 'Length Enforcement (Pass 2)', title: 'Two-pass requirement', content: 'You must do BOTH passes before outputting. Pass 1: write the draft, aim for ~90 words. Pass 2: trim for length. Output only the result of Pass 2. Do not announce that you did the passes.', active: true },
+  { category: 'Length Enforcement (Pass 2)', title: 'Delete transition-only sentences', content: 'In Pass 2, delete sentences whose only job is to announce a transition (start with "However," "Therefore," "Thus," "Furthermore," "Moreover," etc. AND don\'t add new info).', active: true },
+  { category: 'Length Enforcement (Pass 2)', title: 'Compress verbose phrases', content: '"in order to" → "to"; "the fact that" → delete; "a number of" → "several"; "it is important to note that" → delete; "due to the fact that" → "because"; "in the event that" → "if"; "at this point in time" → "now".', active: true },
+  { category: 'Length Enforcement (Pass 2)', title: 'Merge or trim', content: 'Merge two short related sentences into one with semicolons, em dashes, or colons (saves words, improves flow). Delete parenthetical asides not essential. Only after that, if still long, delete the least-central sentence.', active: true },
+];
 
-## 6. Output format
-Output only the rewritten summary. No preamble, no explanation, no headers, no word count. Plain prose in short paragraphs. Italics with markdown asterisks (*term*).
-
-## 7. Final self-check
-1. Any word ending "-os" or "-us" that should be "-ot"? (Shabbos→Shabbat, mitzvos→mitzvot)
-2. Any "Moshiach"? → Mashiach.
-3. Any "God"? → G-d.
-4. Any italicized term not on the whitelist? → remove italics.
-5. Any whitelist term left plain? → add italics.
-6. Any "bas" in a name? → bat.
-
-## FINAL STEP — two-pass length enforcement
-Pass 1: write the draft, aim for ~90 words.
-Pass 2: if over 110 words, cut transition-only sentences, delete last sentence if it only restates, cut verbose phrases, merge short related sentences, delete parenthetical asides, then if still long delete least-central sentence.
-Output only the result of Pass 2.`;
 
 // ══════════════════════════════════════════════
 // STATE
@@ -525,6 +682,7 @@ let S = {
   batchRunning: false,
   rangeStart: 0,
   rangeSize: 50,
+  rulesArr: [], // structured rules loaded from sheet (each rule = one row)
 };
 
 // ══════════════════════════════════════════════
@@ -623,7 +781,7 @@ function rowNum(clip) { return clip._rowNum; } // 1-based sheet row
 // ══════════════════════════════════════════════
 // REVIEW TAB
 // ══════════════════════════════════════════════
-const REVIEW_COLS = { ID: 0, STATUS: 1, ORIGINAL_BACKUP: 2, FLAG_REASON: 3, APPROVED_BY: 4, APPROVED_AT: 5 };
+const REVIEW_COLS = { ID: 0, STATUS: 1, ORIGINAL_BACKUP: 2, FLAG_REASON: 3, APPROVED_BY: 4, APPROVED_AT: 5, DRAFT_TEXT: 6, CHAT_HISTORY: 7 };
 
 async function ensureReviewTab() {
   // Check if tab exists
@@ -639,7 +797,16 @@ async function ensureReviewTab() {
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title: CONFIG.REVIEW_TAB } } }] })
     });
     // Write header
-    await sheetsSet(`'${CONFIG.REVIEW_TAB}'!A1:F1`, [['clip_id','status','original_backup','flag_reason','approved_by','approved_at']]);
+    await sheetsSet(`'${CONFIG.REVIEW_TAB}'!A1:H1`, [['clip_id','status','original_backup','flag_reason','approved_by','approved_at','draft_text','chat_history']]);
+  } else {
+    // Tab exists — ensure new columns G & H exist (migration for older review tabs)
+    try {
+      const hdr = await sheetsGet(`'${CONFIG.REVIEW_TAB}'!A1:H1`);
+      const row = hdr.values?.[0] || [];
+      if (row.length < 8) {
+        await sheetsSet(`'${CONFIG.REVIEW_TAB}'!G1:H1`, [['draft_text','chat_history']]);
+      }
+    } catch {}
   }
 }
 
@@ -656,7 +823,16 @@ async function loadReviewData() {
         flagReason: row[3] || '',
         approvedBy: row[4] || '',
         approvedAt: row[5] || '',
+        draftText: row[6] || '',
+        chatHistory: row[7] || '',
       };
+      // Restore in-memory draft + chat
+      const id = row[0];
+      const clip = S.clips?.find(c => String(c._rowNum) === id);
+      if (clip && row[6]) clip._draft = row[6];
+      if (row[7]) {
+        try { S.chatHistory[parseInt(id)] = JSON.parse(row[7]); } catch {}
+      }
     });
   } catch(e) { console.warn('Review data load error:', e); }
 }
@@ -669,14 +845,138 @@ async function saveReviewRow(clip) {
   const rows = data.values || [];
   let sheetRow = -1;
   rows.forEach((r, i) => { if (r[0] === id) sheetRow = i + 1; });
-  const values = [[id, rd.status||'unprocessed', rd.originalBackup||'', rd.flagReason||'', rd.approvedBy||'', rd.approvedAt||'']];
+  const draftText = rd.draftText || '';
+  const chatHist = S.chatHistory[parseInt(id)] ? JSON.stringify(S.chatHistory[parseInt(id)]) : '';
+  const values = [[id, rd.status||'unprocessed', rd.originalBackup||'', rd.flagReason||'', rd.approvedBy||'', rd.approvedAt||'', draftText, chatHist]];
   if (sheetRow > 0) {
-    await sheetsSet(`'${CONFIG.REVIEW_TAB}'!A${sheetRow}:F${sheetRow}`, values);
+    await sheetsSet(`'${CONFIG.REVIEW_TAB}'!A${sheetRow}:H${sheetRow}`, values);
   } else {
-    // Append
     const nextRow = rows.length + 1;
-    await sheetsSet(`'${CONFIG.REVIEW_TAB}'!A${nextRow}:F${nextRow}`, values);
+    await sheetsSet(`'${CONFIG.REVIEW_TAB}'!A${nextRow}:H${nextRow}`, values);
   }
+}
+
+// ══════════════════════════════════════════════
+// AI RULES (stored in sheet tab so any device picks up edits)
+// ══════════════════════════════════════════════
+async function loadRulesFromSheet() {
+  const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
+    { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+  const existing = meta.sheets?.find(s => s.properties.title === CONFIG.RULES_TAB);
+  if (!existing) {
+    // Create tab + seed with structured default
+    const addRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: CONFIG.RULES_TAB, gridProperties: { frozenRowCount: 1 } } } }] })
+    }).then(r => r.json());
+    const newSheetId = addRes.replies?.[0]?.addSheet?.properties?.sheetId;
+    // Build rows
+    const header = [['id','category','title','content','active']];
+    const rows = DEFAULT_RULES.map((r, i) => [String(i+1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE']);
+    await sheetsSet(`'${CONFIG.RULES_TAB}'!A1`, header.concat(rows));
+    // Format: bold header, wrap content column, set widths
+    if (newSheetId !== undefined) {
+      const fmt = [
+        { repeatCell: { range: { sheetId: newSheetId, startRowIndex: 0, endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { bold: true }, backgroundColor: { red: 0.94, green: 0.92, blue: 0.86 } } }, fields: 'userEnteredFormat(textFormat,backgroundColor)' } },
+        { repeatCell: { range: { sheetId: newSheetId, startColumnIndex: 3, endColumnIndex: 4 }, cell: { userEnteredFormat: { wrapStrategy: 'WRAP' } }, fields: 'userEnteredFormat.wrapStrategy' } },
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 50 }, fields: 'pixelSize' } },
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 200 }, fields: 'pixelSize' } },
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 240 }, fields: 'pixelSize' } },
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 600 }, fields: 'pixelSize' } },
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
+      ];
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: fmt })
+      });
+    }
+    S.rulesArr = DEFAULT_RULES.map((r, i) => ({ id: String(i+1), ...r }));
+    return;
+  }
+  // Tab exists — read all rows
+  try {
+    const data = await sheetsGet(`'${CONFIG.RULES_TAB}'!A:E`);
+    const rows = data.values || [];
+    if (rows.length < 2) { S.rulesArr = []; return; }
+    // First row is header — skip
+    S.rulesArr = rows.slice(1).filter(r => r[0]).map(r => ({
+      id: String(r[0]),
+      category: r[1] || 'Uncategorized',
+      title: r[2] || '',
+      content: r[3] || '',
+      active: !r[4] || String(r[4]).toUpperCase() === 'TRUE',
+    }));
+  } catch(e) {
+    console.warn('Rules load failed:', e);
+    S.rulesArr = DEFAULT_RULES.map((r, i) => ({ id: String(i+1), ...r }));
+  }
+}
+
+// Build the AI prompt text from active rules, grouped by category
+function buildRulesPrompt() {
+  if (!S.rulesArr || !S.rulesArr.length) return '';
+  const active = S.rulesArr.filter(r => r.active);
+  const byCat = {};
+  active.forEach(r => {
+    if (!byCat[r.category]) byCat[r.category] = [];
+    byCat[r.category].push(r);
+  });
+  let out = 'You are an editor rewriting Jewish educational video summaries for the back of the JEM Video Index book. Rewrite the summary provided according to the rules below. Output only the rewritten summary — no preamble, no explanation, no notes about what was changed.\n\n';
+  Object.keys(byCat).forEach(cat => {
+    out += `## ${cat}\n`;
+    byCat[cat].forEach(r => {
+      out += `- **${r.title}** — ${r.content}\n`;
+    });
+    out += '\n';
+  });
+  return out.trimEnd();
+}
+
+// Save a single rule by id (replaces just that row, others untouched)
+async function saveOneRule(rule) {
+  // Find sheet row for this id
+  const data = await sheetsGet(`'${CONFIG.RULES_TAB}'!A:A`);
+  const rows = data.values || [];
+  let sheetRow = -1;
+  rows.forEach((r, i) => { if (r[0] === rule.id) sheetRow = i + 1; });
+  const values = [[rule.id, rule.category, rule.title, rule.content, rule.active ? 'TRUE' : 'FALSE']];
+  if (sheetRow > 0) {
+    await sheetsSet(`'${CONFIG.RULES_TAB}'!A${sheetRow}:E${sheetRow}`, values);
+  } else {
+    const nextRow = rows.length + 1;
+    await sheetsSet(`'${CONFIG.RULES_TAB}'!A${nextRow}:E${nextRow}`, values);
+  }
+  // Update local
+  const idx = S.rulesArr.findIndex(r => r.id === rule.id);
+  if (idx >= 0) S.rulesArr[idx] = rule;
+  else S.rulesArr.push(rule);
+}
+
+async function deleteOneRule(id) {
+  const data = await sheetsGet(`'${CONFIG.RULES_TAB}'!A:A`);
+  const rows = data.values || [];
+  let sheetRow = -1;
+  rows.forEach((r, i) => { if (r[0] === id) sheetRow = i + 1; });
+  if (sheetRow < 1) return;
+  // Get sheet ID for delete request
+  const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
+    { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+  const sheetId = meta.sheets?.find(s => s.properties.title === CONFIG.RULES_TAB)?.properties.sheetId;
+  if (sheetId === undefined) return;
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: sheetRow - 1, endIndex: sheetRow } } }] })
+  });
+  S.rulesArr = S.rulesArr.filter(r => r.id !== id);
+}
+
+function nextRuleId() {
+  if (!S.rulesArr || !S.rulesArr.length) return '1';
+  const max = Math.max(...S.rulesArr.map(r => parseInt(r.id) || 0));
+  return String(max + 1);
 }
 
 // ══════════════════════════════════════════════
@@ -692,9 +992,7 @@ async function loadAllData() {
     const rows = data.values || [];
     if (rows.length < 2) throw new Error('No data found in sheet');
     const header = rows[0];
-    showLoading('Loading review data…');
-    await loadReviewData();
-    // Filter to Sicha clips only
+    // Filter to Sicha clips first, then load review data so we can attach drafts to clips
     S.clips = [];
     rows.slice(1).forEach((row, i) => {
       const clipType = (row[CONFIG.COL.CLIP_TYPE] || '').trim();
@@ -712,7 +1010,20 @@ async function loadAllData() {
         title: row[CONFIG.COL.TITLE] || ('Clip #' + (i+2)),
       });
     });
+    showLoading('Loading review data and drafts…');
+    await loadReviewData();
+    // Re-attach drafts now that clips exist
+    S.clips.forEach(clip => {
+      const rd = S.reviewData[String(clip._rowNum)];
+      if (rd?.draftText && !clip._draft) clip._draft = rd.draftText;
+      if (rd?.chatHistory) {
+        try { S.chatHistory[clip._rowNum] = JSON.parse(rd.chatHistory); } catch {}
+      }
+    });
+    showLoading('Loading AI rules…');
+    await loadRulesFromSheet();
     hideLoading();
+    renderDashboard();
     renderQueue();
     updateAttentionCount();
   } catch(e) {
@@ -796,8 +1107,20 @@ function getReviewField(clip, field) {
 
 function setReviewField(clip, field, val) {
   const id = String(clip._rowNum);
-  if (!S.reviewData[id]) S.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '' };
+  if (!S.reviewData[id]) S.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '', draftText: '', chatHistory: '' };
   S.reviewData[id][field] = val;
+}
+
+// Debounced draft save — fires on textarea changes
+const _draftSaveTimers = {};
+function queueDraftSave(clip) {
+  const id = clip._rowNum;
+  clearTimeout(_draftSaveTimers[id]);
+  _draftSaveTimers[id] = setTimeout(async () => {
+    setReviewField(clip, 'draftText', clip._draft || '');
+    if (getStatus(clip) === 'unprocessed' && clip._draft) setReviewField(clip, 'status', 'draft');
+    try { await saveReviewRow(clip); } catch(e) { console.warn('Draft save failed:', e); }
+  }, 800);
 }
 
 function parseTags(clip) {
@@ -1027,6 +1350,7 @@ function onDraftInput(rowNum) {
     wcEl.textContent = val.trim() ? (wc + ' words' + (wc > 110 ? ' — over limit!' : wc > 90 ? ' ✓' : '')) : '';
     wcEl.className = 'word-count' + (wc > 110 ? ' over' : '');
   }
+  queueDraftSave(clip);
 }
 
 // ══════════════════════════════════════════════
@@ -1050,7 +1374,7 @@ async function loadTranscript(rowNum) {
 // ══════════════════════════════════════════════
 function buildAIPrompt(clip, extraContext) {
   const transcript = S.transcriptLoaded[clip._rowNum];
-  let prompt = EDITORIAL_PROMPT + '\n\n---\n\nNow rewrite this summary:\n\n' + clip.description;
+  let prompt = buildRulesPrompt() + '\n\n---\n\nNow rewrite this summary:\n\n' + clip.description;
   if (transcript) prompt += '\n\n---\n\nAdditional context from transcript:\n' + transcript.substring(0, 3000);
   if (extraContext) prompt += '\n\n---\n\nAdditional guidance: ' + extraContext;
   return prompt;
@@ -1105,12 +1429,14 @@ async function processClip(clip) {
     if (!S.reviewData[id]) S.reviewData[id] = {};
     S.reviewData[id].status = 'flagged';
     S.reviewData[id].flagReason = result.reason;
+    S.reviewData[id].draftText = '';
     await saveReviewRow(clip);
   } else {
     clip._draft = result.draft;
     if (!S.reviewData[id]) S.reviewData[id] = {};
     S.reviewData[id].status = 'draft';
     S.reviewData[id].flagReason = '';
+    S.reviewData[id].draftText = result.draft;
     await saveReviewRow(clip);
   }
 }
@@ -1125,10 +1451,12 @@ async function regenerateClip(rowNum) {
     if (result.flagged) {
       setReviewField(clip, 'status', 'flagged');
       setReviewField(clip, 'flagReason', result.reason);
+      setReviewField(clip, 'draftText', '');
     } else {
       clip._draft = result.draft;
       setReviewField(clip, 'status', 'draft');
       setReviewField(clip, 'flagReason', '');
+      setReviewField(clip, 'draftText', result.draft);
     }
     await saveReviewRow(clip);
     renderDetail();
@@ -1187,6 +1515,7 @@ async function approveClip(rowNum) {
     setReviewField(clip, 'status', 'approved');
     setReviewField(clip, 'approvedBy', S.user?.email || '');
     setReviewField(clip, 'approvedAt', new Date().toISOString());
+    setReviewField(clip, 'draftText', ''); // clear — approved version lives in main sheet now
     // Write col Y on main tab
     const colY = colLetter(CONFIG.COL.REWRITE);
     await sheetsSet(`'${CONFIG.MAIN_TAB}'!${colY}${rowNum}:${colY}${rowNum}`, [[draft]]);
@@ -1215,6 +1544,8 @@ async function revertClip(rowNum) {
     clip._draft = '';
     setReviewField(clip, 'status', 'unprocessed');
     setReviewField(clip, 'flagReason', '');
+    setReviewField(clip, 'draftText', '');
+    delete S.chatHistory[rowNum];
     await saveReviewRow(clip);
     hideLoading();
     renderDetail();
@@ -1283,6 +1614,7 @@ Follow the same editorial rules as before (90 words target, max 110, Sephardic s
     ]);
     S.chatHistory[rowNum].push({ role: 'assistant', content: reply });
     renderChatMessages(rowNum);
+    queueDraftSave(clip); // persist chat history
   } catch(e) {
     S.chatHistory[rowNum].push({ role: 'assistant', content: 'Error: ' + e.message });
     renderChatMessages(rowNum);
@@ -1296,6 +1628,8 @@ function useAsDraft(rowNum, msgIdx) {
   if (!msg) return;
   clip._draft = msg.content;
   setReviewField(clip, 'status', 'draft');
+  setReviewField(clip, 'draftText', msg.content);
+  saveReviewRow(clip).catch(() => {});
   renderDetail();
   showToast('Draft updated from chat ✓', 'success');
 }
@@ -1338,10 +1672,12 @@ function goToClip(rowNum) {
 function renderExportView() {
   const approved = S.clips.filter(c => getStatus(c) === 'approved');
   document.getElementById('exportStats').textContent = `${approved.length} approved clips`;
+  const showOrig = document.getElementById('exportShowOriginal')?.checked;
   const el = document.getElementById('exportList');
   el.innerHTML = approved.map(clip => {
     const tags = parseTags(clip);
-    const summary = clip.rewrite || clip._draft || clip.description || '';
+    const summary = clip.rewrite || clip._draft || '';
+    const original = getReviewField(clip, 'originalBackup') || clip.description || '';
     const thumbHTML = clip.thumbnail
       ? `<img class="export-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
       : `<div class="export-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--tx4)">🎬</div>`;
@@ -1352,11 +1688,123 @@ function renderExportView() {
       <div class="export-body">
         <div class="export-clip-title">${esc(clip.title)}</div>
         <div class="export-meta">LT ${esc(clip.programNum)}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ⏱ ' + esc(dur) : ''}</div>
+        ${showOrig ? `<div style="font-size:12px;color:var(--tx3);background:var(--bg2);border-radius:6px;padding:8px;margin-bottom:6px"><strong style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--tx4);display:block;margin-bottom:3px">Original</strong>${esc(original)}</div>` : ''}
         <div class="export-summary">${esc(summary)}</div>
         <div class="tag-bubbles">${tags.map(t=>`<span class="tag-bubble">${esc(t)}</span>`).join('')}</div>
       </div>
     </div>`;
   }).join('') || `<div class="empty-state">No approved clips yet</div>`;
+}
+
+async function generateSheetExport() {
+  const approved = S.clips.filter(c => getStatus(c) === 'approved');
+  if (!approved.length) { showToast('No approved clips to export', 'error'); return; }
+  const tabName = 'Sichos Summary Export';
+  showLoading('Creating sheet tab…');
+  try {
+    // Check if tab exists; if so delete it first so we get a fresh export
+    const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
+      { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+    const existing = meta.sheets?.find(s => s.properties.title === tabName);
+    const requests = [];
+    if (existing) {
+      requests.push({ deleteSheet: { sheetId: existing.properties.sheetId } });
+    }
+    requests.push({ addSheet: { properties: { title: tabName, gridProperties: { frozenRowCount: 1 } } } });
+    const batchRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests })
+    }).then(r => r.json());
+    const newSheetId = batchRes.replies?.find(r => r.addSheet)?.addSheet?.properties?.sheetId;
+
+    // Build header + rows
+    const header = ['Thumbnail', 'Title', 'LT Program', 'Duration', 'Secular Date', 'Hebrew Date', 'Tags', 'Original Description', 'New Description', 'Approved By', 'Approved At'];
+    const rows = approved.map(clip => {
+      const tags = parseTags(clip).join(', ');
+      const formatted = formatClipDate(clip.date);
+      let secular = '', hebrew = '';
+      if (formatted.includes(' - ')) { [secular, hebrew] = formatted.split(' - '); }
+      else { secular = formatted; }
+      const summary = clip.rewrite || '';
+      const original = getReviewField(clip, 'originalBackup') || '';
+      return [
+        clip.thumbnail || '',
+        clip.title || '',
+        clip.programNum ? 'LT ' + clip.programNum : '',
+        formatDuration(clip.durationMs),
+        secular,
+        hebrew,
+        tags,
+        original,
+        summary,
+        getReviewField(clip, 'approvedBy'),
+        getReviewField(clip, 'approvedAt'),
+      ];
+    });
+    const allRows = [header, ...rows];
+
+    // Write data
+    showLoading('Writing data…');
+    await sheetsSet(`'${tabName}'!A1`, allRows);
+
+    // Format: hide original-description column (column H = index 7 zero-based), bold header, freeze
+    if (newSheetId !== undefined) {
+      const fmtRequests = [
+        { repeatCell: {
+            range: { sheetId: newSheetId, startRowIndex: 0, endRowIndex: 1 },
+            cell: { userEnteredFormat: { textFormat: { bold: true }, backgroundColor: { red: 0.94, green: 0.92, blue: 0.86 } } },
+            fields: 'userEnteredFormat(textFormat,backgroundColor)'
+          }
+        },
+        { updateDimensionProperties: {
+            range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 },
+            properties: { hiddenByUser: true },
+            fields: 'hiddenByUser'
+          }
+        },
+        // Wrap text on long columns (Original + New Description = H, I = index 7,8)
+        { repeatCell: {
+            range: { sheetId: newSheetId, startColumnIndex: 7, endColumnIndex: 9 },
+            cell: { userEnteredFormat: { wrapStrategy: 'WRAP' } },
+            fields: 'userEnteredFormat.wrapStrategy'
+          }
+        },
+        // Set column widths
+        { updateDimensionProperties: {
+            range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 },
+            properties: { pixelSize: 200 },
+            fields: 'pixelSize'
+          }
+        },
+        { updateDimensionProperties: {
+            range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 },
+            properties: { pixelSize: 220 },
+            fields: 'pixelSize'
+          }
+        },
+        { updateDimensionProperties: {
+            range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 },
+            properties: { pixelSize: 480 },
+            fields: 'pixelSize'
+          }
+        },
+      ];
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: fmtRequests })
+      });
+    }
+
+    hideLoading();
+    showToast(`Exported ${approved.length} clips to "${tabName}" tab`, 'success');
+    window.open(`https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/edit#gid=${newSheetId || ''}`, '_blank');
+  } catch(e) {
+    hideLoading();
+    showToast('Export failed: ' + e.message, 'error');
+    console.error(e);
+  }
 }
 
 function exportHTML() {
@@ -1426,18 +1874,254 @@ function renderBookView() {
 }
 
 // ══════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════
+function renderDashboard() {
+  const total = S.clips.length;
+  document.getElementById('dashTotal').textContent = total;
+  // Count by status
+  const counts = { unprocessed: 0, flagged: 0, draft: 0, approved: 0 };
+  S.clips.forEach(c => { counts[getStatus(c)] = (counts[getStatus(c)] || 0) + 1; });
+  const pct = (n) => total ? Math.round((n / total) * 100) : 0;
+
+  // Stat cards
+  const stats = [
+    { key: 'approved', label: '✅ Approved', count: counts.approved, filter: 'approved' },
+    { key: 'draft', label: '🟡 Drafts', count: counts.draft, filter: 'draft' },
+    { key: 'flagged', label: '🚩 Flagged', count: counts.flagged, filter: 'flagged' },
+    { key: 'unprocessed', label: '⬜ Unprocessed', count: counts.unprocessed, filter: 'unprocessed' },
+  ];
+  document.getElementById('dashStats').innerHTML = stats.map(s => `
+    <div class="dash-stat-card ${s.key}" onclick="goToQueueWithFilter('${s.filter}')">
+      <div class="label">${s.label}</div>
+      <div class="value">${s.count}</div>
+      <div class="pct">${pct(s.count)}%</div>
+    </div>
+  `).join('');
+
+  // Overall progress = approved %
+  const approvedPct = pct(counts.approved);
+  document.getElementById('dashOverallPct').textContent = `${counts.approved} of ${total} approved · ${approvedPct}%`;
+  document.getElementById('dashProgressFill').style.width = approvedPct + '%';
+
+  // Program grid — group by programNum
+  const byProgram = {};
+  S.clips.forEach(c => {
+    const p = c.programNum || '—';
+    if (!byProgram[p]) byProgram[p] = { approved: 0, draft: 0, flagged: 0, unprocessed: 0, total: 0, num: p };
+    byProgram[p].total++;
+    byProgram[p][getStatus(c)]++;
+  });
+  // Sort by program num (numeric)
+  const programs = Object.values(byProgram).sort((a, b) => {
+    const na = parseInt(a.num); const nb = parseInt(b.num);
+    if (isNaN(na) && isNaN(nb)) return a.num.localeCompare(b.num);
+    if (isNaN(na)) return 1; if (isNaN(nb)) return -1;
+    return na - nb;
+  });
+  document.getElementById('dashProgramGrid').innerHTML = programs.map(p => {
+    let cls = 'status-unprocessed';
+    if (p.approved === p.total) cls = 'status-approved';
+    else if (p.flagged > 0 && p.approved === 0 && p.draft === 0) cls = 'status-flagged';
+    else if (p.draft > 0 && p.approved === 0) cls = 'status-draft';
+    else if (p.approved > 0 && p.approved < p.total) cls = 'status-mixed';
+    else if (p.unprocessed === p.total) cls = '';
+    return `<div class="dash-program-cell ${cls}" onclick="goToProgramInQueue('${esc(p.num)}')" title="LT ${esc(p.num)} — ${p.approved}/${p.total} approved">
+      <div class="dash-program-cell-num">${esc(p.num)}</div>
+      <div class="dash-program-cell-count">${p.approved}/${p.total}</div>
+    </div>`;
+  }).join('');
+}
+
+function goToQueueWithFilter(filter) {
+  S.filter = filter;
+  S.rangeStart = 0;
+  switchView('queue', document.querySelector('[data-view="queue"]'));
+  // Update filter chips
+  document.querySelectorAll('.filter-chip').forEach(b => {
+    b.classList.toggle('active', b.dataset.status === filter);
+  });
+  renderQueue();
+}
+
+function goToProgramInQueue(progNum) {
+  S.search = progNum;
+  S.filter = 'all';
+  S.rangeStart = 0;
+  switchView('queue', document.querySelector('[data-view="queue"]'));
+  document.querySelectorAll('.filter-chip').forEach(b => b.classList.toggle('active', b.dataset.status === 'all'));
+  const si = document.getElementById('searchInput');
+  if (si) si.value = progNum;
+  renderQueue();
+}
+
+// ══════════════════════════════════════════════
+// RULES EDITOR
+// ══════════════════════════════════════════════
+// Track per-rule unsaved edits (id -> {title, content})
+const _ruleDrafts = {};
+
+function renderRulesView() {
+  const total = S.rulesArr?.length || 0;
+  const active = S.rulesArr?.filter(r => r.active).length || 0;
+  document.getElementById('rulesMeta').innerHTML =
+    `<strong>${active}</strong> of <strong>${total}</strong> rules active · stored in "${CONFIG.RULES_TAB}" tab · each rule is its own row`;
+
+  const container = document.getElementById('rulesContainer');
+  if (!total) {
+    container.innerHTML = '<div class="empty-state">No rules yet. Click "+ Add Rule" to create one.</div>';
+    return;
+  }
+
+  // Group by category, preserving order of first appearance
+  const cats = [];
+  const byCat = {};
+  S.rulesArr.forEach(r => {
+    const c = r.category || 'Uncategorized';
+    if (!byCat[c]) { byCat[c] = []; cats.push(c); }
+    byCat[c].push(r);
+  });
+
+  let html = '';
+  cats.forEach(cat => {
+    const rules = byCat[cat];
+    const activeCount = rules.filter(r => r.active).length;
+    html += `<div class="rules-cat-section">
+      <div class="rules-cat-header">
+        ${esc(cat)}
+        <span class="rules-cat-header-count">${activeCount}/${rules.length} active</span>
+      </div>`;
+    rules.forEach(rule => {
+      html += `<div class="rule-card ${rule.active ? '' : 'inactive'}" id="ruleCard_${esc(rule.id)}">
+        <div class="rule-toggle ${rule.active ? 'on' : ''}" onclick="toggleRule('${esc(rule.id)}')" title="${rule.active ? 'Active — click to disable' : 'Disabled — click to enable'}"></div>
+        <div class="rule-body">
+          <input class="rule-title-input" data-rule-id="${esc(rule.id)}" data-field="title" value="${esc(rule.title)}" oninput="onRuleEdit('${esc(rule.id)}')" placeholder="Rule title…">
+          <textarea class="rule-content-input" data-rule-id="${esc(rule.id)}" data-field="content" oninput="onRuleEdit('${esc(rule.id)}')" placeholder="Rule content…" rows="2">${esc(rule.content)}</textarea>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+            <span class="rule-id-badge">#${esc(rule.id)}</span>
+            <span id="ruleStatus_${esc(rule.id)}" style="font-size:10px;color:var(--tx4)"></span>
+          </div>
+        </div>
+        <div class="rule-actions">
+          <button class="rule-action-btn save" id="ruleSaveBtn_${esc(rule.id)}" onclick="saveRule('${esc(rule.id)}')" style="display:none">💾 Save</button>
+          <button class="rule-action-btn delete" onclick="deleteRule('${esc(rule.id)}')" title="Delete this rule">🗑</button>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+  container.innerHTML = html;
+}
+
+function onRuleEdit(id) {
+  if (!_ruleDrafts[id]) _ruleDrafts[id] = {};
+  const titleEl = document.querySelector(`[data-rule-id="${id}"][data-field="title"]`);
+  const contentEl = document.querySelector(`[data-rule-id="${id}"][data-field="content"]`);
+  _ruleDrafts[id].title = titleEl?.value || '';
+  _ruleDrafts[id].content = contentEl?.value || '';
+  // Show save button
+  document.getElementById('ruleSaveBtn_' + id).style.display = 'inline-block';
+  document.getElementById('ruleStatus_' + id).textContent = 'unsaved';
+  document.getElementById('ruleStatus_' + id).style.color = 'var(--yellow)';
+}
+
+async function saveRule(id) {
+  const rule = S.rulesArr.find(r => r.id === id);
+  if (!rule) return;
+  const draft = _ruleDrafts[id];
+  if (!draft) return;
+  const updated = { ...rule, title: draft.title, content: draft.content };
+  const btn = document.getElementById('ruleSaveBtn_' + id);
+  const status = document.getElementById('ruleStatus_' + id);
+  btn.disabled = true; btn.textContent = 'Saving…';
+  status.textContent = 'saving…'; status.style.color = 'var(--tx4)';
+  try {
+    await saveOneRule(updated);
+    delete _ruleDrafts[id];
+    btn.style.display = 'none';
+    btn.disabled = false; btn.textContent = '💾 Save';
+    status.textContent = 'saved ✓'; status.style.color = 'var(--green)';
+    setTimeout(() => { status.textContent = ''; }, 2000);
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '💾 Save';
+    status.textContent = 'save failed'; status.style.color = 'var(--red)';
+    showToast('Save failed: ' + e.message, 'error');
+  }
+}
+
+async function toggleRule(id) {
+  const rule = S.rulesArr.find(r => r.id === id);
+  if (!rule) return;
+  const updated = { ...rule, active: !rule.active };
+  try {
+    await saveOneRule(updated);
+    renderRulesView();
+  } catch(e) {
+    showToast('Toggle failed: ' + e.message, 'error');
+  }
+}
+
+async function deleteRule(id) {
+  const rule = S.rulesArr.find(r => r.id === id);
+  if (!rule) return;
+  if (!confirm(`Delete rule "${rule.title}"? This removes its row from the sheet permanently.`)) return;
+  try {
+    await deleteOneRule(id);
+    delete _ruleDrafts[id];
+    renderRulesView();
+    showToast('Rule deleted', 'success');
+  } catch(e) {
+    showToast('Delete failed: ' + e.message, 'error');
+  }
+}
+
+async function addNewRule() {
+  const title = prompt('Title for the new rule (e.g. "No exclamation marks"):');
+  if (!title || !title.trim()) return;
+  const content = prompt('Content of the rule (the actual instruction):');
+  if (!content || !content.trim()) return;
+  const category = prompt('Category (e.g. "Voice", "Spelling", "Custom"):', 'Custom') || 'Custom';
+  const newRule = { id: nextRuleId(), category: category.trim(), title: title.trim(), content: content.trim(), active: true };
+  try {
+    await saveOneRule(newRule);
+    renderRulesView();
+    showToast('Rule added', 'success');
+  } catch(e) {
+    showToast('Add failed: ' + e.message, 'error');
+  }
+}
+
+async function reloadRulesFromSheet() {
+  // Check if any unsaved drafts
+  if (Object.keys(_ruleDrafts).length && !confirm('You have unsaved rule edits. Reload from sheet and discard them?')) return;
+  showToast('Reloading rules from sheet…');
+  try {
+    await loadRulesFromSheet();
+    Object.keys(_ruleDrafts).forEach(k => delete _ruleDrafts[k]);
+    renderRulesView();
+    showToast('Rules reloaded ✓', 'success');
+  } catch(e) {
+    showToast('Reload failed: ' + e.message, 'error');
+  }
+}
+
+// ══════════════════════════════════════════════
 // VIEW SWITCHING
 // ══════════════════════════════════════════════
 function switchView(view, btn) {
   S.currentView = view;
   document.querySelectorAll('.topbar-nav-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  const views = ['queueView','attentionView','exportView','bookView'];
+  // Also activate the right button by data-view if btn wasn't passed
+  if (!btn) document.querySelector(`.topbar-nav-btn[data-view="${view}"]`)?.classList.add('active');
+  const views = ['dashboardView','queueView','attentionView','exportView','bookView','rulesView'];
   views.forEach(v => document.getElementById(v).style.display = 'none');
-  if (view === 'queue') { document.getElementById('queueView').style.display = 'flex'; }
+  if (view === 'dashboard') { document.getElementById('dashboardView').style.display = 'block'; renderDashboard(); }
+  else if (view === 'queue') { document.getElementById('queueView').style.display = 'flex'; }
   else if (view === 'attention') { document.getElementById('attentionView').style.display = 'block'; renderAttentionView(); }
   else if (view === 'export') { document.getElementById('exportView').style.display = 'block'; renderExportView(); }
   else if (view === 'book') { document.getElementById('bookView').style.display = 'block'; renderBookView(); }
+  else if (view === 'rules') { document.getElementById('rulesView').style.display = 'block'; renderRulesView(); }
 }
 
 // ══════════════════════════════════════════════
@@ -1479,7 +2163,7 @@ async function init() {
       document.getElementById('userAvatar').textContent = (S.user.email || '?')[0].toUpperCase();
       document.getElementById('topBar').style.display = 'flex';
       document.getElementById('appShell').style.display = 'flex';
-      switchView('queue', document.querySelector('[data-view="queue"]'));
+      switchView('dashboard', document.querySelector('[data-view="dashboard"]'));
       hideLoading();
       await loadAllData();
     } catch(e) {
