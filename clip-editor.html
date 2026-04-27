@@ -160,12 +160,14 @@
   button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
 
   /* ── MAIN LAYOUT ── */
-  #appShell { display: none; flex: 1; flex-direction: row; height: calc(100vh - 52px); overflow: hidden; }
+  #appShell { display: none; flex: 1; flex-direction: row; height: calc(100vh - 64px); overflow: hidden; }
+  #appShell.sb-collapsed #sidebar { width: 0; padding: 0; overflow: hidden; }
+  #sidebar { transition: width 0.25s ease, padding 0.25s ease; }
   #appMain { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
   /* Sidebar */
   #sidebar {
-    width: 248px; background: transparent;
+    width: 260px; background: transparent;
     display: flex; flex-direction: column; flex-shrink: 0;
     overflow-y: auto; padding: 18px 14px;
   }
@@ -188,7 +190,7 @@
     box-shadow: var(--shadow-clay);
   }
   .sb-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
-  .sb-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sb-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .sb-badge {
     font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: var(--radius-pill);
     background: var(--bg2); color: var(--tx3); margin-left: auto; flex-shrink: 0;
@@ -196,13 +198,13 @@
   }
   .sb-item.active .sb-badge { background: var(--accent-light); color: var(--accent2); }
   .sb-sub-item {
-    padding: 7px 14px 7px 44px; font-size: 12px; color: var(--tx3);
+    padding: 7px 14px 7px 32px; font-size: 12px; color: var(--tx3);
     cursor: pointer; border-radius: var(--radius-pill); transition: all 0.15s;
     display: flex; align-items: center; gap: 6px; margin-bottom: 1px;
   }
   .sb-sub-item:hover { background: var(--panel); color: var(--tx2); }
   .sb-sub-item.active { background: var(--accent-light); color: var(--accent2); font-weight: 600; }
-  .sb-caret { font-size: 9px; transition: transform 0.18s; color: var(--tx4); margin-right: 4px; }
+  .sb-caret { font-size: 9px; transition: transform 0.12s; color: var(--tx4); margin-right: 4px; }
   .sb-type-expanded > .sb-item .sb-caret { transform: rotate(90deg); }
   .sb-type-children { display: none; padding-top: 2px; padding-bottom: 4px; }
   .sb-type-expanded .sb-type-children { display: block; }
@@ -219,10 +221,12 @@
   .overall-type-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-clay-lg); }
   .overall-type-card .otc-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
   .overall-type-card .otc-icon {
-    font-size: 22px;
-    background: var(--bg2); width: 44px; height: 44px; border-radius: 14px;
+    font-family: var(--font-serif); font-size: 18px; font-weight: 500;
+    color: var(--accent2); width: 40px; height: 40px; border-radius: 12px;
+    background: var(--accent-light);
     display: flex; align-items: center; justify-content: center;
     box-shadow: var(--shadow-inner);
+    text-transform: uppercase; letter-spacing: 0.5px;
   }
   .overall-type-card .otc-title { font-family: var(--font-serif); font-size: 18px; font-weight: 500; color: var(--tx); letter-spacing: -0.3px; }
   .overall-type-card .otc-count {
@@ -247,10 +251,12 @@
   #queueView { flex: 1; display: flex; gap: 18px; overflow: hidden; padding: 18px; }
 
   .queue-sidebar {
-    width: 340px; min-width: 320px; background: var(--panel); border-radius: var(--radius2);
+    flex: 0 0 33%; min-width: 280px; max-width: 460px;
+    background: var(--panel); border-radius: var(--radius2);
     display: flex; flex-direction: column; overflow: hidden;
     box-shadow: var(--shadow-clay);
   }
+  .detail-panel { flex: 0 0 66%; min-width: 0; }
   .queue-controls { padding: 16px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--border); }
   .search-input {
     width: 100%; padding: 10px 16px; border: none; border-radius: var(--radius-pill);
@@ -400,6 +406,44 @@
   .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s; }
   .progress-label { font-size: 11px; color: var(--tx3); }
 
+  /* ── FILMS VIEW ── */
+  .films-list { display: flex; flex-direction: column; gap: 10px; }
+  .film-card {
+    background: var(--panel); border-radius: var(--radius2);
+    padding: 16px 20px; cursor: pointer; transition: all 0.18s ease;
+    box-shadow: var(--shadow-clay);
+  }
+  .film-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-clay-lg); }
+  .film-card-header { display: flex; align-items: center; gap: 12px; }
+  .film-card-title { font-family: var(--font-serif); font-size: 17px; font-weight: 500; color: var(--tx); flex: 1; }
+  .film-card-count { font-size: 11px; color: var(--accent2); background: var(--accent-light); padding: 3px 12px; border-radius: var(--radius-pill); font-weight: 600; }
+  .film-card-progress { font-size: 11px; color: var(--tx3); margin-top: 6px; }
+  .film-card-bar { background: var(--bg2); height: 6px; border-radius: var(--radius-pill); overflow: hidden; margin-top: 8px; box-shadow: var(--shadow-inner); }
+  .film-card-bar-fill { height: 100%; background: linear-gradient(90deg, #8FB392, var(--green)); border-radius: var(--radius-pill); transition: width 0.4s; }
+
+  .film-back-btn { margin-bottom: 16px; }
+  .chapters-list {
+    background: var(--panel); border-radius: var(--radius2);
+    overflow: hidden; box-shadow: var(--shadow-clay);
+  }
+  .chapter-row {
+    display: flex; gap: 12px; align-items: center; padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: grab; transition: background 0.12s;
+    user-select: none;
+  }
+  .chapter-row:last-child { border-bottom: none; }
+  .chapter-row:hover { background: var(--bg2); }
+  .chapter-row.dragging { opacity: 0.4; cursor: grabbing; }
+  .chapter-row.drag-over { background: var(--accent-light); border-top: 2px solid var(--accent); }
+  .chapter-handle { color: var(--tx4); font-size: 16px; cursor: grab; flex-shrink: 0; }
+  .chapter-num { font-size: 11px; color: var(--tx3); font-weight: 600; min-width: 28px; text-align: right; flex-shrink: 0; font-family: monospace; }
+  .chapter-thumb { width: 60px; height: 38px; border-radius: 8px; object-fit: cover; background: var(--bg3); flex-shrink: 0; }
+  .chapter-info { flex: 1; min-width: 0; }
+  .chapter-title { font-size: 13px; font-weight: 600; color: var(--tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chapter-meta { font-size: 11px; color: var(--tx3); margin-top: 2px; }
+  .chapter-status { flex-shrink: 0; }
+
   /* ── ATTENTION QUEUE ── */
   .attention-grid { display: flex; flex-direction: column; gap: 14px; max-width: 960px; margin: 0 auto; }
   .attention-card {
@@ -432,7 +476,7 @@
   }
 
   /* ── BOOK VIEW ── */
-  #bookView { flex: 1; overflow-y: auto; background: var(--bg2); padding: 36px; }
+  #bookView, #fullBookView { flex: 1; overflow-y: auto; background: var(--bg2); padding: 36px; }
   .book-controls { display: flex; gap: 12px; align-items: center; margin-bottom: 28px; justify-content: center; }
   .book-pages { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 0; }
   .book-page {
@@ -715,18 +759,11 @@
 
 <!-- TOP BAR -->
 <div id="topBar">
+  <button class="btn btn-sm" id="sidebarToggleBtn" onclick="toggleSidebar()" style="padding:6px 10px;font-size:14px;line-height:1" title="Toggle sidebar">☰</button>
   <img id="topbarLogoImg" class="topbar-logo" alt="JEM">
   <div class="topbar-sep"></div>
   <div class="topbar-title">Summary Editor</div>
   <div class="topbar-sep"></div>
-  <div class="topbar-nav">
-    <button class="topbar-nav-btn active" data-view="dashboard" onclick="switchView('dashboard',this)">📊 Dashboard</button>
-    <button class="topbar-nav-btn" data-view="queue" onclick="switchView('queue',this)">📋 Queue</button>
-    <button class="topbar-nav-btn" data-view="attention" onclick="switchView('attention',this)">🚩 Attention <span id="attentionCount" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:0 5px;font-size:10px;margin-left:2px"></span></button>
-    <button class="topbar-nav-btn" data-view="export" onclick="switchView('export',this)">📄 Export</button>
-    <button class="topbar-nav-btn" data-view="book" onclick="switchView('book',this)">📖 Book View</button>
-    <button class="topbar-nav-btn" data-view="rules" onclick="switchView('rules',this)">⚙ Rules</button>
-  </div>
   <div class="topbar-right">
     <button class="btn btn-sm" id="refreshBtn" onclick="manualRefresh()" title="Refresh data from sheet">
       <span id="refreshIcon">↻</span>
@@ -746,8 +783,7 @@
   <aside id="sidebar">
     <div class="sb-section">
       <button class="sb-item" id="sbOverallBtn" onclick="switchView('overall', null)">
-        <span class="sb-icon">📊</span>
-        <span class="sb-label">Overall Dashboard</span>
+        <span class="sb-label">General Dashboard</span>
       </button>
     </div>
     <div class="sb-section">
@@ -756,11 +792,9 @@
     </div>
     <div class="sb-section sb-bottom">
       <button class="sb-item" id="sbRulesBtn" onclick="switchView('rules', null)">
-        <span class="sb-icon">⚙</span>
         <span class="sb-label">Rules</span>
       </button>
       <button class="sb-item" id="sbTeamBtn" onclick="switchView('team', null)" style="display:none">
-        <span class="sb-icon">👥</span>
         <span class="sb-label">Team</span>
       </button>
     </div>
@@ -774,8 +808,8 @@
     <div class="dash-wrap">
       <div class="dash-header">
         <div>
-          <h1 class="dash-title">Overall Dashboard</h1>
-          <p class="dash-sub">Editorial progress across all clip types</p>
+          <h1 class="dash-title">General Dashboard</h1>
+          <p class="dash-sub">Progress across all summary types</p>
         </div>
       </div>
       <div class="dash-stats" id="overallStats"></div>
@@ -790,7 +824,7 @@
 
       <div id="overallTeamSection" style="display:none;margin-top:32px;">
         <div class="dash-section-header">
-          <h2 class="dash-section-title">👥 Team Activity</h2>
+          <h2 class="dash-section-title">Team Activity</h2>
         </div>
         <div class="dash-team-list" id="overallTeamList"></div>
       </div>
@@ -807,6 +841,28 @@
         </div>
       </div>
       <div class="dash-team-list" id="teamFullList"></div>
+    </div>
+  </div>
+
+  <!-- FULL BOOK VIEW (all types combined with section title pages) -->
+  <div id="fullBookView" style="display:none;">
+    <div class="book-controls">
+      <span style="font-size:13px;color:var(--tx3)">Full Book — all approved summaries, grouped by section</span>
+      <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 Print / PDF</button>
+    </div>
+    <div class="book-pages" id="fullBookPages"></div>
+  </div>
+
+  <!-- FILMS VIEW (Film Chapters only — list of films + chapter ordering) -->
+  <div id="filmsView" style="display:none;">
+    <div class="dash-wrap">
+      <div class="dash-header">
+        <div>
+          <h1 class="dash-title">Films</h1>
+          <p class="dash-sub">Click a film to view its chapters and reorder them. The order saved here applies to Book View and Exports.</p>
+        </div>
+      </div>
+      <div id="filmsContainer"></div>
     </div>
   </div>
 
@@ -843,7 +899,7 @@
 
       <div id="dashTeamSection" style="display:none;margin-top:32px;">
         <div class="dash-section-header">
-          <h2 class="dash-section-title">👥 Team Activity</h2>
+          <h2 class="dash-section-title">Team Activity</h2>
           <div style="display:flex;gap:8px;align-items:center;font-size:11px;color:var(--tx3)">
             <label>Filter clips by editor:</label>
             <select id="userFilterSelect" onchange="setUserFilter(this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--tx2);font-family:inherit">
@@ -882,10 +938,10 @@
         <input class="search-input" id="searchInput" placeholder="Search clips…" oninput="filterQueue()">
         <div class="filter-row" id="filterRow">
           <button class="filter-chip active" data-status="all" onclick="setFilter('all',this)">All</button>
-          <button class="filter-chip" data-status="unprocessed" onclick="setFilter('unprocessed',this)">⬜ Unprocessed</button>
-          <button class="filter-chip" data-status="flagged" onclick="setFilter('flagged',this)">🚩 Flagged</button>
-          <button class="filter-chip" data-status="draft" onclick="setFilter('draft',this)">🟡 Draft</button>
-          <button class="filter-chip" data-status="approved" onclick="setFilter('approved',this)">✅ Approved</button>
+          <button class="filter-chip" data-status="unprocessed" onclick="setFilter('unprocessed',this)">Unprocessed</button>
+          <button class="filter-chip" data-status="flagged" onclick="setFilter('flagged',this)">Flagged</button>
+          <button class="filter-chip" data-status="draft" onclick="setFilter('draft',this)">Draft</button>
+          <button class="filter-chip" data-status="approved" onclick="setFilter('approved',this)">Approved</button>
         </div>
         <div id="rangeRow" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--border);padding-top:8px;">
           <span style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-right:2px">Range:</span>
@@ -922,7 +978,7 @@
   <div id="exportView" style="display:none;">
     <div class="export-header" style="flex-wrap:wrap">
       <div class="export-title">Export — Sichos Summaries</div>
-      <button class="btn btn-primary" onclick="generateSheetExport()">📊 Generate Sheet Tab</button>
+      <button class="btn btn-primary" onclick="generateSheetExport()">Generate Sheet Tab</button>
       <button class="btn" onclick="exportHTML()">⬇ Export as HTML</button>
       <button class="btn" onclick="window.print()">🖨 Print</button>
       <label style="font-size:11px;color:var(--tx3);display:flex;align-items:center;gap:5px;margin-left:6px;cursor:pointer">
@@ -962,10 +1018,12 @@ const CONFIG = {
   COL: {
     DESCRIPTION_A: 0, // A - sometimes the description lives here
     DURATION: 1,      // B - duration in milliseconds
+    CLIP_ID: 3,       // D - clip ID for video URL
     THUMBNAIL: 4,     // E
     KEYWORDS: 6,      // G
     DESCRIPTION_H: 7, // H - primary description column
     TITLE: 9,         // J - clip title
+    FILM_ID: 12,      // M - produced/film ID for full-film URL
     FILM_NAME: 13,    // N - parent film name (Film Chapter)
     PROGRAM_NUM: 15,  // P
     DATE: 16,         // Q
@@ -981,13 +1039,74 @@ const CONFIG = {
 // All clip types supported by this workspace.
 // Each type has its own Review Data tab + AI Rules tab in the sheet.
 // Add a new type by adding a new entry — no other code changes needed.
+// Allowed films for Film Chapter type — only chapters whose parent film is in this list count
+const ALLOWED_FILMS = new Set([
+  '22 Shevat Broadcast 5778',
+  'A Light In the Darkness',
+  'A Movement on Trial',
+  'America Is No Different',
+  'Challenge',
+  'Chof Av Special Presentation',
+  'Chof Daled Teves - Special Presentation',
+  'Climbing the Rungs of Prayer',
+  'Connected',
+  'Cornerstones',
+  'Enduring Peace - Episode 1',
+  'Enduring Peace 6',
+  'Faithful and Fortified Defense and Intelligence',
+  "Faithful and Fortified Israel’s Journalists",
+  "Faithful and Fortified: Israel’s Prime Ministers",
+  'Glimpse Through the Veil',
+  'Glimpse Through the Veil 2',
+  'Hand in Hand',
+  'Hidden Treasure',
+  'I Am A Chassid',
+  'JEM Presents - Motti Eden - Motivating the youth',
+  'JEM Presents: How Israel can achieve complete victory and a lasting peace',
+  'Jem Presents: Anti-Semitism',
+  'Jem Presents: It Will Be Good',
+  'Joy!',
+  'Linked',
+  'Marching Orders',
+  'Moment of Silence',
+  'My Land',
+  'My Pesukim',
+  'Never Alone',
+  'Niggunim of the Rebbeim',
+  'Peace Upon The Land',
+  'Rebbetzin Chana',
+  'Reflections',
+  'Sensitivity',
+  'Spiritual Ammunition',
+  'Switch',
+  'Take to Heart',
+  'The Alter Rebbe',
+  "The Case for Israel's Preemptive Strike? | The Rebbe’s Roadmap to Peace, Episode 2",
+  'The Early Years 1',
+  'The Early Years 2',
+  'The Early Years 3',
+  'The Early Years 4',
+  'The Gift of Chanukah',
+  'The Greatest Blessing',
+  'The Jewish Woman',
+  'The Rebbe Unfiltered | Terrorism | Party Politics | Peace Treaties',
+  'The Rebbe and the Holy Land',
+  "The Rebbe's Road Map to Peace Ep. 3",
+  "The Rebbe's Roadmap to Peace, Episode 3",
+  'The Rebbetzin',
+  'The Scharf Family',
+  'Tishrei with the Rebbe - Vol. 1',
+  'Tishrei with the Rebbe - Vol. 2',
+  'Truly Free (Our Rebbe)',
+]);
+
 const CLIP_TYPES = [
-  { key: 'sichos',         displayName: 'Sichos',           adValue: 'LT Sicha',            reviewTab: 'Sichos Review Data',         rulesTab: 'Sichos AI Rules',         icon: '📝' },
-  { key: 'my_encounter',   displayName: 'My Encounter',     adValue: 'LT My Encounter',     reviewTab: 'My Encounter Review Data',   rulesTab: 'My Encounter AI Rules',   icon: '👁' },
-  { key: 'conversations',  displayName: 'Conversations',    adValue: 'LT Eye to Eye',       reviewTab: 'Conversations Review Data',  rulesTab: 'Conversations AI Rules',  icon: '💬' },
-  { key: 'timeless',       displayName: 'Timeless Moments', adValue: 'LT Timeless Moment',  reviewTab: 'Timeless Moments Review Data', rulesTab: 'Timeless Moments AI Rules', icon: '⏳' },
-  { key: 'short_film',     displayName: 'Short Films',      adValue: 'Short Film',          reviewTab: 'Short Films Review Data',    rulesTab: 'Short Films AI Rules',    icon: '🎬' },
-  { key: 'film_chapter',   displayName: 'Film Chapters',    adValue: 'Film Chapter',        reviewTab: 'Film Chapters Review Data',  rulesTab: 'Film Chapters AI Rules',  icon: '📽',  hasFilmName: true },
+  { key: 'sichos',         displayName: 'Addresses',        adValue: 'LT Sicha',            reviewTab: 'Addresses Review Data',         rulesTab: 'Addresses AI Rules' },
+  { key: 'timeless',       displayName: 'Timeless Moments', adValue: 'LT Timeless Moment',  reviewTab: 'Timeless Moments Review Data',  rulesTab: 'Timeless Moments AI Rules' },
+  { key: 'conversations',  displayName: 'Conversations',    adValue: 'LT Eye to Eye',       reviewTab: 'Conversations Review Data',     rulesTab: 'Conversations AI Rules' },
+  { key: 'my_encounter',   displayName: 'My Encounter',     adValue: 'LT My Encounter',     reviewTab: 'My Encounter Review Data',      rulesTab: 'My Encounter AI Rules' },
+  { key: 'short_film',     displayName: 'Short Film',       adValue: 'Short Film',          reviewTab: 'Short Films Review Data',       rulesTab: 'Short Films AI Rules' },
+  { key: 'film_chapter',   displayName: 'Film Chapters',    adValue: 'Film Chapter',        reviewTab: 'Film Chapters Review Data',     rulesTab: 'Film Chapters AI Rules', hasFilmName: true, filterByFilms: true },
 ];
 function getTypeByKey(key) { return CLIP_TYPES.find(t => t.key === key); }
 function getTypeByAd(ad) { return CLIP_TYPES.find(t => t.adValue === ad); }
@@ -1188,6 +1307,13 @@ function silentRefreshIframe() {
       _silentRefreshing = false;
     }
   }, 8000);
+}
+
+function toggleSidebar() {
+  const shell = document.getElementById('appShell');
+  shell.classList.toggle('sb-collapsed');
+  // Persist
+  localStorage.setItem('jem_cse_sb_collapsed', shell.classList.contains('sb-collapsed') ? '1' : '0');
 }
 
 function startTokenAgeMonitor() {
@@ -1672,8 +1798,10 @@ async function migrateLegacyTabs() {
     { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
   const sheets = meta.sheets || [];
   const renames = [
-    { from: 'Clip Review Data', to: 'Sichos Review Data' },
-    { from: 'AI Rules', to: 'Sichos AI Rules' },
+    { from: 'Clip Review Data', to: 'Addresses Review Data' },
+    { from: 'AI Rules', to: 'Addresses AI Rules' },
+    { from: 'Sichos Review Data', to: 'Addresses Review Data' },
+    { from: 'Sichos AI Rules', to: 'Addresses AI Rules' },
   ];
   for (const r of renames) {
     const fromSheet = sheets.find(s => s.properties.title === r.from);
@@ -1705,14 +1833,33 @@ async function loadAllData() {
     CLIP_TYPES.forEach(t => {
       S.byType[t.key] = { clips: [], reviewData: {}, rulesArr: [] };
     });
+    // Pre-scan all rows to find FILM rows (AD === 'Film') keyed by film name
+    S.filmsMap = {}; // filmName -> { filmId, durationMs, thumbnail, date }
+    rows.slice(1).forEach((row, i) => {
+      const ad = (row[CONFIG.COL.CLIP_TYPE] || '').trim();
+      if (ad === 'Film') {
+        const name = (row[CONFIG.COL.TITLE] || row[CONFIG.COL.FILM_NAME] || '').trim();
+        if (!name) return;
+        S.filmsMap[name] = {
+          filmId: (row[CONFIG.COL.FILM_ID] || '').trim(),
+          durationMs: row[CONFIG.COL.DURATION] || '',
+          thumbnail: row[CONFIG.COL.THUMBNAIL] || '',
+          date: row[CONFIG.COL.DATE] || '',
+        };
+      }
+    });
     rows.slice(1).forEach((row, i) => {
       const clipTypeStr = (row[CONFIG.COL.CLIP_TYPE] || '').trim();
       const tCfg = getTypeByAd(clipTypeStr);
       if (!tCfg) return;
+      // Film Chapter filter: only include if the parent film name is in our allowed list
+      const filmName = (row[CONFIG.COL.FILM_NAME] || '').trim();
+      if (tCfg.filterByFilms && !ALLOWED_FILMS.has(filmName)) return;
       const desc = getDescription(row);
       const clip = {
         _rowNum: i + 2,
         typeKey: tCfg.key,
+        clipId: (row[CONFIG.COL.CLIP_ID] || '').toString().trim(),
         description: desc.text,
         descSourceCol: desc.sourceCol,
         thumbnail: row[CONFIG.COL.THUMBNAIL] || '',
@@ -1722,9 +1869,9 @@ async function loadAllData() {
         durationMs: row[CONFIG.COL.DURATION] || '',
         clipType: clipTypeStr,
         title: row[CONFIG.COL.TITLE] || ('Clip #' + (i+2)),
-        rewrite: '', // set below if approved
+        rewrite: '',
       };
-      if (tCfg.hasFilmName) clip.filmName = row[CONFIG.COL.FILM_NAME] || '';
+      if (tCfg.hasFilmName) clip.filmName = filmName;
       S.byType[tCfg.key].clips.push(clip);
     });
 
@@ -1738,6 +1885,10 @@ async function loadAllData() {
       try { await loadRulesForType(t); } catch(e) { console.warn('Load rules failed for ' + t.key + ':', e); }
     }
 
+    // Load film chapter order if film_chapter type has clips
+    if (S.byType['film_chapter']?.clips?.length) {
+      try { await ensureFilmOrderTab(); await loadFilmOrder(); } catch(e) { console.warn('Film order load failed:', e); }
+    }
     // After review data is loaded, set the "rewrite" field on each clip from current desc value
     Object.values(S.byType).forEach(bucket => {
       bucket.clips.forEach(clip => {
@@ -1891,10 +2042,10 @@ function wordCount(text) {
 
 function statusBadgeHTML(status) {
   const map = {
-    unprocessed: ['status-unprocessed', '⬜ Unprocessed'],
-    flagged: ['status-flagged', '🚩 Needs Attention'],
-    draft: ['status-draft', '🟡 Draft'],
-    approved: ['status-approved', '✅ Approved'],
+    unprocessed: ['status-unprocessed', 'Unprocessed'],
+    flagged: ['status-flagged', 'Needs Attention'],
+    draft: ['status-draft', 'Draft'],
+    approved: ['status-approved', 'Approved'],
   };
   const [cls, label] = map[status] || map.unprocessed;
   return `<span class="status-badge ${cls}">${label}</span>`;
@@ -2044,12 +2195,13 @@ function renderDetail() {
         ${duration ? `<div style="font-size:11px;color:var(--tx3);background:var(--bg2);padding:2px 8px;border-radius:10px;font-family:monospace">⏱ ${esc(duration)}</div>` : ''}
       </div>
       <div class="detail-meta" style="flex:1">
-        ${clip.filmName ? `<div style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px;font-weight:600">📽 ${esc(clip.filmName)}</div>` : ''}
+        ${clip.filmName ? `<div style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px;font-weight:600">${esc(clip.filmName)}</div>` : ''}
         <div class="detail-title" style="font-size:20px;line-height:1.25;margin-bottom:8px">${esc(clip.title)}</div>
         <div class="detail-meta-row" style="margin-bottom:10px">
-          ${formattedDate ? `<span class="detail-meta-item" style="font-size:13px;color:var(--tx2)">📅 ${esc(formattedDate)}</span>` : ''}
-          <span class="detail-meta-item">📺 LT ${esc(clip.programNum)}</span>
+          ${formattedDate ? `<span class="detail-meta-item" style="font-size:13px;color:var(--tx2)">${esc(formattedDate)}</span>` : ''}
+          ${clip.programNum ? `<span class="detail-meta-item">LT ${esc(clip.programNum)}</span>` : ''}
           <span class="detail-meta-item">${statusBadgeHTML(status)}</span>
+          ${clip.clipId ? `<a class="detail-meta-item" href="https://videos.jem.tv/video-player?clip=${esc(clip.clipId)}" target="_blank" rel="noopener" style="font-weight:600;color:var(--accent2);text-decoration:none;background:var(--accent-light);padding:4px 12px;border-radius:var(--radius-pill);transition:all 0.15s">▶ Watch on JEM.tv</a>` : ''}
         </div>
         ${tags.length ? `<div class="tag-bubbles">${tags.map(t=>`<span class="tag-bubble">${esc(t)}</span>`).join('')}</div>` : ''}
       </div>
@@ -2429,7 +2581,7 @@ function renderAttentionView() {
   const flagged = activeBucket().clips.filter(c => getStatus(c) === 'flagged');
   const el = document.getElementById('attentionGrid');
   if (!flagged.length) { el.innerHTML = `<div class="empty-state">No flagged clips 🎉</div>`; return; }
-  el.innerHTML = `<h2 style="font-size:18px;color:var(--tx);margin-bottom:8px">🚩 Needs Attention (${flagged.length})</h2>` +
+  el.innerHTML = `<h2 style="font-size:18px;color:var(--tx);margin-bottom:8px">Needs Attention (${flagged.length})</h2>` +
     flagged.map(clip => {
       const thumbHTML = clip.thumbnail
         ? `<img class="attention-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
@@ -2458,7 +2610,14 @@ function goToClip(rowNum) {
 // EXPORT VIEW
 // ══════════════════════════════════════════════
 function renderExportView() {
-  const approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
+  let approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
+  if (S.activeType === 'film_chapter' && _filmOrderCache) {
+    const byFilm = {};
+    approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
+    const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
+    approved = [];
+    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => getStatus(c) === 'approved')); });
+  }
   document.getElementById('exportStats').textContent = `${approved.length} approved clips`;
   const showOrig = document.getElementById('exportShowOriginal')?.checked;
   const el = document.getElementById('exportList');
@@ -2625,7 +2784,15 @@ function exportHTML() {
 // BOOK VIEW
 // ══════════════════════════════════════════════
 function renderBookView() {
-  const approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
+  let approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
+  // For film chapters, sort by saved film order
+  if (S.activeType === 'film_chapter' && _filmOrderCache) {
+    const byFilm = {};
+    approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
+    const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
+    approved = [];
+    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => getStatus(c) === 'approved')); });
+  }
   const el = document.getElementById('bookPages');
   if (!approved.length) { el.innerHTML = `<div class="empty-state">No approved summaries yet</div>`; return; }
   // Chunk into pages
@@ -2672,6 +2839,7 @@ function renderSidebar() {
 
   // Update overall + rules buttons active state
   document.getElementById('sbOverallBtn').classList.toggle('active', S.currentView === 'overall');
+  document.getElementById('sbFullBookBtn').classList.toggle('active', S.currentView === 'fullbook');
   document.getElementById('sbRulesBtn').classList.toggle('active', S.currentView === 'rules');
   if (teamBtn) teamBtn.classList.toggle('active', S.currentView === 'team');
 
@@ -2684,63 +2852,56 @@ function renderSidebar() {
     if (total === 0) {
       // Still show but greyed out
       return `<button class="sb-item" style="opacity:0.4;cursor:default" title="No clips of this type in sheet">
-        <span class="sb-icon">${t.icon}</span>
         <span class="sb-label">${esc(t.displayName)}</span>
         <span class="sb-badge">0</span>
       </button>`;
     }
     const isActiveType = S.activeType === t.key;
     const isExpanded = _expandedTypes.has(t.key) || isActiveType;
-    return `<div class="${isExpanded ? 'sb-type-expanded' : ''}" data-type="${t.key}">
+    return `<div class="sb-type-wrapper ${isExpanded ? 'sb-type-expanded' : ''}" data-type="${t.key}">
       <button class="sb-item ${isActiveType && S.currentView !== 'overall' && S.currentView !== 'rules' && S.currentView !== 'team' ? 'active' : ''}" onclick="selectType('${t.key}')">
         <span class="sb-caret">▶</span>
-        <span class="sb-icon">${t.icon}</span>
         <span class="sb-label">${esc(t.displayName)}</span>
         <span class="sb-badge">${total}</span>
       </button>
       <div class="sb-type-children">
-        <div class="sb-sub-item ${isActiveType && S.currentView === 'dashboard' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','dashboard')">📊 Dashboard</div>
-        <div class="sb-sub-item ${isActiveType && S.currentView === 'queue' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','queue')">📋 Queue</div>
-        <div class="sb-sub-item ${isActiveType && S.currentView === 'attention' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','attention')">🚩 Attention</div>
-        <div class="sb-sub-item ${isActiveType && S.currentView === 'export' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','export')">📄 Export</div>
-        <div class="sb-sub-item ${isActiveType && S.currentView === 'book' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','book')">📖 Book View</div>
+        <div class="sb-sub-item ${isActiveType && S.currentView === 'dashboard' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','dashboard')">Dashboard</div>
+        <div class="sb-sub-item ${isActiveType && S.currentView === 'queue' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','queue')">Queue</div>
+        ${t.hasFilmName ? `<div class="sb-sub-item ${isActiveType && S.currentView === 'films' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','films')">Films</div>` : ''}
+        <div class="sb-sub-item ${isActiveType && S.currentView === 'attention' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','attention')">Attention</div>
+        <div class="sb-sub-item ${isActiveType && S.currentView === 'export' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','export')">Export</div>
+        <div class="sb-sub-item ${isActiveType && S.currentView === 'book' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','book')">Book View</div>
       </div>
     </div>`;
   }).join('');
 
-  // Update breadcrumb
-  const bc = document.getElementById('topbarBreadcrumb');
-  if (bc) {
-    if (S.currentView === 'overall') bc.innerHTML = '📊 Overall Dashboard';
-    else if (S.currentView === 'rules') bc.innerHTML = `⚙ Rules · <span style="color:var(--tx3)">${esc(activeTypeCfg().displayName)}</span>`;
-    else if (S.currentView === 'team') bc.innerHTML = '👥 Team';
-    else {
-      const t = activeTypeCfg();
-      const viewLabel = { dashboard: 'Dashboard', queue: 'Queue', attention: 'Attention', export: 'Export', book: 'Book View' }[S.currentView] || '';
-      bc.innerHTML = `${t.icon} ${esc(t.displayName)} <span style="color:var(--tx4)">›</span> <span style="color:var(--tx3)">${esc(viewLabel)}</span>`;
-    }
-  }
 }
 
 function selectType(typeKey) {
   const bucket = S.byType[typeKey];
   if (!bucket || !bucket.clips.length) return;
-  if (_expandedTypes.has(typeKey)) {
-    _expandedTypes.delete(typeKey);
-  } else {
-    _expandedTypes.add(typeKey);
+  // Toggle expansion immediately via CSS for snappy feel
+  const wrapper = document.querySelector(`.sb-type-wrapper[data-type="${typeKey}"]`);
+  if (S.activeType === typeKey && wrapper) {
+    // Same type — just toggle expand state via direct CSS class (no full render)
+    if (_expandedTypes.has(typeKey)) {
+      _expandedTypes.delete(typeKey);
+      wrapper.classList.remove('sb-type-expanded');
+    } else {
+      _expandedTypes.add(typeKey);
+      wrapper.classList.add('sb-type-expanded');
+    }
+    return;
   }
-  if (S.activeType !== typeKey) {
-    S.activeType = typeKey;
-    localStorage.setItem('jem_cse_active_type', typeKey);
-    S.selectedIdx = null;
-    S.search = '';
-    S.filter = 'all';
-    S.rangeStart = 0;
-    selectTypeView(typeKey, 'dashboard');
-  } else {
-    renderSidebar();
-  }
+  // Different type — switch to it
+  _expandedTypes.add(typeKey);
+  S.activeType = typeKey;
+  localStorage.setItem('jem_cse_active_type', typeKey);
+  S.selectedIdx = null;
+  S.search = '';
+  S.filter = 'all';
+  S.rangeStart = 0;
+  selectTypeView(typeKey, 'dashboard');
 }
 
 function selectTypeView(typeKey, view) {
@@ -2754,6 +2915,344 @@ function selectTypeView(typeKey, view) {
   }
   _expandedTypes.add(typeKey);
   switchView(view, null);
+}
+
+// ══════════════════════════════════════════════
+// FILMS VIEW (Film Chapter ordering)
+// ══════════════════════════════════════════════
+// Saved chapter order is stored in a sheet tab "Film Chapter Order"
+// keyed by clip_id (row number). Default order = clip ID.
+let _filmOrderCache = null; // { rowNum: orderIndex } map after load
+const FILM_ORDER_TAB = 'Film Chapter Order';
+let _selectedFilm = null;
+
+async function ensureFilmOrderTab() {
+  const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
+    { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+  const exists = meta.sheets?.some(s => s.properties.title === FILM_ORDER_TAB);
+  if (!exists) {
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: FILM_ORDER_TAB } } }] })
+    });
+    await sheetsSet(`'${FILM_ORDER_TAB}'!A1:C1`, [['film_name','clip_id','order_index']]);
+  }
+}
+
+async function loadFilmOrder() {
+  try {
+    const data = await sheetsGet(`'${FILM_ORDER_TAB}'!A:C`);
+    const rows = data.values || [];
+    _filmOrderCache = {}; // film_name -> { clip_id: order }
+    rows.slice(1).forEach(r => {
+      const film = r[0]; const id = r[1]; const ord = parseInt(r[2]);
+      if (!film || !id) return;
+      if (!_filmOrderCache[film]) _filmOrderCache[film] = {};
+      _filmOrderCache[film][id] = isNaN(ord) ? 0 : ord;
+    });
+  } catch(e) { console.warn('Film order load failed:', e); _filmOrderCache = {}; }
+}
+
+async function saveFilmOrder(filmName, orderedClipIds) {
+  // Replace all rows for this film with the new order
+  await ensureFilmOrderTab();
+  // Read all rows
+  const data = await sheetsGet(`'${FILM_ORDER_TAB}'!A:C`);
+  const allRows = data.values || [];
+  const header = allRows[0] || ['film_name','clip_id','order_index'];
+  // Keep rows for OTHER films; replace this film's rows with new ones
+  const otherRows = allRows.slice(1).filter(r => r[0] !== filmName);
+  const newRows = orderedClipIds.map((id, i) => [filmName, String(id), String(i)]);
+  // Clear sheet then rewrite
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(`'${FILM_ORDER_TAB}'!A:C`)}:clear`, {
+    method: 'POST', headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' }, body: '{}'
+  });
+  await sheetsSet(`'${FILM_ORDER_TAB}'!A1`, [header, ...otherRows, ...newRows]);
+  if (!_filmOrderCache) _filmOrderCache = {};
+  _filmOrderCache[filmName] = {};
+  newRows.forEach(([f, id, ord]) => { _filmOrderCache[filmName][id] = parseInt(ord); });
+}
+
+function getOrderedChapters(filmName) {
+  const bucket = S.byType['film_chapter'];
+  if (!bucket) return [];
+  const chapters = bucket.clips.filter(c => c.filmName === filmName);
+  if (!_filmOrderCache || !_filmOrderCache[filmName]) {
+    // Default — sort by clip ID (row number)
+    return [...chapters].sort((a, b) => a._rowNum - b._rowNum);
+  }
+  const orderMap = _filmOrderCache[filmName];
+  return [...chapters].sort((a, b) => {
+    const ai = orderMap[String(a._rowNum)];
+    const bi = orderMap[String(b._rowNum)];
+    if (ai === undefined && bi === undefined) return a._rowNum - b._rowNum;
+    if (ai === undefined) return 1;
+    if (bi === undefined) return -1;
+    return ai - bi;
+  });
+}
+
+async function renderFilmsView() {
+  const container = document.getElementById('filmsContainer');
+  if (!_filmOrderCache) {
+    container.innerHTML = '<div class="empty-state">Loading films…</div>';
+    try { await ensureFilmOrderTab(); await loadFilmOrder(); } catch(e) {}
+  }
+  if (_selectedFilm) {
+    renderFilmChapters(_selectedFilm);
+  } else {
+    renderFilmsList();
+  }
+}
+
+function renderFilmsList() {
+  const container = document.getElementById('filmsContainer');
+  const bucket = S.byType['film_chapter'];
+  if (!bucket || !bucket.clips.length) { container.innerHTML = '<div class="empty-state">No film chapters loaded.</div>'; return; }
+  // Group by film name
+  const byFilm = {};
+  bucket.clips.forEach(c => {
+    const f = c.filmName || 'Unspecified';
+    if (!byFilm[f]) byFilm[f] = [];
+    byFilm[f].push(c);
+  });
+  const films = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
+  let html = '<div class="films-list">';
+  films.forEach(film => {
+    const chapters = byFilm[film];
+    const total = chapters.length;
+    const approved = chapters.filter(c => getStatus(c) === 'approved').length;
+    const pct = total ? Math.round((approved / total) * 100) : 0;
+    const filmInfo = (S.filmsMap || {})[film];
+    const filmDur = filmInfo ? formatDuration(filmInfo.durationMs) : '';
+    const filmId = filmInfo?.filmId || '';
+    const filmEsc = esc(film).replace(/'/g, "\\'");
+    html += `<div class="film-card">
+      <div class="film-card-header">
+        <div class="film-card-title" onclick="selectFilm('${filmEsc}')" style="cursor:pointer;flex:1">${esc(film)}</div>
+        ${filmDur ? `<span class="film-card-count" style="background:var(--bg2);color:var(--tx3);font-family:monospace">${esc(filmDur)}</span>` : ''}
+        <span class="film-card-count">${total} chapter${total === 1 ? '' : 's'}</span>
+        ${filmId ? `<a href="https://videos.jem.tv/video-player?produced=${esc(filmId)}" target="_blank" rel="noopener" class="btn btn-sm btn-primary" style="text-decoration:none;flex-shrink:0" onclick="event.stopPropagation()">▶ Watch Film</a>` : ''}
+      </div>
+      <div class="film-card-progress" onclick="selectFilm('${filmEsc}')" style="cursor:pointer">${approved}/${total} approved · ${pct}%</div>
+      <div class="film-card-bar" onclick="selectFilm('${filmEsc}')" style="cursor:pointer"><div class="film-card-bar-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function selectFilm(filmName) {
+  _selectedFilm = filmName;
+  renderFilmChapters(filmName);
+}
+
+function backToFilmsList() {
+  _selectedFilm = null;
+  renderFilmsList();
+}
+
+function renderFilmChapters(filmName) {
+  const container = document.getElementById('filmsContainer');
+  const chapters = getOrderedChapters(filmName);
+  const filmInfo = (S.filmsMap || {})[filmName];
+  const filmDur = filmInfo ? formatDuration(filmInfo.durationMs) : '';
+  const filmId = filmInfo?.filmId || '';
+  const filmEsc = esc(filmName).replace(/'/g, "\\'");
+  let html = `<button class="btn btn-sm film-back-btn" onclick="backToFilmsList()">← Back to films</button>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div style="flex:1;min-width:0">
+        <h2 style="font-family:var(--font-serif);font-size:22px;font-weight:500;color:var(--tx);margin:0">${esc(filmName)}</h2>
+        ${filmDur ? `<div style="font-size:11px;color:var(--tx3);margin-top:4px;font-family:monospace">⏱ ${esc(filmDur)} · full film</div>` : ''}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${filmId ? `<a class="btn btn-sm btn-primary" href="https://videos.jem.tv/video-player?produced=${esc(filmId)}" target="_blank" rel="noopener" style="text-decoration:none">▶ Watch Full Film</a>` : ''}
+        <button class="btn btn-sm" onclick="resetFilmOrder('${filmEsc}')">↻ Reset Order</button>
+        <button class="btn btn-sm btn-primary" id="filmSaveBtn" onclick="commitFilmOrder('${filmEsc}')" disabled>💾 Save Order</button>
+      </div>
+    </div>
+    <div class="chapters-list" id="chaptersList">`;
+  chapters.forEach((c, i) => {
+    const status = getStatus(c);
+    const thumb = c.thumbnail
+      ? `<img class="chapter-thumb" src="${esc(c.thumbnail)}" onerror="this.style.display='none'">`
+      : `<div class="chapter-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--tx4);font-size:11px">—</div>`;
+    const chapDur = formatDuration(c.durationMs);
+    html += `<div class="chapter-row" draggable="true" data-clip-id="${c._rowNum}" data-film="${esc(filmName)}"
+        ondragstart="onChapterDragStart(event)" ondragover="onChapterDragOver(event)" ondrop="onChapterDrop(event)" ondragend="onChapterDragEnd(event)" ondragleave="onChapterDragLeave(event)">
+      <span class="chapter-handle">⋮⋮</span>
+      <span class="chapter-num">${i + 1}</span>
+      ${thumb}
+      <div class="chapter-info">
+        <div class="chapter-title" onclick="event.stopPropagation();openChapterClip(${c._rowNum})" style="cursor:pointer">${esc(c.title)}</div>
+        <div class="chapter-meta">${chapDur ? esc(chapDur) + ' · ' : ''}Clip #${c._rowNum}</div>
+      </div>
+      <div class="chapter-status">${statusBadgeHTML(status)}</div>
+      ${c.clipId ? `<a href="https://videos.jem.tv/video-player?clip=${esc(c.clipId)}" target="_blank" rel="noopener" class="btn btn-sm" onclick="event.stopPropagation()" title="Watch chapter on JEM.tv" style="text-decoration:none;flex-shrink:0">▶</a>` : ''}
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function openChapterClip(rowNum) {
+  S.selectedIdx = rowNum;
+  switchView('queue', null);
+}
+
+let _draggingChapterId = null;
+let _filmOrderDirty = false;
+
+function onChapterDragStart(e) {
+  const row = e.currentTarget;
+  _draggingChapterId = row.dataset.clipId;
+  row.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', _draggingChapterId);
+}
+
+function onChapterDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const row = e.currentTarget;
+  if (row.dataset.clipId !== _draggingChapterId) {
+    row.classList.add('drag-over');
+  }
+}
+
+function onChapterDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function onChapterDrop(e) {
+  e.preventDefault();
+  const targetRow = e.currentTarget;
+  targetRow.classList.remove('drag-over');
+  const dropId = targetRow.dataset.clipId;
+  if (!_draggingChapterId || _draggingChapterId === dropId) return;
+  // Reorder DOM: move dragged row before target
+  const list = document.getElementById('chaptersList');
+  const draggedEl = list.querySelector(`[data-clip-id="${_draggingChapterId}"]`);
+  if (!draggedEl) return;
+  // Determine drop position — before or after?
+  const rect = targetRow.getBoundingClientRect();
+  const before = (e.clientY - rect.top) < rect.height / 2;
+  if (before) list.insertBefore(draggedEl, targetRow);
+  else list.insertBefore(draggedEl, targetRow.nextSibling);
+  // Renumber
+  list.querySelectorAll('.chapter-row').forEach((row, i) => {
+    row.querySelector('.chapter-num').textContent = i + 1;
+  });
+  _filmOrderDirty = true;
+  document.getElementById('filmSaveBtn').disabled = false;
+}
+
+function onChapterDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.chapter-row.drag-over').forEach(r => r.classList.remove('drag-over'));
+  _draggingChapterId = null;
+}
+
+async function commitFilmOrder(filmName) {
+  const list = document.getElementById('chaptersList');
+  const ids = [...list.querySelectorAll('.chapter-row')].map(r => r.dataset.clipId);
+  const btn = document.getElementById('filmSaveBtn');
+  btn.disabled = true; btn.textContent = '💾 Saving…';
+  try {
+    await saveFilmOrder(filmName, ids);
+    _filmOrderDirty = false;
+    btn.textContent = '✅ Saved';
+    setTimeout(() => { btn.textContent = '💾 Save Order'; }, 1500);
+    showToast('Chapter order saved', 'success');
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '💾 Save Order';
+    showToast('Save failed: ' + e.message, 'error');
+  }
+}
+
+async function resetFilmOrder(filmName) {
+  if (!confirm('Reset to default order (by clip ID)?')) return;
+  if (_filmOrderCache && _filmOrderCache[filmName]) {
+    delete _filmOrderCache[filmName];
+    // Save empty order — effectively removes saved rows
+    try {
+      const data = await sheetsGet(`'${FILM_ORDER_TAB}'!A:C`);
+      const allRows = data.values || [];
+      const header = allRows[0] || ['film_name','clip_id','order_index'];
+      const otherRows = allRows.slice(1).filter(r => r[0] !== filmName);
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(`'${FILM_ORDER_TAB}'!A:C`)}:clear`, {
+        method: 'POST', headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' }, body: '{}'
+      });
+      await sheetsSet(`'${FILM_ORDER_TAB}'!A1`, [header, ...otherRows]);
+    } catch(e) { console.warn('Reset save failed:', e); }
+  }
+  renderFilmChapters(filmName);
+  showToast('Reset to default order', 'success');
+}
+
+// ══════════════════════════════════════════════
+// FULL BOOK VIEW (all types, section title pages)
+// ══════════════════════════════════════════════
+function renderFullBookView() {
+  const el = document.getElementById('fullBookPages');
+  let html = '';
+  let pageNum = 0;
+  CLIP_TYPES.forEach(t => {
+    const bucket = S.byType[t.key];
+    if (!bucket) return;
+    let approved = bucket.clips.filter(c => getStatus(c) === 'approved');
+    if (!approved.length) return;
+    // For film chapters: order by saved film order
+    if (t.key === 'film_chapter') {
+      // Group by film and use ordered chapters
+      const byFilm = {};
+      approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
+      const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
+      approved = [];
+      filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => getStatus(c) === 'approved')); });
+    }
+    // Section title page
+    pageNum++;
+    html += `<div class="book-page" style="display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;min-height:680px;">
+      <div style="font-family:var(--font-serif);font-size:14px;color:var(--tx3);letter-spacing:3px;text-transform:uppercase;margin-bottom:24px">Section</div>
+      <h1 style="font-family:var(--font-serif);font-size:56px;font-weight:500;color:var(--tx);letter-spacing:-1.5px;line-height:1.1;margin:0 0 18px">${esc(t.displayName)}</h1>
+      <div style="font-family:var(--font-serif);font-size:16px;color:var(--tx3);font-style:italic">${approved.length} entr${approved.length === 1 ? 'y' : 'ies'}</div>
+    </div>`;
+    // Then book pages — chunk into pages
+    const perPage = CONFIG.ENTRIES_PER_PAGE || 10;
+    for (let i = 0; i < approved.length; i += perPage) {
+      pageNum++;
+      const pageClips = approved.slice(i, i + perPage);
+      const entries = pageClips.map(clip => {
+        const tags = parseTags(clip).slice(0, 8);
+        const summary = clip.rewrite || clip.description || '';
+        const thumbHTML = clip.thumbnail
+          ? `<img class="book-entry-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
+          : `<div class="book-entry-thumb" style="display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--tx4)">—</div>`;
+        const fd = formatClipDate(clip.date);
+        const dur = formatDuration(clip.durationMs);
+        return `<div class="book-entry">
+          <div class="book-entry-inner">
+            ${thumbHTML}
+            <div class="book-entry-content">
+              ${clip.filmName ? `<div style="font-size:8px;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;font-weight:600">${esc(clip.filmName)}</div>` : ''}
+              <div class="book-entry-title">${esc(clip.title)}</div>
+              <div class="book-entry-meta">${clip.programNum ? 'LT ' + esc(clip.programNum) : ''}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ' + esc(dur) : ''}</div>
+              <div class="book-entry-summary">${esc(summary)}</div>
+              ${tags.length ? `<div class="book-entry-tags">${tags.map(tg=>`<span class="book-tag">${esc(tg)}</span>`).join('')}</div>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      html += `<div class="book-page">
+        <div class="book-page-header"><div class="book-page-header-title">JEM Video Index · ${esc(t.displayName)}</div></div>
+        <div class="book-entries">${entries}</div>
+        <div class="book-page-footer"><span>JEM · Jewish Educational Media</span><span>${pageNum}</span><span>${esc(t.displayName)}</span></div>
+      </div>`;
+    }
+  });
+  el.innerHTML = html || '<div class="empty-state">No approved summaries yet across any section.</div>';
 }
 
 // ══════════════════════════════════════════════
@@ -2777,10 +3276,10 @@ function renderOverallDashboard() {
   const pct = (n) => total ? Math.round((n / total) * 100) : 0;
 
   const stats = [
-    { key: 'approved', label: '✅ Approved', count: approved },
-    { key: 'draft', label: '🟡 Drafts', count: draft },
-    { key: 'flagged', label: '🚩 Flagged', count: flagged },
-    { key: 'unprocessed', label: '⬜ Unprocessed', count: unprocessed },
+    { key: 'approved', label: 'Approved', count: approved },
+    { key: 'draft', label: 'Drafts', count: draft },
+    { key: 'flagged', label: 'Flagged', count: flagged },
+    { key: 'unprocessed', label: 'Unprocessed', count: unprocessed },
   ];
   document.getElementById('overallStats').innerHTML = stats.map(s => `
     <div class="dash-stat-card ${s.key}">
@@ -2800,7 +3299,7 @@ function renderOverallDashboard() {
     if (tTotal === 0) {
       return `<div class="overall-type-card" style="opacity:0.5;cursor:default">
         <div class="otc-header">
-          <span class="otc-icon">${t.icon}</span>
+          <span class="otc-icon">${t.displayName.charAt(0)}</span>
           <span class="otc-title">${esc(t.displayName)}</span>
           <span class="otc-count">no clips</span>
         </div>
@@ -2816,15 +3315,15 @@ function renderOverallDashboard() {
     const tPct = tTotal ? Math.round((tApp / tTotal) * 100) : 0;
     return `<div class="overall-type-card" onclick="selectTypeView('${t.key}','dashboard')">
       <div class="otc-header">
-        <span class="otc-icon">${t.icon}</span>
+        <span class="otc-icon">${t.displayName.charAt(0)}</span>
         <span class="otc-title">${esc(t.displayName)}</span>
         <span class="otc-count">${tApp}/${tTotal}</span>
       </div>
       <div class="otc-bar"><div class="otc-bar-fill" style="width:${tPct}%"></div></div>
       <div class="otc-stats">
-        <span class="otc-stat">✅ <span class="otc-stat-num">${tApp}</span></span>
-        <span class="otc-stat">🟡 <span class="otc-stat-num">${tDr}</span></span>
-        <span class="otc-stat">🚩 <span class="otc-stat-num">${tFl}</span></span>
+        <span class="otc-stat"><span class="dash-dot dash-dot-approved" style="width:7px;height:7px"></span><span class="otc-stat-num">${tApp}</span></span>
+        <span class="otc-stat"><span class="dash-dot dash-dot-draft" style="width:7px;height:7px"></span><span class="otc-stat-num">${tDr}</span></span>
+        <span class="otc-stat"><span class="dash-dot dash-dot-flagged" style="width:7px;height:7px"></span><span class="otc-stat-num">${tFl}</span></span>
         <span class="otc-stat" style="margin-left:auto">${tPct}%</span>
       </div>
     </div>`;
@@ -2898,10 +3397,10 @@ function renderDashboard() {
 
   // Stat cards
   const stats = [
-    { key: 'approved', label: '✅ Approved', count: counts.approved, filter: 'approved' },
-    { key: 'draft', label: '🟡 Drafts', count: counts.draft, filter: 'draft' },
-    { key: 'flagged', label: '🚩 Flagged', count: counts.flagged, filter: 'flagged' },
-    { key: 'unprocessed', label: '⬜ Unprocessed', count: counts.unprocessed, filter: 'unprocessed' },
+    { key: 'approved', label: 'Approved', count: counts.approved, filter: 'approved' },
+    { key: 'draft', label: 'Drafts', count: counts.draft, filter: 'draft' },
+    { key: 'flagged', label: 'Flagged', count: counts.flagged, filter: 'flagged' },
+    { key: 'unprocessed', label: 'Unprocessed', count: counts.unprocessed, filter: 'unprocessed' },
   ];
   document.getElementById('dashStats').innerHTML = stats.map(s => `
     <div class="dash-stat-card ${s.key}" onclick="goToQueueWithFilter('${s.filter}')">
@@ -3221,11 +3720,12 @@ async function reloadRulesFromSheet() {
 // ══════════════════════════════════════════════
 // VIEW SWITCHING
 // ══════════════════════════════════════════════
-function switchView(view, btn) {
+function switchView(view, btn, opts) {
   S.currentView = view;
-  const views = ['overallView','teamView','dashboardView','queueView','attentionView','exportView','bookView','rulesView'];
+  const views = ['overallView','teamView','dashboardView','queueView','attentionView','exportView','bookView','fullBookView','rulesView','filmsView'];
   views.forEach(v => { const el = document.getElementById(v); if (el) el.style.display = 'none'; });
   if (view === 'overall') { document.getElementById('overallView').style.display = 'block'; renderOverallDashboard(); }
+  else if (view === 'fullbook') { document.getElementById('fullBookView').style.display = 'block'; renderFullBookView(); }
   else if (view === 'team') { document.getElementById('teamView').style.display = 'block'; renderTeamView(); }
   else if (view === 'dashboard') { document.getElementById('dashboardView').style.display = 'block'; renderDashboard(); }
   else if (view === 'queue') {
@@ -3236,8 +3736,14 @@ function switchView(view, btn) {
   else if (view === 'attention') { document.getElementById('attentionView').style.display = 'block'; renderAttentionView(); }
   else if (view === 'export') { document.getElementById('exportView').style.display = 'block'; renderExportView(); }
   else if (view === 'book') { document.getElementById('bookView').style.display = 'block'; renderBookView(); }
+  else if (view === 'films') { document.getElementById('filmsView').style.display = 'block'; renderFilmsView(); }
   else if (view === 'rules') { document.getElementById('rulesView').style.display = 'block'; renderRulesView(); }
   renderSidebar();
+  // Push browser history state so back button works
+  if (!opts || !opts.skipHistory) {
+    const stateObj = { view, activeType: S.activeType, selectedIdx: S.selectedIdx, filter: S.filter };
+    history.pushState(stateObj, '', '#' + view + (S.activeType !== 'sichos' ? '/' + S.activeType : ''));
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -3263,6 +3769,18 @@ function showToast(msg, type) {
 // ══════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════
+window.addEventListener('popstate', (e) => {
+  if (!e.state) return;
+  const { view, activeType, selectedIdx, filter } = e.state;
+  if (activeType && activeType !== S.activeType) {
+    S.activeType = activeType;
+    localStorage.setItem('jem_cse_active_type', activeType);
+  }
+  if (filter) S.filter = filter;
+  if (selectedIdx) S.selectedIdx = selectedIdx;
+  if (view) switchView(view, null, { skipHistory: true });
+});
+
 async function init() {
   const gotToken = handleAuthCallback();
   const savedCode = localStorage.getItem('jem_cse_key');
@@ -3284,7 +3802,11 @@ async function init() {
       document.getElementById('userAvatar').textContent = (S.user.email || '?')[0].toUpperCase();
       document.getElementById('topBar').style.display = 'flex';
       document.getElementById('appShell').style.display = 'flex';
-      switchView('overall', null);
+      if (localStorage.getItem('jem_cse_sb_collapsed') === '1') {
+        document.getElementById('appShell').classList.add('sb-collapsed');
+      }
+      switchView('overall', null, { skipHistory: true });
+      history.replaceState({ view: 'overall', activeType: S.activeType }, '', '#overall');
       startTokenAgeMonitor();
       startDataAutoRefresh();
       hideLoading();
