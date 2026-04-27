@@ -725,28 +725,36 @@ async function loadAllData() {
 // ══════════════════════════════════════════════
 // CLIP HELPERS
 // ══════════════════════════════════════════════
-// Format date — strip JSON quotes and present as "Hebrew · Secular"
+// Format clip date — column Q stores a JSON array like:
+// [{"secular_year":1980,"secular_month":7,"secular_day":17,"hebrew_year":5740,"hebrew_month":12,"hebrew_day":4,"hebrew_month_name":"Av","after_nightfall":false,"hebrew_date":"4 Av, 5740"}]
+// Output: "July 17, 1980 - 4 Av, 5740"
+const _MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 function formatClipDate(raw) {
   if (!raw) return '';
-  let s = String(raw).trim();
-  // Try JSON parse
+  const s = String(raw).trim();
+  if (!s) return '';
+  let obj = null;
   try {
     const parsed = JSON.parse(s);
-    if (typeof parsed === 'object' && parsed !== null) {
-      const heb = parsed.hebrew || parsed.he || parsed.hebrewDate || '';
-      const sec = parsed.secular || parsed.english || parsed.en || parsed.gregorian || parsed.date || '';
-      if (heb || sec) return [heb, sec].filter(Boolean).join(' · ');
-      const vals = Object.values(parsed).filter(v => typeof v === 'string').slice(0, 2);
-      if (vals.length) return vals.join(' · ');
-    }
-  } catch {}
-  // Strip { } [ ] " ' and key:value style — try splitting on common separators
-  s = s.replace(/[{}\[\]"']/g, '').trim();
-  // Look for two date-like parts (e.g. "hebrew: 5 Tishrei 5783, secular: 30 Sep 2022")
-  const parts = s.split(/\s*,\s*|\s+\|\s+/);
-  const cleaned = parts.map(p => p.replace(/^(hebrew|secular|english|en|he|gregorian|date)\s*:\s*/i, '').trim()).filter(Boolean);
-  if (cleaned.length >= 2) return cleaned.slice(0, 2).join(' · ');
-  return cleaned[0] || s;
+    obj = Array.isArray(parsed) ? parsed[0] : parsed;
+  } catch {
+    // Fallback: not JSON — return as-is
+    return s;
+  }
+  if (!obj || typeof obj !== 'object') return s;
+  // Build secular date
+  let secular = '';
+  if (obj.secular_year && obj.secular_month && obj.secular_day) {
+    const m = _MONTH_NAMES[obj.secular_month - 1] || '';
+    secular = `${m} ${obj.secular_day}, ${obj.secular_year}`;
+  }
+  // Hebrew date — prefer the pre-built string, otherwise compose from parts
+  let hebrew = obj.hebrew_date || '';
+  if (!hebrew && obj.hebrew_day && obj.hebrew_month_name && obj.hebrew_year) {
+    hebrew = `${obj.hebrew_day} ${obj.hebrew_month_name}, ${obj.hebrew_year}`;
+  }
+  if (secular && hebrew) return `${secular} - ${hebrew}`;
+  return secular || hebrew || '';
 }
 
 // Format duration in ms to mm:ss or h:mm:ss
