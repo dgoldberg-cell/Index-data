@@ -1719,41 +1719,110 @@ function signOut() {
 // ══════════════════════════════════════════════
 // SHEETS API
 // ══════════════════════════════════════════════
-async function sheetsGet(range) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(range)}`;
-  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + S.token } });
-  if (r.status === 401) {
-    // Token expired — try silent iframe refresh; if that fails it'll fall back to redirect
-    silentRefreshIframe();
-    throw new Error('Session refreshing — please retry');
+// Minimum spacing between sheet API calls to avoid rate limits (Google Sheets API: ~60 reads/minute)
+let _lastSheetCall = 0;
+const _SHEET_MIN_GAP_MS = 120; // ~8 calls/sec sustained, well under quota
+async function _waitForSheetSlot() {
+  const elapsed = Date.now() - _lastSheetCall;
+  if (elapsed < _SHEET_MIN_GAP_MS) {
+    await new Promise(r => setTimeout(r, _SHEET_MIN_GAP_MS - elapsed));
   }
-  if (!r.ok) throw new Error('Sheets read error: ' + r.status);
-  return r.json();
+  _lastSheetCall = Date.now();
+}
+
+// Retry wrapper for 429s with exponential backoff
+async function _withRetry(fn, label) {
+  let lastErr;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      await _waitForSheetSlot();
+      return await fn();
+    } catch(e) {
+      lastErr = e;
+      const isRate = /429/.test(e.message || '');
+      if (!isRate) throw e;
+      const wait = Math.min(8000, 800 * Math.pow(2, attempt)); // 800ms, 1.6s, 3.2s, 6.4s
+      console.warn(`[${label || 'sheets'}] 429 rate limit, retrying in ${wait}ms (attempt ${attempt + 1}/4)`);
+      await new Promise(r => setTimeout(r, wait));
+    }
+  }
+  throw lastErr;
+}
+
+async function sheetsGet(range) {
+  return _withRetry(async () => {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(range)}`;
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + S.token } });
+    if (r.status === 401) {
+      silentRefreshIframe();
+      throw new Error('Session refreshing — please retry');
+    }
+    if (!r.ok) throw new Error('Sheets read error: ' + r.status);
+    return r.json();
+  }, 'sheetsGet');
 }
 
 async function sheetsSet(range, values) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
-  const r = await fetch(url, {
-    method: 'PUT',
-    headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ range, majorDimension: 'ROWS', values })
-  });
-  if (r.status === 401) { silentRefreshIframe(); throw new Error('Session refreshing — please retry'); }
-  if (!r.ok) throw new Error('Sheets write error: ' + r.status);
-  return r.json();
+  return _withRetry(async () => {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
+    const r = await fetch(url, {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ range, majorDimension: 'ROWS', values })
+    });
+    if (r.status === 401) { silentRefreshIframe(); throw new Error('Session refreshing — please retry'); }
+    if (!r.ok) throw new Error('Sheets write error: ' + r.status);
+    return r.json();
+  }, 'sheetsSet');
 }
 
 async function sheetsBatchSet(data) {
-  // data = [{range, values}]
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values:batchUpdate`;
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ valueInputOption: 'RAW', data })
-  });
-  if (r.status === 401) { silentRefreshIframe(); throw new Error('Session refreshing — please retry'); }
-  if (!r.ok) throw new Error('Sheets batch write error: ' + r.status);
-  return r.json();
+  return _withRetry(async () => {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values:batchUpdate`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ valueInputOption: 'RAW', data })
+    });
+    if (r.status === 401) { silentRefreshIframe(); throw new Error('Session refreshing — please retry'); }
+    if (!r.ok) throw new Error('Sheets batch write error: ' + r.status);
+    return r.json();
+  }, 'sheetsBatchSet');
+}
+
+// Cached + throttled sheet metadata fetch (same metadata is needed by ensure-tab logic many times during load)
+let _sheetMetaCache = null;
+let _sheetMetaCacheTime = 0;
+async function getSheetMeta(forceFresh = false) {
+  // Cache for 30 seconds — metadata doesn't change that often
+  if (!forceFresh && _sheetMetaCache && Date.now() - _sheetMetaCacheTime < 30000) {
+    return _sheetMetaCache;
+  }
+  const data = await _withRetry(async () => {
+    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
+      { headers: { Authorization: 'Bearer ' + S.token } });
+    if (r.status === 401) { silentRefreshIframe(); throw new Error('Session refreshing — please retry'); }
+    if (!r.ok) throw new Error('Sheets meta error: ' + r.status);
+    return r.json();
+  }, 'getSheetMeta');
+  _sheetMetaCache = data;
+  _sheetMetaCacheTime = Date.now();
+  return data;
+}
+
+function invalidateSheetMeta() { _sheetMetaCache = null; _sheetMetaCacheTime = 0; }
+
+// Throttled wrapper for any direct sheet API call (metadata fetches, batchUpdate, clear, etc.)
+async function sheetsApiCall(url, options = {}) {
+  return _withRetry(async () => {
+    const r = await fetch(url, {
+      ...options,
+      headers: { Authorization: 'Bearer ' + S.token, ...(options.headers || {}) }
+    });
+    if (r.status === 401) { silentRefreshIframe(); throw new Error('Session refreshing — please retry'); }
+    if (!r.ok) throw new Error('Sheets API error: ' + r.status);
+    return r.json();
+  }, 'sheetsApi');
 }
 
 function colLetter(n) { // 0-based to A, B, ...
@@ -1772,16 +1841,15 @@ const REVIEW_COLS = { ID: 0, STATUS: 1, ORIGINAL_BACKUP: 2, FLAG_REASON: 3, APPR
 
 async function ensureReviewTab(typeCfg) {
   const tabName = typeCfg.reviewTab;
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`;
-  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + S.token } });
-  const meta = await r.json();
+  const meta = await getSheetMeta();
   const exists = meta.sheets?.some(s => s.properties.title === tabName);
   if (!exists) {
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+    await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName } } }] })
     });
+    invalidateSheetMeta();
     await sheetsSet(`'${tabName}'!A1:I1`, [['clip_id','status','original_backup','flag_reason','approved_by','approved_at','draft_text','chat_history','desc_source_col']]);
   } else {
     // Migration: ensure all 9 columns exist
@@ -1853,15 +1921,15 @@ async function saveReviewRow(clip) {
 const TEAM_HEADERS = ['email','name','joinedAt','lastSeen','role'];
 
 async function ensureTeamTab() {
-  const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
-    { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+  const meta = await getSheetMeta();
   const exists = meta.sheets?.some(s => s.properties.title === CONFIG.TEAM_TAB);
   if (!exists) {
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+    await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title: CONFIG.TEAM_TAB, gridProperties: { frozenRowCount: 1 } } } }] })
     });
+    invalidateSheetMeta();
     await sheetsSet(`'${CONFIG.TEAM_TAB}'!A1:E1`, [TEAM_HEADERS]);
   }
 }
@@ -1916,15 +1984,15 @@ async function registerTeamMember() {
 const NOTES_HEADERS = ['id','timestamp','scope','clip_row','type_key','user','text','resolved','parent_id','edited_at'];
 
 async function ensureNotesTab() {
-  const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
-    { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+  const meta = await getSheetMeta();
   const exists = meta.sheets?.some(s => s.properties.title === CONFIG.NOTES_TAB);
   if (!exists) {
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+    await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title: CONFIG.NOTES_TAB, gridProperties: { frozenRowCount: 1 } } } }] })
     });
+    invalidateSheetMeta();
     await sheetsSet(`'${CONFIG.NOTES_TAB}'!A1:J1`, [NOTES_HEADERS]);
   }
 }
@@ -1964,8 +2032,7 @@ async function addNote(scope, text, opts = {}) {
 }
 
 async function deleteNote(id) {
-  const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
-    { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+  const meta = await getSheetMeta();
   const sheetId = meta.sheets?.find(s => s.properties.title === CONFIG.NOTES_TAB)?.properties.sheetId;
   if (sheetId === undefined) return;
   const data = await sheetsGet(`'${CONFIG.NOTES_TAB}'!A:A`);
@@ -1973,9 +2040,9 @@ async function deleteNote(id) {
   let sheetRow = -1;
   rows.forEach((r, i) => { if (r[0] === id) sheetRow = i + 1; });
   if (sheetRow < 1) return;
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+  await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: sheetRow - 1, endIndex: sheetRow } } }] })
   });
   S.notes = S.notes.filter(n => n.id !== id);
@@ -2022,16 +2089,16 @@ function getGeneralNotes() {
 async function loadRulesForType(typeCfg) {
   const bucket = S.byType[typeCfg.key];
   const tabName = typeCfg.rulesTab;
-  const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
-    { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+  const meta = await getSheetMeta();
   const existing = meta.sheets?.find(s => s.properties.title === tabName);
   if (!existing) {
     // Create empty tab — only seed Sichos with default rules
-    const addRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+    const addRes = await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName, gridProperties: { frozenRowCount: 1 } } } }] })
-    }).then(r => r.json());
+    });
+    invalidateSheetMeta();
     const newSheetId = addRes.replies?.[0]?.addSheet?.properties?.sheetId;
     const header = [['id','category','title','content','active']];
     let rows = [];
@@ -2049,9 +2116,9 @@ async function loadRulesForType(typeCfg) {
         { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 600 }, fields: 'pixelSize' } },
         { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
       ];
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requests: fmt })
       });
     }
@@ -2129,13 +2196,12 @@ async function deleteOneRule(id) {
   let sheetRow = -1;
   rows.forEach((r, i) => { if (r[0] === id) sheetRow = i + 1; });
   if (sheetRow < 1) return;
-  const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
-    { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+  const meta = await getSheetMeta();
   const sheetId = meta.sheets?.find(s => s.properties.title === tabName)?.properties.sheetId;
   if (sheetId === undefined) return;
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+  await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: sheetRow - 1, endIndex: sheetRow } } }] })
   });
   bucket.rulesArr = bucket.rulesArr.filter(r => r.id !== id);
@@ -2153,8 +2219,7 @@ function nextRuleId() {
 // ══════════════════════════════════════════════
 async function migrateLegacyTabs() {
   // Rename old single-type tabs from earlier versions to Sichos-specific names
-  const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
-    { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+  const meta = await getSheetMeta();
   const sheets = meta.sheets || [];
   const renames = [
     { from: 'Clip Review Data', to: 'Addresses Review Data' },
@@ -2167,9 +2232,9 @@ async function migrateLegacyTabs() {
     const toExists = sheets.some(s => s.properties.title === r.to);
     if (fromSheet && !toExists) {
       try {
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+        await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ requests: [{ updateSheetProperties: { properties: { sheetId: fromSheet.properties.sheetId, title: r.to }, fields: 'title' } }] })
         });
         console.log(`Migrated tab: "${r.from}" → "${r.to}"`);
@@ -3340,19 +3405,19 @@ async function generateSheetExport() {
   showLoading('Creating sheet tab…');
   try {
     // Check if tab exists; if so delete it first so we get a fresh export
-    const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
-      { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+    const meta = await getSheetMeta();
     const existing = meta.sheets?.find(s => s.properties.title === tabName);
     const requests = [];
     if (existing) {
       requests.push({ deleteSheet: { sheetId: existing.properties.sheetId } });
     }
     requests.push({ addSheet: { properties: { title: tabName, gridProperties: { frozenRowCount: 1 } } } });
-    const batchRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+    const batchRes = await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requests })
-    }).then(r => r.json());
+    });
+    invalidateSheetMeta();
     const newSheetId = batchRes.replies?.find(r => r.addSheet)?.addSheet?.properties?.sheetId;
 
     // Build header + rows
@@ -3427,9 +3492,9 @@ async function generateSheetExport() {
           }
         },
       ];
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requests: fmtRequests })
       });
     }
@@ -3624,13 +3689,12 @@ const FILM_ORDER_TAB = 'Film Chapter Order';
 let _selectedFilm = null;
 
 async function ensureFilmOrderTab() {
-  const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?fields=sheets.properties`,
-    { headers: { Authorization: 'Bearer ' + S.token } }).then(r => r.json());
+  const meta = await getSheetMeta();
   const exists = meta.sheets?.some(s => s.properties.title === FILM_ORDER_TAB);
   if (!exists) {
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+    await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title: FILM_ORDER_TAB } } }] })
     });
     await sheetsSet(`'${FILM_ORDER_TAB}'!A1:C1`, [['film_name','clip_id','order_index']]);
@@ -3662,8 +3726,8 @@ async function saveFilmOrder(filmName, orderedClipIds) {
   const otherRows = allRows.slice(1).filter(r => r[0] !== filmName);
   const newRows = orderedClipIds.map((id, i) => [filmName, String(id), String(i)]);
   // Clear sheet then rewrite
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(`'${FILM_ORDER_TAB}'!A:C`)}:clear`, {
-    method: 'POST', headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' }, body: '{}'
+  await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(`'${FILM_ORDER_TAB}'!A:C`)}:clear`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
   });
   await sheetsSet(`'${FILM_ORDER_TAB}'!A1`, [header, ...otherRows, ...newRows]);
   if (!_filmOrderCache) _filmOrderCache = {};
@@ -3878,8 +3942,8 @@ async function resetFilmOrder(filmName) {
       const allRows = data.values || [];
       const header = allRows[0] || ['film_name','clip_id','order_index'];
       const otherRows = allRows.slice(1).filter(r => r[0] !== filmName);
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(`'${FILM_ORDER_TAB}'!A:C`)}:clear`, {
-        method: 'POST', headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/json' }, body: '{}'
+      await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(`'${FILM_ORDER_TAB}'!A:C`)}:clear`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
       });
       await sheetsSet(`'${FILM_ORDER_TAB}'!A1`, [header, ...otherRows]);
     } catch(e) { console.warn('Reset save failed:', e); }
