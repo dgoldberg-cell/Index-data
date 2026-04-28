@@ -1419,6 +1419,8 @@ let S = {
   rangeSize: 50,
   team: [],
   notes: [],
+  filmsMap: {}, // filmName -> { filmId, durationMs, thumbnail, date }
+  regenCounts: {}, // rowNum -> count of regenerations this session
   isAdmin: false,
   userFilter: '',
 };
@@ -1865,6 +1867,8 @@ async function ensureReviewTab(typeCfg) {
 }
 
 async function loadReviewData(typeCfg) {
+  if (!typeCfg) return;
+  if (!S.byType[typeCfg.key]) S.byType[typeCfg.key] = { clips: [], reviewData: {}, rulesArr: [] };
   const bucket = S.byType[typeCfg.key];
   bucket.reviewData = {};
   try {
@@ -2087,6 +2091,8 @@ function getGeneralNotes() {
 // AI RULES (stored in sheet tab so any device picks up edits)
 // ══════════════════════════════════════════════
 async function loadRulesForType(typeCfg) {
+  if (!typeCfg) return;
+  if (!S.byType[typeCfg.key]) S.byType[typeCfg.key] = { clips: [], reviewData: {}, rulesArr: [] };
   const bucket = S.byType[typeCfg.key];
   const tabName = typeCfg.rulesTab;
   const meta = await getSheetMeta();
@@ -2233,10 +2239,11 @@ async function migrateLegacyTabs() {
     if (fromSheet && !toExists) {
       try {
         await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ requests: [{ updateSheetProperties: { properties: { sheetId: fromSheet.properties.sheetId, title: r.to }, fields: 'title' } }] })
         });
+        invalidateSheetMeta();
         console.log(`Migrated tab: "${r.from}" → "${r.to}"`);
       } catch(e) { console.warn('Migration failed for', r.from, e); }
     }
@@ -3112,6 +3119,7 @@ async function regenerateClip(rowNum) {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Generating…'; }
   try {
     // Increment regen count so the AI knows to produce a different variation
+    if (!S.regenCounts) S.regenCounts = {};
     const existingDraft = clip._draft || getReviewField(clip, 'draftText') || '';
     if (existingDraft) {
       S.regenCounts[rowNum] = (S.regenCounts[rowNum] || 0) + 1;
@@ -3240,7 +3248,7 @@ async function revertClip(rowNum) {
     setReviewField(clip, 'flagReason', '');
     setReviewField(clip, 'draftText', '');
     delete S.chatHistory[rowNum];
-    delete S.regenCounts[rowNum]; // reset so next generate is treated as fresh
+    if (S.regenCounts) delete S.regenCounts[rowNum]; // reset so next generate is treated as fresh
     await saveReviewRow(clip);
     hideLoading();
     renderDetail();
@@ -4099,7 +4107,7 @@ function renderOverallDashboard() {
     CLIP_TYPES.forEach(t => {
       const bucket = S.byType[t.key];
       if (!bucket) return;
-      Object.values(bucket.reviewData).forEach(rd => {
+      Object.values(bucket.reviewData || {}).forEach(rd => {
         if (rd.approvedBy && stats2[rd.approvedBy]) stats2[rd.approvedBy].approvals++;
       });
     });
@@ -4142,7 +4150,7 @@ function renderTeamView() {
   CLIP_TYPES.forEach(t => {
     const bucket = S.byType[t.key];
     if (!bucket) return;
-    Object.values(bucket.reviewData).forEach(rd => {
+    Object.values(bucket.reviewData || {}).forEach(rd => {
       if (rd.approvedBy && approvalCounts[rd.approvedBy] !== undefined) approvalCounts[rd.approvedBy]++;
     });
   });
