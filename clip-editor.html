@@ -1372,7 +1372,8 @@ const DEFAULT_RULES = [
   { category: 'Italicization', title: 'Do NOT italicize', content: 'Do NOT italicize: Torah, Mashiach, Shabbat, Rebbe, Alter Rebbe, Mitteler Rebbe, Tzemach Tzedek, Chassidus, Chassidic, Kohen, Levi, Jerusalem, Hebron, Talmud, Midrash, Zohar, Tanya, Rashi, Maimonides, names of people, months, holidays, places, books of Tanach. If a term is not on the whitelist and not obviously a proper noun, leave it plain. Under-italicizing beats over-italicizing.', active: true },
 
   // category: punctuation
-  { category: 'Punctuation', title: 'Em dash usage', content: 'Em dash (—) only for emphasis or interruption, not as a comma or colon substitute. Double hyphen (--) may substitute for em dash.', active: true },
+  { category: 'Punctuation', title: 'Em dash usage', content: 'Em dash (—) only for emphasis or interruption, not as a comma or colon substitute. ALWAYS surround the em dash with a space on each side: "word — word", never "word—word". Double hyphen (--) may substitute for em dash but must also have spaces.', active: true },
+  { category: 'Punctuation', title: 'Smart quotes', content: 'Use curly/smart quotation marks throughout: "..." for double quotes, \u2018...\u2019 for single quotes, \u2019 for apostrophes (e.g. don\u2019t, Rebbe\u2019s). Never use straight quotes (").', active: true },
 
   // category: tone
   { category: 'Tone & Fidelity', title: 'Warm and direct', content: 'Tone is warm and direct.', active: true },
@@ -3090,7 +3091,41 @@ Do not include any other text.`;
     prompt += `\n\n---\n\nThis is regeneration attempt #${regenCount + 1}. Produce a meaningfully DIFFERENT version than what you would produce on the first attempt — different sentence structure, different opening, different emphasis. Do not repeat the same wording from previous attempts.`;
   }
   const draft = await callAI([{ role: 'user', content: prompt }], { temperature: 1.0 });
-  return { flagged: false, draft };
+  return { flagged: false, draft: smartenQuotes(draft) };
+}
+
+// Convert straight quotes/apostrophes/dashes to typographically correct ones.
+// Run after every AI output so output reads like a published book.
+function smartenQuotes(text) {
+  if (!text) return text;
+  let s = text;
+  // Apostrophes inside words (don't, Rebbe's, '40s, etc.)
+  s = s.replace(/(\w)'(\w)/g, '$1\u2019$2');           // word'word → word'word
+  s = s.replace(/(\w)'(\s|[.,!?;:)\-])/g, '$1\u2019$2'); // word' → word'
+  s = s.replace(/(^|\s|\()'(\d)/g, '$1\u2019$2');      // '40s → '40s
+
+  // Double quotes — open after whitespace/start/punct, close otherwise
+  s = s.replace(/(^|[\s\(\[\{])"/g, '$1\u201C');       // opening "
+  s = s.replace(/"/g, '\u201D');                        // remaining " → closing "
+
+  // Single quotes — open after whitespace/start, close otherwise
+  s = s.replace(/(^|[\s\(\[\{])'/g, '$1\u2018');       // opening '
+  s = s.replace(/'/g, '\u2019');                        // remaining ' → closing/apostrophe
+
+  // Triple-period ellipsis → single character
+  s = s.replace(/\.{3,}/g, '\u2026');
+
+  // Double-hyphen → em dash
+  s = s.replace(/(\w)\s*--\s*(\w)/g, '$1 \u2014 $2');
+  s = s.replace(/\s--\s/g, ' \u2014 ');
+
+  // Enforce spaces around em dashes — never word—word, always word — word
+  s = s.replace(/\s*\u2014\s*/g, ' \u2014 ');
+
+  // Collapse any double-spaces that might have resulted
+  s = s.replace(/  +/g, ' ');
+
+  return s;
 }
 
 async function processClip(clip) {
@@ -3329,9 +3364,10 @@ function useAsDraft(rowNum, msgIdx) {
   if (!clip) return;
   const msg = S.chatHistory[rowNum]?.[msgIdx];
   if (!msg) return;
-  clip._draft = msg.content;
+  const cleaned = smartenQuotes(msg.content);
+  clip._draft = cleaned;
   setReviewField(clip, 'status', 'draft');
-  setReviewField(clip, 'draftText', msg.content);
+  setReviewField(clip, 'draftText', cleaned);
   saveReviewRow(clip).catch(() => {});
   renderDetail();
   showToast('Draft updated from chat ✓', 'success');
