@@ -1072,8 +1072,13 @@
           <h1 class="dash-title" id="dashTitle">Dashboard</h1>
           <p class="dash-sub" id="dashSub">Overview of <strong id="dashTotal">…</strong> clips and current progress</p>
         </div>
-        <div class="dash-actions">
+        <div class="dash-actions" style="flex-direction:column;align-items:flex-end;gap:10px">
           <button class="btn btn-primary" onclick="selectTypeView(S.activeType,'queue')">▶ Continue in Queue</button>
+          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--tx3);background:var(--panel);padding:8px 14px;border-radius:var(--radius-pill);box-shadow:var(--shadow-clay)">
+            <label for="minWcInput" title="Drafts under this word count are auto-flagged. Set to 0 to disable.">Auto-flag if under</label>
+            <input id="minWcInput" type="number" min="0" step="5" style="width:54px;padding:4px 8px;border:none;border-radius:var(--radius-pill);background:var(--bg2);box-shadow:var(--shadow-inner);font-family:var(--font-sans);font-size:11px;text-align:center;color:var(--tx)" oninput="onMinWcChange(this.value)">
+            <span>words</span>
+          </div>
         </div>
       </div>
 
@@ -3091,7 +3096,51 @@ Do not include any other text.`;
     prompt += `\n\n---\n\nThis is regeneration attempt #${regenCount + 1}. Produce a meaningfully DIFFERENT version than what you would produce on the first attempt — different sentence structure, different opening, different emphasis. Do not repeat the same wording from previous attempts.`;
   }
   const draft = await callAI([{ role: 'user', content: prompt }], { temperature: 1.0 });
-  return { flagged: false, draft: smartenQuotes(draft) };
+  const cleanedDraft = smartenQuotes(draft);
+
+  // Post-generation word count check: flag drafts that are under the configured minimum
+  const minWords = getMinWordCount(clip.typeKey);
+  const wc = wordCount(cleanedDraft);
+  if (minWords > 0 && wc < minWords) {
+    return {
+      flagged: true,
+      reason: `Draft is only ${wc} words (minimum ${minWords}) — original may need more context, or try regenerating`,
+      draft: cleanedDraft, // include the draft anyway so user can see what was generated
+    };
+  }
+  return { flagged: false, draft: cleanedDraft };
+}
+
+// Per-type minimum word count for auto-flagging. Stored in localStorage so each user can tune.
+// Default: 90 for all types. Set to 0 to disable flagging by length for that type.
+function getMinWordCount(typeKey) {
+  const v = localStorage.getItem('jem_cse_minwc_' + typeKey);
+  if (v === null) return 90;
+  const n = parseInt(v);
+  return isNaN(n) ? 90 : n;
+}
+function setMinWordCount(typeKey, n) {
+  if (n === '' || n === null || n === undefined) {
+    localStorage.removeItem('jem_cse_minwc_' + typeKey);
+  } else {
+    localStorage.setItem('jem_cse_minwc_' + typeKey, String(parseInt(n) || 0));
+  }
+}
+
+// Debounced handler for the dashboard's min word count input
+let _minWcSaveTimer = null;
+function onMinWcChange(val) {
+  const typeKey = S.activeType;
+  if (_minWcSaveTimer) clearTimeout(_minWcSaveTimer);
+  _minWcSaveTimer = setTimeout(() => {
+    setMinWordCount(typeKey, val);
+    const n = parseInt(val);
+    if (val === '' || val === '0' || isNaN(n) || n === 0) {
+      showToast(`Auto-flagging by length disabled for ${activeTypeCfg().displayName}`, 'success');
+    } else {
+      showToast(`Auto-flag threshold set to ${n} words for ${activeTypeCfg().displayName}`, 'success');
+    }
+  }, 600);
 }
 
 // Convert straight quotes/apostrophes/dashes to typographically correct ones.
@@ -3136,7 +3185,13 @@ async function processClip(clip) {
   if (result.flagged) {
     setReviewField(clip, 'status', 'flagged');
     setReviewField(clip, 'flagReason', result.reason);
-    setReviewField(clip, 'draftText', '');
+    // Keep the draft if AI did produce one (e.g. flagged for being short)
+    if (result.draft) {
+      clip._draft = result.draft;
+      setReviewField(clip, 'draftText', result.draft);
+    } else {
+      setReviewField(clip, 'draftText', '');
+    }
     await saveReviewRow(clip);
   } else {
     clip._draft = result.draft;
@@ -3163,7 +3218,12 @@ async function regenerateClip(rowNum) {
     if (result.flagged) {
       setReviewField(clip, 'status', 'flagged');
       setReviewField(clip, 'flagReason', result.reason);
-      setReviewField(clip, 'draftText', '');
+      if (result.draft) {
+        clip._draft = result.draft;
+        setReviewField(clip, 'draftText', result.draft);
+      } else {
+        setReviewField(clip, 'draftText', '');
+      }
     } else {
       clip._draft = result.draft;
       setReviewField(clip, 'status', 'draft');
@@ -4359,6 +4419,10 @@ function renderDashboard() {
   const total = activeBucket().clips.length;
   document.getElementById('dashTitle').textContent = typeCfg.displayName;
   document.getElementById('dashSub').innerHTML = `Overview of <strong id="dashTotal">${total}</strong> ${esc(typeCfg.displayName.toLowerCase())} clips and current progress`;
+
+  // Populate the min word count input for this type
+  const minWcInput = document.getElementById('minWcInput');
+  if (minWcInput) minWcInput.value = getMinWordCount(typeCfg.key);
   // Count by status
   const counts = { unprocessed: 0, flagged: 0, draft: 0, approved: 0 };
   activeBucket().clips.forEach(c => { counts[getStatus(c)] = (counts[getStatus(c)] || 0) + 1; });
