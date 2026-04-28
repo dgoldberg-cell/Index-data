@@ -909,6 +909,14 @@
   <div class="topbar-title">Summary Editor</div>
   <div class="topbar-sep"></div>
   <div class="topbar-right">
+    <div class="model-picker" title="AI model used for generation" style="display:flex;align-items:center;gap:0">
+      <label style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1.2px;font-weight:600;margin-right:6px">AI</label>
+      <select id="modelSelect" onchange="changeModel(this.value)" style="font-size:11.5px;padding:6px 12px;border:none;border-radius:var(--radius-pill);background:var(--bg2);color:var(--tx);font-family:var(--font-sans);outline:none;box-shadow:var(--shadow-inner);cursor:pointer;font-weight:500">
+        <option value="claude-sonnet-4-5">Sonnet 4.5 (fast)</option>
+        <option value="claude-opus-4-5">Opus 4.5 (best)</option>
+      </select>
+      <span id="modelIndicator" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-left:6px;box-shadow:var(--shadow-sm)" title="Model active"></span>
+    </div>
     <button class="btn btn-sm" id="refreshBtn" onclick="manualRefresh()" title="Refresh data from sheet">
       <span id="refreshIcon">↻</span>
     </button>
@@ -1394,6 +1402,7 @@ let S = {
   token: null,
   tokenTime: 0, // ms timestamp of when token was issued
   claudeKey: localStorage.getItem('jem_cse_key') || '',
+  aiModel: localStorage.getItem('jem_cse_ai_model') || 'claude-sonnet-4-5',
   user: null,
   // Per-type data: { sichos: {clips:[], reviewData:{}, rulesArr:[]}, ... }
   byType: {},
@@ -1683,6 +1692,18 @@ async function fetchUserInfo() {
   });
   if (!r.ok) throw new Error('Auth failed');
   return r.json();
+}
+
+function changeModel(model) {
+  S.aiModel = model;
+  localStorage.setItem('jem_cse_ai_model', model);
+  const indicator = document.getElementById('modelIndicator');
+  if (indicator) {
+    // Visual cue: gold for Opus, green for Sonnet
+    indicator.style.background = model.includes('opus') ? 'var(--accent)' : 'var(--green)';
+  }
+  const label = model.includes('opus') ? 'Opus' : 'Sonnet';
+  showToast(`AI model set to ${label}`, 'success');
 }
 
 function signOut() {
@@ -2654,6 +2675,7 @@ function renderDetail() {
         ${status === 'approved' ? 'Approved Summary' : status === 'draft' ? 'Pending Draft' : 'AI Generated Description'}
         ${status === 'approved' ? '<span style="font-size:10px;color:var(--green);font-weight:500;margin-left:4px;background:var(--green-light);padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">✓ Approved</span>' : ''}
         ${status === 'draft' ? '<span style="font-size:10px;color:#8C7635;font-weight:500;margin-left:4px;background:var(--yellow-light);padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">Awaiting review</span>' : ''}
+        ${status === 'unprocessed' ? `<span style="font-size:10px;font-weight:500;margin-left:4px;background:${S.aiModel.includes('opus') ? 'var(--accent-light)' : 'var(--green-light)'};color:${S.aiModel.includes('opus') ? 'var(--accent2)' : 'var(--green)'};padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">⚡ ${S.aiModel.includes('opus') ? 'Opus' : 'Sonnet'}</span>` : ''}
         <div style="margin-left:auto;display:flex;gap:6px;">
           ${(activeBucket().rulesArr?.filter(r=>r.active).length||0) === 0
             ? `<button class="btn btn-sm" disabled title="No active rules for this clip type. Add rules in the Rules section first.">✨ Generate (no rules yet)</button>`
@@ -2952,7 +2974,7 @@ async function callAI(messages) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': S.claudeKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: S.aiModel,
       max_tokens: 1000,
       messages,
     })
@@ -4687,6 +4709,13 @@ async function init() {
     try {
       S.user = await fetchUserInfo();
       document.getElementById('userEmail').textContent = S.user.email || '';
+      // Restore model selection in dropdown
+      const modelSelect = document.getElementById('modelSelect');
+      if (modelSelect) {
+        modelSelect.value = S.aiModel;
+        const indicator = document.getElementById('modelIndicator');
+        if (indicator) indicator.style.background = S.aiModel.includes('opus') ? 'var(--accent)' : 'var(--green)';
+      }
       document.getElementById('userAvatar').textContent = (S.user.email || '?')[0].toUpperCase();
       document.getElementById('topBar').style.display = 'flex';
       document.getElementById('appShell').style.display = 'flex';
