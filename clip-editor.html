@@ -247,6 +247,41 @@
   .overall-type-card .otc-stat-num { font-weight: 600; color: var(--tx); font-size: 12px; }
 
 
+  /* Queue list collapse */
+  #queueView.queue-list-collapsed .queue-sidebar {
+    flex: 0 0 56px; min-width: 56px; max-width: 56px;
+    overflow: hidden;
+  }
+  #queueView.queue-list-collapsed .queue-controls,
+  #queueView.queue-list-collapsed .queue-list,
+  #queueView.queue-list-collapsed .queue-sidebar > *:not(.queue-collapse-bar) { display: none; }
+  #queueView.queue-list-collapsed .queue-collapse-bar {
+    flex-direction: column; padding: 14px 0; align-items: center;
+    writing-mode: vertical-rl; text-orientation: mixed;
+  }
+  #queueView.queue-list-collapsed .queue-collapse-label { display: block; }
+  .queue-collapse-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    background: var(--panel2); flex-shrink: 0;
+  }
+  .queue-collapse-label { display: none; font-size: 11px; color: var(--tx3); margin-top: 14px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
+  #queueCollapseBtn {
+    background: transparent; border: none; color: var(--tx3); cursor: pointer;
+    font-size: 16px; padding: 4px 8px; border-radius: 6px; transition: all 0.15s;
+  }
+  #queueCollapseBtn:hover { background: var(--bg2); color: var(--tx); }
+
+  /* Detail nav bar (Prev / Next) */
+  .detail-nav-bar {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border-radius: var(--radius2);
+    padding: 10px 16px; box-shadow: var(--shadow-clay);
+    margin-bottom: 14px;
+  }
+  .detail-nav-bar .nav-spacer { flex: 1; }
+  .detail-nav-position { font-size: 12px; color: var(--tx3); font-weight: 500; }
+
   /* ── QUEUE VIEW ── */
   #queueView { flex: 1; display: flex; gap: 18px; overflow: hidden; padding: 18px; }
 
@@ -444,6 +479,43 @@
   .chapter-meta { font-size: 11px; color: var(--tx3); margin-top: 2px; }
   .chapter-status { flex-shrink: 0; }
 
+  /* Simplified rule cards */
+  .rule-card-simple {
+    background: var(--panel); border-radius: var(--radius2);
+    padding: 14px 18px; margin-bottom: 10px; box-shadow: var(--shadow-clay);
+    display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: start;
+    transition: opacity 0.2s;
+  }
+  .rule-card-simple.inactive { opacity: 0.55; }
+  .rule-card-simple .rule-toggle { margin-top: 4px; }
+  .rule-text-input {
+    width: 100%; border: none; padding: 10px 14px; border-radius: var(--radius);
+    background: var(--bg2); color: var(--tx); font-family: var(--font-sans);
+    font-size: 13.5px; line-height: 1.55; resize: vertical;
+    outline: none; box-shadow: var(--shadow-inner); transition: box-shadow 0.18s;
+  }
+  .rule-text-input:focus { box-shadow: var(--shadow-inner), 0 0 0 3px var(--accent-soft); }
+  .rule-card-actions {
+    grid-column: 2; display: flex; gap: 8px; align-items: center;
+    font-size: 11px; color: var(--tx4); margin-top: 6px;
+  }
+  .rule-id-badge {
+    font-family: monospace; font-size: 10px; color: var(--tx4);
+    background: var(--bg2); padding: 2px 7px; border-radius: var(--radius-pill);
+  }
+  .rule-status-msg { font-size: 11px; }
+  .rule-card-actions .rule-action-btn {
+    margin-left: auto; padding: 5px 12px; border: none; border-radius: var(--radius-pill);
+    cursor: pointer; font-size: 11px; font-family: var(--font-sans); font-weight: 500;
+    background: var(--bg2); color: var(--tx2); box-shadow: var(--shadow-pill);
+    transition: all 0.15s;
+  }
+  .rule-card-actions .rule-action-btn:hover { background: var(--bg3); }
+  .rule-card-actions .rule-action-btn.save {
+    background: linear-gradient(180deg, #88AB8B, var(--green)); color: #fff;
+  }
+  .rule-card-actions .rule-action-btn.delete:hover { background: var(--red-light); color: var(--red); }
+
   /* Notes */
   .note-card {
     background: var(--bg2); border-radius: var(--radius);
@@ -469,6 +541,8 @@
   }
   .note-action-btn:hover { background: var(--bg3); color: var(--tx); }
   .note-action-btn.note-delete:hover { background: var(--red-light); color: var(--red); }
+  .note-action-btn.note-jump { background: var(--accent-light); color: var(--accent2); font-weight: 600; }
+  .note-action-btn.note-jump:hover { background: var(--accent); color: #fff; }
   .note-text { font-size: 13px; color: var(--tx); line-height: 1.55; white-space: pre-wrap; }
   .note-context {
     font-size: 10px; font-weight: 600; color: var(--tx3);
@@ -536,7 +610,34 @@
   .book-tag { font-size: 8px; padding: 1px 6px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--border); color: var(--tx3); }
   .book-page-footer { position: absolute; bottom: 24px; left: 60px; right: 60px; display: flex; justify-content: space-between; font-size: 9px; color: var(--tx4); border-top: 0.5px solid var(--border); padding-top: 8px; }
 
-    /* Refresh button spinning animation */
+    /* Themed modals */
+  #modalOverlay {
+    position: fixed; inset: 0; background: rgba(60, 47, 28, 0.32);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1100; animation: modalFade 0.18s ease;
+  }
+  @keyframes modalFade { from { opacity: 0; } to { opacity: 1; } }
+  .modal-card {
+    background: var(--panel); border-radius: var(--radius3);
+    padding: 28px 32px 24px; max-width: 460px; width: calc(100% - 40px);
+    box-shadow: var(--shadow-clay-lg), 0 24px 60px rgba(60, 47, 28, 0.18);
+    animation: modalSlide 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes modalSlide { from { transform: translateY(20px) scale(0.96); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+  .modal-title { font-family: var(--font-serif); font-size: 22px; font-weight: 500; color: var(--tx); margin-bottom: 8px; letter-spacing: -0.3px; }
+  .modal-body { font-size: 13.5px; color: var(--tx2); line-height: 1.55; margin-bottom: 22px; }
+  .modal-body input, .modal-body textarea {
+    width: 100%; margin-top: 12px; padding: 11px 14px; border: none;
+    border-radius: var(--radius); background: var(--bg2); color: var(--tx);
+    font-family: var(--font-sans); font-size: 13.5px; outline: none;
+    box-shadow: var(--shadow-inner); transition: box-shadow 0.18s;
+  }
+  .modal-body textarea { min-height: 100px; resize: vertical; line-height: 1.55; }
+  .modal-body input:focus, .modal-body textarea:focus { box-shadow: var(--shadow-inner), 0 0 0 3px var(--accent-soft); }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+  /* Refresh button spinning animation */
   #refreshBtn { padding: 6px 12px; font-size: 14px; line-height: 1; }
   #refreshIcon { display: inline-block; transition: transform 0.3s; }
   #refreshIcon.spinning { animation: spin 0.7s linear infinite; }
@@ -895,6 +996,23 @@
     </div>
   </div>
 
+  <!-- TYPE NOTES VIEW (per-segment-type notes) -->
+  <div id="typeNotesView" style="display:none;">
+    <div class="dash-wrap">
+      <div class="dash-header">
+        <div>
+          <h1 class="dash-title" id="typeNotesTitle">Notes</h1>
+          <p class="dash-sub" id="typeNotesSub">Notes on clips in this section</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:18px">
+        <button class="btn filter-chip active" id="typeNotesFilterAll" onclick="setTypeNotesFilter('all',this)">All</button>
+        <button class="btn filter-chip" id="typeNotesFilterUnresolved" onclick="setTypeNotesFilter('unresolved',this)">Unresolved</button>
+      </div>
+      <div id="typeNotesList"></div>
+    </div>
+  </div>
+
   <!-- TEAM VIEW -->
   <div id="teamView" style="display:none;">
     <div class="dash-wrap">
@@ -1079,6 +1197,15 @@
 
 <!-- TOAST -->
 <div id="toast"></div>
+
+<!-- THEMED MODAL -->
+<div id="modalOverlay" style="display:none">
+  <div class="modal-card" id="modalCard">
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-actions" id="modalActions"></div>
+  </div>
+</div>
 
 <script>
 // ══════════════════════════════════════════════
@@ -2383,6 +2510,45 @@ function selectClip(rowNum) {
   renderDetail();
 }
 
+// Navigate to the next/previous clip in the queue (respecting current filter+search+sort)
+function getAdjacentClip(direction) {
+  const list = allMatchingClips();
+  const idx = list.findIndex(c => c._rowNum === S.selectedIdx);
+  if (idx === -1) return null;
+  const newIdx = direction === 'next' ? idx + 1 : idx - 1;
+  if (newIdx < 0 || newIdx >= list.length) return null;
+  return { clip: list[newIdx], idx: newIdx };
+}
+
+function navigateClip(direction) {
+  const next = getAdjacentClip(direction);
+  if (!next) {
+    showToast(direction === 'next' ? 'You are at the last clip' : 'You are at the first clip');
+    return;
+  }
+  S.selectedIdx = next.clip._rowNum;
+  // Adjust pagination if needed so the selected clip is visible in the queue list
+  const pageStart = Math.floor(next.idx / S.rangeSize) * S.rangeSize;
+  if (pageStart !== S.rangeStart) S.rangeStart = pageStart;
+  renderQueue();
+  renderDetail();
+}
+
+// Toggle the queue list panel collapsed/expanded
+let _queueCollapsed = localStorage.getItem('jem_cse_queue_collapsed') === '1';
+function toggleQueueList() {
+  _queueCollapsed = !_queueCollapsed;
+  localStorage.setItem('jem_cse_queue_collapsed', _queueCollapsed ? '1' : '0');
+  applyQueueCollapsed();
+}
+function applyQueueCollapsed() {
+  const view = document.getElementById('queueView');
+  if (!view) return;
+  view.classList.toggle('queue-list-collapsed', _queueCollapsed);
+  const btn = document.getElementById('queueCollapseBtn');
+  if (btn) btn.textContent = _queueCollapsed ? '▸' : '◂';
+}
+
 function renderDetail() {
   const clip = activeBucket().clips.find(c => c._rowNum === S.selectedIdx);
   if (!clip) return;
@@ -2405,7 +2571,21 @@ function renderDetail() {
   const hasDraft = !!(clip._draft || (clip.rewrite && getStatus(clip) !== 'unprocessed'));
   const draftValue = clip._draft || (getStatus(clip) === 'approved' ? clip.rewrite : '');
 
+  // Position info for nav bar
+  const _navList = allMatchingClips();
+  const _navIdx = _navList.findIndex(c => c._rowNum === S.selectedIdx);
+  const _hasPrev = _navIdx > 0;
+  const _hasNext = _navIdx >= 0 && _navIdx < _navList.length - 1;
+  const _posLabel = _navIdx >= 0 ? `${_navIdx + 1} of ${_navList.length}` : '';
+
   dc.innerHTML = `
+    <div class="detail-nav-bar">
+      <button class="btn btn-sm" onclick="navigateClip('prev')" ${_hasPrev ? '' : 'disabled'}>← Previous</button>
+      <span class="detail-nav-position">${esc(_posLabel)}</span>
+      <span class="nav-spacer"></span>
+      <button class="btn btn-sm" onclick="toggleQueueList()" title="${_queueCollapsed ? 'Show queue list' : 'Hide queue list'}">${_queueCollapsed ? '☰ Show queue' : '☰ Hide queue'}</button>
+      <button class="btn btn-sm btn-primary" onclick="navigateClip('next')" ${_hasNext ? '' : 'disabled'}>Next →</button>
+    </div>
     <div class="detail-header" style="align-items:flex-start">
       <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0">
         ${thumbHTML}
@@ -2503,12 +2683,15 @@ function renderNoteCard(n) {
   const isMine = n.user === S.user?.email;
   const initials = (n.user || '?').substring(0, 2).toUpperCase();
   const userShort = n.user.split('@')[0];
+  // Whether to show jump-to-clip button (only for clip-scoped notes shown outside the clip's own panel)
+  const showJump = n.scope === 'clip' && n.clipRow && n.typeKey && S.currentView !== 'queue';
   return `<div class="note-card ${n.resolved ? 'note-resolved' : ''}" data-note-id="${esc(n.id)}">
     <div class="note-header">
       <div class="note-avatar">${esc(initials)}</div>
       <span class="note-user">${esc(userShort)}</span>
       <span class="note-time">${esc(when)}${n.editedAt ? ' (edited)' : ''}</span>
       <div class="note-actions">
+        ${showJump ? `<button class="note-action-btn note-jump" onclick="jumpToClipFromNote('${esc(n.typeKey)}', ${parseInt(n.clipRow)})" title="Jump to this clip">→</button>` : ''}
         <button class="note-action-btn" onclick="toggleNoteResolvedUI('${esc(n.id)}')" title="${n.resolved ? 'Mark unresolved' : 'Mark resolved'}">${n.resolved ? '↺' : '✓'}</button>
         ${isMine ? `<button class="note-action-btn" onclick="editNoteUI('${esc(n.id)}')" title="Edit">✎</button>` : ''}
         ${isMine ? `<button class="note-action-btn note-delete" onclick="deleteNoteUI('${esc(n.id)}')" title="Delete">×</button>` : ''}
@@ -2550,10 +2733,11 @@ async function submitGeneralNote() {
 }
 
 async function deleteNoteUI(id) {
-  if (!confirm('Delete this note?')) return;
+  if (!await jemConfirm('Delete this note?', { danger: true, okLabel: 'Delete' })) return;
   try {
     await deleteNote(id);
     if (S.currentView === 'notes') renderNotesView();
+    else if (S.currentView === 'typenotes') renderTypeNotesView();
     else if (S.currentView === 'queue' && S.selectedIdx) {
       const clip = activeBucket().clips.find(c => c._rowNum === S.selectedIdx);
       if (clip) renderClipNotes(clip);
@@ -2567,6 +2751,7 @@ async function toggleNoteResolvedUI(id) {
   try {
     await toggleNoteResolved(id);
     if (S.currentView === 'notes') renderNotesView();
+    else if (S.currentView === 'typenotes') renderTypeNotesView();
     else if (S.currentView === 'queue' && S.selectedIdx) {
       const clip = activeBucket().clips.find(c => c._rowNum === S.selectedIdx);
       if (clip) renderClipNotes(clip);
@@ -2575,19 +2760,21 @@ async function toggleNoteResolvedUI(id) {
   } catch(e) { showToast('Update failed: ' + e.message, 'error'); }
 }
 
-function editNoteUI(id) {
+async function editNoteUI(id) {
   const note = S.notes.find(n => n.id === id);
   if (!note) return;
-  const newText = prompt('Edit note:', note.text);
-  if (newText === null || !newText.trim()) return;
-  updateNote(id, newText).then(() => {
+  const newText = await jemPrompt('Edit note:', note.text, { multiline: true });
+  if (!newText || !newText.trim()) return;
+  try {
+    await updateNote(id, newText);
     if (S.currentView === 'notes') renderNotesView();
+    else if (S.currentView === 'typenotes') renderTypeNotesView();
     else if (S.currentView === 'queue' && S.selectedIdx) {
       const clip = activeBucket().clips.find(c => c._rowNum === S.selectedIdx);
       if (clip) renderClipNotes(clip);
     }
     showToast('Note updated', 'success');
-  }).catch(e => showToast('Update failed: ' + e.message, 'error'));
+  } catch(e) { showToast('Update failed: ' + e.message, 'error'); }
 }
 
 let _notesFilter = 'all';
@@ -2636,6 +2823,40 @@ function jumpToClipFromNote(typeKey, rowNum) {
   const idx = all.findIndex(c => c._rowNum === rowNum);
   if (idx >= 0) S.rangeStart = Math.floor(idx / S.rangeSize) * S.rangeSize;
   switchView('queue', null);
+}
+
+let _typeNotesFilter = 'all';
+function setTypeNotesFilter(f, btn) {
+  _typeNotesFilter = f;
+  document.querySelectorAll('#typeNotesFilterAll, #typeNotesFilterUnresolved').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderTypeNotesView();
+}
+
+function renderTypeNotesView() {
+  const typeCfg = activeTypeCfg();
+  document.getElementById('typeNotesTitle').textContent = typeCfg.displayName + ' — Notes';
+  document.getElementById('typeNotesSub').textContent = `Notes on clips in the ${typeCfg.displayName} section`;
+  const el = document.getElementById('typeNotesList');
+  if (!el) return;
+  let notes = S.notes.filter(n => n.scope === 'clip' && n.typeKey === typeCfg.key);
+  if (_typeNotesFilter === 'unresolved') notes = notes.filter(n => !n.resolved);
+  notes.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+  if (!notes.length) {
+    el.innerHTML = `<div class="empty-state">No ${_typeNotesFilter === 'unresolved' ? 'unresolved ' : ''}notes for ${esc(typeCfg.displayName)} yet.<br><br><span style="font-size:12px;color:var(--tx4);font-style:normal">Add per-clip notes from any clip's detail panel.</span></div>`;
+    return;
+  }
+  const bucket = S.byType[typeCfg.key];
+  el.innerHTML = notes.map(n => {
+    const clip = bucket?.clips.find(c => String(c._rowNum) === n.clipRow);
+    let context = '';
+    if (clip) {
+      context = `<div class="note-context" onclick="jumpToClipFromNote('${typeCfg.key}', ${clip._rowNum})">${esc(clip.title)} →</div>`;
+    } else {
+      context = `<div class="note-context" style="opacity:0.6">Clip #${esc(n.clipRow)} (not found)</div>`;
+    }
+    return `<div style="margin-bottom:12px">${context}${renderNoteCard(n)}</div>`;
+  }).join('');
 }
 
 function updateNotesBadge() {
@@ -2808,7 +3029,7 @@ async function acceptOriginal(rowNum) {
   const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
   if (!clip) return;
   if (!clip.description?.trim()) { showToast('No original description to accept', 'error'); return; }
-  if (!confirm('Mark the current description as approved without changes?')) return;
+  if (!await jemConfirm('Mark the current description as approved without changes?')) return;
   showLoading('Saving…');
   try {
     setReviewField(clip, 'status', 'approved');
@@ -2867,7 +3088,7 @@ async function revertClip(rowNum) {
   if (!clip) return;
   const backup = getReviewField(clip, 'originalBackup');
   const restoreTo = backup || clip.description;
-  if (!confirm('Revert to original description? This cannot be undone.')) return;
+  if (!await jemConfirm('Revert to original description?<br><br><span style="color:var(--tx3);font-size:12px">This cannot be undone.</span>', { danger: true, okLabel: 'Revert' })) return;
   showLoading('Reverting…');
   try {
     const targetCol = clipDescColLetter(clip);
@@ -3269,6 +3490,7 @@ function renderSidebar() {
         <div class="sb-sub-item ${isActiveType && S.currentView === 'attention' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','attention')">Attention</div>
         <div class="sb-sub-item ${isActiveType && S.currentView === 'export' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','export')">Export</div>
         <div class="sb-sub-item ${isActiveType && S.currentView === 'book' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','book')">Book View</div>
+        <div class="sb-sub-item ${isActiveType && S.currentView === 'typenotes' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','typenotes')">Notes</div>
         <div class="sb-sub-item ${isActiveType && S.currentView === 'rules' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','rules')">AI Rules</div>
       </div>
     </div>`;
@@ -3571,7 +3793,7 @@ async function commitFilmOrder(filmName) {
 }
 
 async function resetFilmOrder(filmName) {
-  if (!confirm('Reset to default order (by clip ID)?')) return;
+  if (!await jemConfirm('Reset to default order (by clip ID)?')) return;
   if (_filmOrderCache && _filmOrderCache[filmName]) {
     delete _filmOrderCache[filmName];
     // Save empty order — effectively removes saved rows
@@ -4138,80 +4360,42 @@ function renderRulesView() {
   const total = activeBucket().rulesArr?.length || 0;
   const active = activeBucket().rulesArr?.filter(r => r.active).length || 0;
   document.getElementById('rulesMeta').innerHTML =
-    `<strong>${active}</strong> of <strong>${total}</strong> rules for <strong>${esc(activeTypeCfg().displayName)}</strong> active · click a rule to expand and edit · stored in "${esc(activeTypeCfg().rulesTab)}" tab`;
+    `<strong>${active}</strong> of <strong>${total}</strong> rules for <strong>${esc(activeTypeCfg().displayName)}</strong> active · stored in "${esc(activeTypeCfg().rulesTab)}" tab · each rule is a row in the sheet`;
 
   const container = document.getElementById('rulesContainer');
   if (!total) {
     container.innerHTML = '<div class="empty-state">No rules yet. Click "+ Add Rule" to create one.</div>';
     return;
   }
-  const cats = [];
-  const byCat = {};
-  activeBucket().rulesArr.forEach(r => {
-    const c = r.category || 'Uncategorized';
-    if (!byCat[c]) { byCat[c] = []; cats.push(c); }
-    byCat[c].push(r);
-  });
+  // Simplified — flat list of rule cards, no categories, just text + toggle
   let html = '';
-  cats.forEach(cat => {
-    const rules = byCat[cat];
-    const activeCount = rules.filter(r => r.active).length;
-    const collapsed = _collapsedCats.has(cat);
-    html += `<div class="rules-cat-section ${collapsed ? 'collapsed' : ''}" data-cat="${esc(cat)}">
-      <div class="rules-cat-header" onclick="toggleCategory('${esc(cat)}')">
-        <span class="rules-cat-caret">▼</span>${esc(cat)}
-        <span class="rules-cat-header-count">${activeCount}/${rules.length} active</span>
-      </div>`;
-    rules.forEach(rule => {
-      const expanded = _expandedRules.has(rule.id);
-      html += `<div class="rule-card ${rule.active ? '' : 'inactive'} ${expanded ? 'expanded' : ''}" id="ruleCard_${esc(rule.id)}">
-        <div class="rule-toggle ${rule.active ? 'on' : ''}" onclick="event.stopPropagation();toggleRule('${esc(rule.id)}')" title="${rule.active ? 'Active' : 'Disabled'}"></div>
-        <div class="rule-body">
-          <div class="rule-row-collapsed" onclick="toggleRuleExpand('${esc(rule.id)}')">
-            <span class="rule-row-title">${esc(rule.title)}</span>
-            <span class="rule-row-preview">${esc(rule.content.substring(0, 100))}${rule.content.length > 100 ? '…' : ''}</span>
-            <span class="rule-row-expand">▶</span>
-          </div>
-          <div class="rule-edit-area">
-            <input class="rule-title-input" data-rule-id="${esc(rule.id)}" data-field="title" value="${esc(rule.title)}" oninput="onRuleEdit('${esc(rule.id)}')" placeholder="Rule title…">
-            <textarea class="rule-content-input" data-rule-id="${esc(rule.id)}" data-field="content" oninput="onRuleEdit('${esc(rule.id)}')" placeholder="Rule content…" rows="3">${esc(rule.content)}</textarea>
-            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
-              <span class="rule-id-badge">#${esc(rule.id)}</span>
-              <span id="ruleStatus_${esc(rule.id)}" style="font-size:10px;color:var(--tx4)"></span>
-              <div style="margin-left:auto;display:flex;gap:4px;">
-                <button class="rule-action-btn save" id="ruleSaveBtn_${esc(rule.id)}" onclick="saveRule('${esc(rule.id)}')" style="display:none">💾 Save</button>
-                <button class="rule-action-btn delete" onclick="deleteRule('${esc(rule.id)}')" title="Delete">🗑 Delete</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>`;
-    });
-    html += `</div>`;
+  activeBucket().rulesArr.forEach(rule => {
+    html += `<div class="rule-card-simple ${rule.active ? '' : 'inactive'}" id="ruleCard_${esc(rule.id)}">
+      <div class="rule-toggle ${rule.active ? 'on' : ''}" onclick="toggleRule('${esc(rule.id)}')" title="${rule.active ? 'Active — click to disable' : 'Disabled — click to enable'}"></div>
+      <textarea class="rule-text-input" data-rule-id="${esc(rule.id)}" oninput="onRuleEdit('${esc(rule.id)}')" placeholder="Type the rule for the AI…" rows="3">${esc(rule.content)}</textarea>
+      <div class="rule-card-actions">
+        <span class="rule-id-badge">#${esc(rule.id)}</span>
+        <span id="ruleStatus_${esc(rule.id)}" class="rule-status-msg"></span>
+        <button class="rule-action-btn save" id="ruleSaveBtn_${esc(rule.id)}" onclick="saveRule('${esc(rule.id)}')" style="display:none">💾 Save</button>
+        <button class="rule-action-btn delete" onclick="deleteRule('${esc(rule.id)}')" title="Delete this rule">🗑</button>
+      </div>
+    </div>`;
   });
   container.innerHTML = html;
 }
 
 function toggleRuleExpand(id) {
-  if (_expandedRules.has(id)) _expandedRules.delete(id);
-  else _expandedRules.add(id);
-  const card = document.getElementById('ruleCard_' + id);
-  if (card) card.classList.toggle('expanded');
+  // Kept for backwards compatibility but no longer used
 }
 
 function toggleCategory(cat) {
-  if (_collapsedCats.has(cat)) _collapsedCats.delete(cat);
-  else _collapsedCats.add(cat);
-  const sect = document.querySelector(`.rules-cat-section[data-cat="${cat.replace(/"/g, '\\"')}"]`);
-  if (sect) sect.classList.toggle('collapsed');
+  // Kept for backwards compatibility but no longer used
 }
 
 function onRuleEdit(id) {
   if (!_ruleDrafts[id]) _ruleDrafts[id] = {};
-  const titleEl = document.querySelector(`[data-rule-id="${id}"][data-field="title"]`);
-  const contentEl = document.querySelector(`[data-rule-id="${id}"][data-field="content"]`);
-  _ruleDrafts[id].title = titleEl?.value || '';
-  _ruleDrafts[id].content = contentEl?.value || '';
+  const textEl = document.querySelector(`[data-rule-id="${id}"]`);
+  _ruleDrafts[id].content = textEl?.value || '';
   // Show save button
   document.getElementById('ruleSaveBtn_' + id).style.display = 'inline-block';
   document.getElementById('ruleStatus_' + id).textContent = 'unsaved';
@@ -4223,7 +4407,9 @@ async function saveRule(id) {
   if (!rule) return;
   const draft = _ruleDrafts[id];
   if (!draft) return;
-  const updated = { ...rule, title: draft.title, content: draft.content };
+  // Auto-derive title from first 6 words of content (so sheet has something readable)
+  const autoTitle = (draft.content || '').split(/\s+/).slice(0, 6).join(' ').replace(/[.!?,;:]+$/, '');
+  const updated = { ...rule, title: autoTitle || 'Rule', content: draft.content, category: rule.category || 'General' };
   const btn = document.getElementById('ruleSaveBtn_' + id);
   const status = document.getElementById('ruleStatus_' + id);
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -4257,7 +4443,7 @@ async function toggleRule(id) {
 async function deleteRule(id) {
   const rule = activeBucket().rulesArr.find(r => r.id === id);
   if (!rule) return;
-  if (!confirm(`Delete rule "${rule.title}"? This removes its row from the sheet permanently.`)) return;
+  if (!await jemConfirm(`Delete this rule?<br><br><span style="color:var(--tx3);font-size:12px">"${esc((rule.content || '').substring(0, 80))}${rule.content && rule.content.length > 80 ? '…' : ''}"<br><br>This removes its row from the sheet permanently.</span>`, { danger: true, okLabel: 'Delete' })) return;
   try {
     await deleteOneRule(id);
     delete _ruleDrafts[id];
@@ -4269,12 +4455,10 @@ async function deleteRule(id) {
 }
 
 async function addNewRule() {
-  const title = prompt('Title for the new rule (e.g. "No exclamation marks"):');
-  if (!title || !title.trim()) return;
-  const content = prompt('Content of the rule (the actual instruction):');
-  if (!content || !content.trim()) return;
-  const category = prompt('Category (e.g. "Voice", "Spelling", "Custom"):', 'Custom') || 'Custom';
-  const newRule = { id: nextRuleId(), category: category.trim(), title: title.trim(), content: content.trim(), active: true };
+  const text = await jemPrompt('Type the new rule for the AI:', '', { multiline: true, title: 'Add Rule', okLabel: 'Add Rule' });
+  if (!text || !text.trim()) return;
+  const autoTitle = text.split(/\s+/).slice(0, 6).join(' ').replace(/[.!?,;:]+$/, '') || 'Rule';
+  const newRule = { id: nextRuleId(), category: 'General', title: autoTitle, content: text.trim(), active: true };
   try {
     await saveOneRule(newRule);
     renderRulesView();
@@ -4285,8 +4469,7 @@ async function addNewRule() {
 }
 
 async function reloadRulesFromSheet() {
-  // Check if any unsaved drafts
-  if (Object.keys(_ruleDrafts).length && !confirm('You have unsaved rule edits. Reload from sheet and discard them?')) return;
+  if (Object.keys(_ruleDrafts).length && !await jemConfirm('You have unsaved rule edits. Reload from sheet and discard them?')) return;
   showToast('Reloading rules from sheet…');
   try {
     await loadRulesFromSheet();
@@ -4305,7 +4488,7 @@ function switchView(view, btn, opts) {
   S.currentView = view;
   // Reset member detail state if leaving team view
   if (view !== 'team') { _selectedMember = null; }
-  const views = ['overallView','teamView','notesView','dashboardView','queueView','attentionView','exportView','bookView','fullBookView','rulesView','filmsView'];
+  const views = ['overallView','teamView','notesView','typeNotesView','dashboardView','queueView','attentionView','exportView','bookView','fullBookView','rulesView','filmsView'];
   views.forEach(v => { const el = document.getElementById(v); if (el) el.style.display = 'none'; });
   if (view === 'overall') { document.getElementById('overallView').style.display = 'block'; renderOverallDashboard(); }
   else if (view === 'fullbook') { document.getElementById('fullBookView').style.display = 'block'; renderFullBookView(); }
@@ -4314,6 +4497,7 @@ function switchView(view, btn, opts) {
   else if (view === 'queue') {
     document.getElementById('queueView').style.display = 'flex';
     renderQueue();
+    applyQueueCollapsed();
     if (S.selectedIdx) renderDetail(); else { document.getElementById('detailEmpty').style.display = 'flex'; document.getElementById('detailContent').style.display = 'none'; }
   }
   else if (view === 'attention') { document.getElementById('attentionView').style.display = 'block'; renderAttentionView(); }
@@ -4322,6 +4506,7 @@ function switchView(view, btn, opts) {
   else if (view === 'films') { document.getElementById('filmsView').style.display = 'block'; renderFilmsView(); }
   else if (view === 'rules') { document.getElementById('rulesView').style.display = 'block'; renderRulesView(); }
   else if (view === 'notes') { document.getElementById('notesView').style.display = 'block'; renderNotesView(); }
+  else if (view === 'typenotes') { document.getElementById('typeNotesView').style.display = 'block'; renderTypeNotesView(); }
   renderSidebar();
   // Push browser history state so back button works
   if (!opts || !opts.skipHistory) {
@@ -4336,6 +4521,77 @@ function switchView(view, btn, opts) {
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+// ══════════════════════════════════════════════
+// THEMED MODAL SYSTEM
+// Replaces native confirm/alert/prompt with claymorphic dialogs.
+// All return Promises for await-style use.
+// ══════════════════════════════════════════════
+function _showModal({ title, body, actions }) {
+  return new Promise(resolve => {
+    const ov = document.getElementById('modalOverlay');
+    document.getElementById('modalTitle').textContent = title || '';
+    document.getElementById('modalBody').innerHTML = body || '';
+    const actEl = document.getElementById('modalActions');
+    actEl.innerHTML = '';
+    actions.forEach(a => {
+      const btn = document.createElement('button');
+      btn.className = 'btn ' + (a.primary ? 'btn-primary' : (a.danger ? 'btn-sm' : ''));
+      if (a.danger) { btn.style.background = 'linear-gradient(180deg,#C58A7E,var(--red))'; btn.style.color = '#fff'; }
+      btn.textContent = a.label;
+      btn.onclick = () => {
+        const inputEl = document.querySelector('#modalBody input, #modalBody textarea');
+        const val = inputEl ? inputEl.value : null;
+        ov.style.display = 'none';
+        resolve(a.value !== undefined ? (a.returnInput ? val : a.value) : val);
+      };
+      actEl.appendChild(btn);
+    });
+    ov.style.display = 'flex';
+    // Auto-focus the first input if present
+    setTimeout(() => {
+      const inputEl = document.querySelector('#modalBody input, #modalBody textarea');
+      if (inputEl) inputEl.focus();
+    }, 50);
+  });
+}
+
+// Themed confirm — returns true / false
+function jemConfirm(message, opts = {}) {
+  return _showModal({
+    title: opts.title || 'Confirm',
+    body: `<div>${message}</div>`,
+    actions: [
+      { label: opts.cancelLabel || 'Cancel', value: false },
+      { label: opts.okLabel || 'Confirm', value: true, primary: !opts.danger, danger: opts.danger }
+    ]
+  });
+}
+
+// Themed alert — single OK
+function jemAlert(message, opts = {}) {
+  return _showModal({
+    title: opts.title || 'Notice',
+    body: `<div>${message}</div>`,
+    actions: [{ label: 'OK', value: true, primary: true }]
+  });
+}
+
+// Themed prompt — returns the entered string or null
+function jemPrompt(message, defaultValue = '', opts = {}) {
+  const inputType = opts.multiline ? 'textarea' : 'input';
+  const inputHTML = opts.multiline
+    ? `<textarea>${(defaultValue || '').replace(/</g,'&lt;')}</textarea>`
+    : `<input type="text" value="${(defaultValue || '').replace(/"/g,'&quot;')}">`;
+  return _showModal({
+    title: opts.title || 'Input',
+    body: `<div>${message}</div>${inputHTML}`,
+    actions: [
+      { label: 'Cancel', value: null },
+      { label: opts.okLabel || 'Save', value: true, primary: true, returnInput: true }
+    ]
+  }).then(v => v === null || v === false ? null : v);
+}
+
 function showLoading(txt) {
   document.getElementById('loadingOverlay').style.display = 'flex';
   document.getElementById('loadingText').textContent = txt || 'Loading…';
@@ -4353,6 +4609,17 @@ function showToast(msg, type) {
 // ══════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════
+// Keyboard shortcuts for queue navigation
+window.addEventListener('keydown', (e) => {
+  // Skip if user is typing in an input/textarea/contenteditable
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (S.currentView !== 'queue' || !S.selectedIdx) return;
+  if (e.key === 'j' || e.key === 'ArrowRight') { e.preventDefault(); navigateClip('next'); }
+  else if (e.key === 'k' || e.key === 'ArrowLeft') { e.preventDefault(); navigateClip('prev'); }
+});
+
 window.addEventListener('popstate', (e) => {
   if (!e.state) return;
   const { view, activeType, selectedIdx, filter } = e.state;
