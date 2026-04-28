@@ -2968,24 +2968,29 @@ function buildAIPrompt(clip, extraContext) {
   return prompt;
 }
 
-async function callAI(messages) {
+async function callAI(messages, opts = {}) {
   if (!S.claudeKey) throw new Error('No API key — please sign out and add your Anthropic key');
+  const body = {
+    model: S.aiModel,
+    max_tokens: 1500,
+    temperature: opts.temperature ?? 1.0, // explicit so we get true variance on regenerations
+    messages,
+  };
+  console.log('[callAI] model:', body.model, 'temp:', body.temperature, 'msgs:', messages.length);
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': S.claudeKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-    body: JSON.stringify({
-      model: S.aiModel,
-      max_tokens: 1000,
-      messages,
-    })
+    body: JSON.stringify(body)
   });
   const data = await r.json();
   if (data.error) throw new Error(data.error.message);
-  return data.content?.find(b => b.type === 'text')?.text || '';
+  const text = data.content?.find(b => b.type === 'text')?.text || '';
+  console.log('[callAI] response length:', text.length, 'preview:', text.substring(0, 80));
+  return text;
 }
 
-async function evaluateAndDraft(clip) {
-  // First pass: evaluate if description is sufficient
+async function evaluateAndDraft(clip, regenCount = 0) {
+  // First pass: evaluate if description is sufficient — eval is deterministic-ish, lower temp
   const evalPrompt = `You are evaluating a video description to decide if it has enough content to rewrite as a 90-word summary.
 
 Description: "${clip.description}"
@@ -2998,15 +3003,20 @@ Do not include any other text.`;
 
   let evalResult;
   try {
-    const evalText = await callAI([{ role: 'user', content: evalPrompt }]);
+    const evalText = await callAI([{ role: 'user', content: evalPrompt }], { temperature: 0.3 });
     const clean = evalText.replace(/```json|```/g, '').trim();
     evalResult = JSON.parse(clean);
   } catch { evalResult = { ok: true }; } // default to trying
 
   if (!evalResult.ok) return { flagged: true, reason: evalResult.reason || 'Description too short or vague' };
 
-  // Second pass: rewrite
-  const draft = await callAI([{ role: 'user', content: buildAIPrompt(clip) }]);
+  // Second pass: rewrite — high temperature to ensure variance between regenerations
+  // On subsequent regenerations, add explicit instruction to produce a different variation
+  let prompt = buildAIPrompt(clip);
+  if (regenCount > 0) {
+    prompt += `\n\n---\n\nThis is regeneration attempt #${regenCount + 1}. Produce a meaningfully DIFFERENT version than what you would produce on the first attempt — different sentence structure, different opening, different emphasis. Do not repeat the same wording from previous attempts.`;
+  }
+  const draft = await callAI([{ role: 'user', content: prompt }], { temperature: 1.0 });
   return { flagged: false, draft };
 }
 
@@ -3035,7 +3045,12 @@ async function regenerateClip(rowNum) {
   const btn = document.querySelector(`[onclick="regenerateClip(${rowNum})"]`);
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Generating…'; }
   try {
-    const result = await evaluateAndDraft(clip);
+    // Increment regen count so the AI knows to produce a different variation
+    const existingDraft = clip._draft || getReviewField(clip, 'draftText') || '';
+    if (existingDraft) {
+      S.regenCounts[rowNum] = (S.regenCounts[rowNum] || 0) + 1;
+    }
+    const result = await evaluateAndDraft(clip, S.regenCounts[rowNum] || 0);
     if (result.flagged) {
       setReviewField(clip, 'status', 'flagged');
       setReviewField(clip, 'flagReason', result.reason);
@@ -3159,6 +3174,7 @@ async function revertClip(rowNum) {
     setReviewField(clip, 'flagReason', '');
     setReviewField(clip, 'draftText', '');
     delete S.chatHistory[rowNum];
+    delete S.regenCounts[rowNum]; // reset so next generate is treated as fresh
     await saveReviewRow(clip);
     hideLoading();
     renderDetail();
