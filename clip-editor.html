@@ -2138,10 +2138,10 @@ async function loadRulesForType(typeCfg) {
     });
     invalidateSheetMeta();
     const newSheetId = addRes.replies?.[0]?.addSheet?.properties?.sheetId;
-    const header = [['id','category','title','content','active']];
+    const header = [['id','category','title','content','active','transcript_only']];
     let rows = [];
     if (typeCfg.key === 'sichos') {
-      rows = DEFAULT_RULES.map((r, i) => [String(i+1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE']);
+      rows = DEFAULT_RULES.map((r, i) => [String(i+1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', r.transcriptOnly ? 'TRUE' : 'FALSE']);
     }
     await sheetsSet(`'${tabName}'!A1`, header.concat(rows));
     if (newSheetId !== undefined) {
@@ -2153,6 +2153,7 @@ async function loadRulesForType(typeCfg) {
         { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 240 }, fields: 'pixelSize' } },
         { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 600 }, fields: 'pixelSize' } },
         { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
       ];
       await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
       method: 'POST',
@@ -2163,8 +2164,16 @@ async function loadRulesForType(typeCfg) {
     bucket.rulesArr = typeCfg.key === 'sichos' ? DEFAULT_RULES.map((r, i) => ({ id: String(i+1), ...r })) : [];
     return;
   }
+  // Migration: ensure header has 6 columns (older sheets only have 5)
   try {
-    const data = await sheetsGet(`'${tabName}'!A:E`);
+    const hdr = await sheetsGet(`'${tabName}'!A1:F1`);
+    const row = hdr.values?.[0] || [];
+    if (row.length < 6) {
+      await sheetsSet(`'${tabName}'!A1:F1`, [['id','category','title','content','active','transcript_only']]);
+    }
+  } catch {}
+  try {
+    const data = await sheetsGet(`'${tabName}'!A:F`);
     const rows = data.values || [];
     if (rows.length < 2) { bucket.rulesArr = []; return; }
     bucket.rulesArr = rows.slice(1).filter(r => r[0]).map(r => ({
@@ -2173,6 +2182,7 @@ async function loadRulesForType(typeCfg) {
       title: r[2] || '',
       content: r[3] || '',
       active: !r[4] || String(r[4]).toUpperCase() === 'TRUE',
+      transcriptOnly: String(r[5] || '').toUpperCase() === 'TRUE',
     }));
   } catch(e) {
     console.warn('Rules load failed for ' + typeCfg.displayName + ':', e);
@@ -2183,11 +2193,14 @@ async function loadRulesForType(typeCfg) {
 // Backward compat
 async function loadRulesFromSheet() { return loadRulesForType(activeTypeCfg()); }
 
-// Build the AI prompt text from active rules, grouped by category
-function buildRulesPrompt(typeKey) {
+// Build the AI prompt text from active rules, grouped by category.
+// If transcriptInUse is false, transcript-only rules are filtered out.
+function buildRulesPrompt(typeKey, transcriptInUse = false) {
   const bucket = S.byType[typeKey || S.activeType];
   if (!bucket?.rulesArr || !bucket.rulesArr.length) return '';
-  const active = bucket.rulesArr.filter(r => r.active);
+  let active = bucket.rulesArr.filter(r => r.active);
+  if (!transcriptInUse) active = active.filter(r => !r.transcriptOnly);
+  if (!active.length) return '';
   const byCat = {};
   active.forEach(r => {
     if (!byCat[r.category]) byCat[r.category] = [];
@@ -2213,12 +2226,12 @@ async function saveOneRule(rule) {
   const rows = data.values || [];
   let sheetRow = -1;
   rows.forEach((r, i) => { if (r[0] === rule.id) sheetRow = i + 1; });
-  const values = [[rule.id, rule.category, rule.title, rule.content, rule.active ? 'TRUE' : 'FALSE']];
+  const values = [[rule.id, rule.category, rule.title, rule.content, rule.active ? 'TRUE' : 'FALSE', rule.transcriptOnly ? 'TRUE' : 'FALSE']];
   if (sheetRow > 0) {
-    await sheetsSet(`'${tabName}'!A${sheetRow}:E${sheetRow}`, values);
+    await sheetsSet(`'${tabName}'!A${sheetRow}:F${sheetRow}`, values);
   } else {
     const nextRow = rows.length + 1;
-    await sheetsSet(`'${tabName}'!A${nextRow}:E${nextRow}`, values);
+    await sheetsSet(`'${tabName}'!A${nextRow}:F${nextRow}`, values);
   }
   const idx = bucket.rulesArr.findIndex(r => r.id === rule.id);
   if (idx >= 0) bucket.rulesArr[idx] = rule;
@@ -3097,7 +3110,7 @@ async function loadTranscript(rowNum) {
 // ══════════════════════════════════════════════
 function buildAIPrompt(clip, extraContext, useTranscript) {
   const transcript = useTranscript ? S.transcriptLoaded[clip._rowNum] : null;
-  const rulesText = buildRulesPrompt(clip.typeKey);
+  const rulesText = buildRulesPrompt(clip.typeKey, !!transcript);
   let prompt = (rulesText || 'You are an editor rewriting Jewish educational video summaries. Rewrite the summary provided concisely.') + '\n\n---\n\nNow rewrite this summary:\n\n' + clip.description;
   if (transcript) prompt += '\n\n---\n\nAdditional context from transcript:\n' + transcript.substring(0, 3000);
   if (extraContext) prompt += '\n\n---\n\nAdditional guidance: ' + extraContext;
@@ -4751,6 +4764,10 @@ function renderRulesView() {
       <textarea class="rule-text-input" data-rule-id="${esc(rule.id)}" oninput="onRuleEdit('${esc(rule.id)}')" placeholder="Type the rule for the AI…" rows="3">${esc(rule.content)}</textarea>
       <div class="rule-card-actions">
         <span class="rule-id-badge">#${esc(rule.id)}</span>
+        <label class="rule-trans-toggle ${rule.transcriptOnly ? 'on' : ''}" title="When ON, this rule only applies to AI runs that include the transcript. Useful for rules like 'prefer specific quotes from the transcript'." style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:10.5px;font-weight:500;color:${rule.transcriptOnly ? 'var(--accent2)' : 'var(--tx4)'};background:${rule.transcriptOnly ? 'var(--accent-light)' : 'var(--bg2)'};padding:3px 9px;border-radius:var(--radius-pill);user-select:none;transition:all 0.15s">
+          <input type="checkbox" ${rule.transcriptOnly ? 'checked' : ''} onchange="toggleRuleTranscriptOnly('${esc(rule.id)}')" style="margin:0;cursor:pointer;accent-color:var(--accent)">
+          📄 Transcript only
+        </label>
         <span id="ruleStatus_${esc(rule.id)}" class="rule-status-msg"></span>
         <button class="rule-action-btn save" id="ruleSaveBtn_${esc(rule.id)}" onclick="saveRule('${esc(rule.id)}')" style="display:none">💾 Save</button>
         <button class="rule-action-btn delete" onclick="deleteRule('${esc(rule.id)}')" title="Delete this rule">🗑</button>
@@ -4811,6 +4828,19 @@ async function toggleRule(id) {
   try {
     await saveOneRule(updated);
     renderRulesView();
+  } catch(e) {
+    showToast('Toggle failed: ' + e.message, 'error');
+  }
+}
+
+async function toggleRuleTranscriptOnly(id) {
+  const rule = activeBucket().rulesArr.find(r => r.id === id);
+  if (!rule) return;
+  const updated = { ...rule, transcriptOnly: !rule.transcriptOnly };
+  try {
+    await saveOneRule(updated);
+    renderRulesView();
+    showToast(updated.transcriptOnly ? 'Rule will only apply when transcript is used' : 'Rule will always apply', 'success');
   } catch(e) {
     showToast('Toggle failed: ' + e.message, 'error');
   }
