@@ -524,6 +524,14 @@
   }
   .rule-card-actions .rule-action-btn.delete:hover { background: var(--red-light); color: var(--red); }
 
+  /* Transcript toggle (in clip detail AI box) */
+  .transcript-toggle { transition: all 0.2s; }
+  .transcript-toggle:hover { background: var(--bg3); color: var(--tx); }
+  .transcript-toggle.on {
+    background: var(--accent-light); color: var(--accent2);
+    box-shadow: var(--shadow-pill);
+  }
+
   /* Notes */
   .note-card {
     background: var(--bg2); border-radius: var(--radius);
@@ -1163,9 +1171,13 @@
           <select id="rangeSelect" onchange="onRangeChange()" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--tx2);font-family:inherit"></select>
           <span id="rangeInfo" style="font-size:10px;color:var(--tx4);margin-left:auto"></span>
         </div>
-        <div class="batch-bar">
+        <div class="batch-bar" style="flex-wrap:wrap;row-gap:6px">
           <button class="btn btn-sm" onclick="selectAll()">Select Range</button>
           <button class="btn btn-sm btn-primary" onclick="runBatch()" id="batchBtn">▶ Run AI on Selected</button>
+          <label id="batchTranscriptToggle" class="transcript-toggle" title="When ON, the batch will fetch and include transcripts for every selected clip" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:10.5px;font-weight:500;color:var(--tx2);background:var(--bg2);padding:5px 10px;border-radius:var(--radius-pill);box-shadow:var(--shadow-inner);user-select:none">
+            <input type="checkbox" id="batchTranscriptCb" onchange="toggleBatchTranscript()" style="margin:0;cursor:pointer;accent-color:var(--accent)">
+            <span>Use transcripts</span>
+          </label>
           <span class="clip-count" id="clipCount"></span>
         </div>
         <div id="batchProgress" style="display:none;">
@@ -1849,6 +1861,7 @@ const REVIEW_COLS = { ID: 0, STATUS: 1, ORIGINAL_BACKUP: 2, FLAG_REASON: 3, APPR
 
 async function ensureReviewTab(typeCfg) {
   const tabName = typeCfg.reviewTab;
+  const fullHeader = ['clip_id','status','original_backup','flag_reason','approved_by','approved_at','draft_text','chat_history','desc_source_col','draft_model','draft_used_transcript'];
   const meta = await getSheetMeta();
   const exists = meta.sheets?.some(s => s.properties.title === tabName);
   if (!exists) {
@@ -1858,15 +1871,14 @@ async function ensureReviewTab(typeCfg) {
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName } } }] })
     });
     invalidateSheetMeta();
-    await sheetsSet(`'${tabName}'!A1:I1`, [['clip_id','status','original_backup','flag_reason','approved_by','approved_at','draft_text','chat_history','desc_source_col']]);
+    await sheetsSet(`'${tabName}'!A1:K1`, [fullHeader]);
   } else {
-    // Migration: ensure all 9 columns exist
+    // Migration: ensure all columns exist (handles older 9-column tabs)
     try {
-      const hdr = await sheetsGet(`'${tabName}'!A1:I1`);
+      const hdr = await sheetsGet(`'${tabName}'!A1:K1`);
       const row = hdr.values?.[0] || [];
-      if (row.length < 9) {
-        const fullHeader = ['clip_id','status','original_backup','flag_reason','approved_by','approved_at','draft_text','chat_history','desc_source_col'];
-        await sheetsSet(`'${tabName}'!A1:I1`, [fullHeader]);
+      if (row.length < 11) {
+        await sheetsSet(`'${tabName}'!A1:K1`, [fullHeader]);
       }
     } catch {}
   }
@@ -1878,7 +1890,7 @@ async function loadReviewData(typeCfg) {
   const bucket = S.byType[typeCfg.key];
   bucket.reviewData = {};
   try {
-    const data = await sheetsGet(`'${typeCfg.reviewTab}'!A:I`);
+    const data = await sheetsGet(`'${typeCfg.reviewTab}'!A:K`);
     const rows = data.values || [];
     rows.slice(1).forEach(row => {
       if (!row[0]) return;
@@ -1891,6 +1903,8 @@ async function loadReviewData(typeCfg) {
         draftText: row[6] || '',
         chatHistory: row[7] || '',
         descSourceCol: row[8] || '',
+        draftModel: row[9] || '',
+        draftUsedTranscript: row[10] === 'TRUE',
       };
       const id = row[0];
       const clip = bucket.clips?.find(c => String(c._rowNum) === id);
@@ -1916,12 +1930,24 @@ async function saveReviewRow(clip) {
   rows.forEach((r, i) => { if (r[0] === id) sheetRow = i + 1; });
   const draftText = rd.draftText || '';
   const chatHist = S.chatHistory[parseInt(id)] ? JSON.stringify(S.chatHistory[parseInt(id)]) : '';
-  const values = [[id, rd.status||'unprocessed', rd.originalBackup||'', rd.flagReason||'', rd.approvedBy||'', rd.approvedAt||'', draftText, chatHist, rd.descSourceCol || clip.descSourceCol || 'H']];
+  const values = [[
+    id,
+    rd.status || 'unprocessed',
+    rd.originalBackup || '',
+    rd.flagReason || '',
+    rd.approvedBy || '',
+    rd.approvedAt || '',
+    draftText,
+    chatHist,
+    rd.descSourceCol || clip.descSourceCol || 'H',
+    rd.draftModel || '',
+    rd.draftUsedTranscript ? 'TRUE' : 'FALSE',
+  ]];
   if (sheetRow > 0) {
-    await sheetsSet(`'${typeCfg.reviewTab}'!A${sheetRow}:I${sheetRow}`, values);
+    await sheetsSet(`'${typeCfg.reviewTab}'!A${sheetRow}:K${sheetRow}`, values);
   } else {
     const nextRow = rows.length + 1;
-    await sheetsSet(`'${typeCfg.reviewTab}'!A${nextRow}:I${nextRow}`, values);
+    await sheetsSet(`'${typeCfg.reviewTab}'!A${nextRow}:K${nextRow}`, values);
   }
 }
 
@@ -2446,7 +2472,7 @@ function setReviewField(clip, field, val) {
   const bucket = S.byType[clip.typeKey];
   if (!bucket) return;
   const id = String(clip._rowNum);
-  if (!bucket.reviewData[id]) bucket.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '', draftText: '', chatHistory: '', descSourceCol: clip.descSourceCol || 'H' };
+  if (!bucket.reviewData[id]) bucket.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '', draftText: '', chatHistory: '', descSourceCol: clip.descSourceCol || 'H', draftModel: '', draftUsedTranscript: false };
   bucket.reviewData[id][field] = val;
 }
 
@@ -2570,6 +2596,11 @@ function renderQueue() {
   const total = allMatchingClips().length;
   const el = document.getElementById('queueList');
   document.getElementById('clipCount').textContent = `${clips.length} of ${total}` + (S.userFilter ? ` · filtered by ${S.userFilter}` : '');
+  // Sync the batch transcript toggle with persisted state
+  const batchCb = document.getElementById('batchTranscriptCb');
+  const batchLabel = document.getElementById('batchTranscriptToggle');
+  if (batchCb) batchCb.checked = _batchUseTranscript;
+  if (batchLabel) batchLabel.classList.toggle('on', _batchUseTranscript);
   el.innerHTML = clips.map(clip => {
     const status = getStatus(clip);
     const thumbHTML = clip.thumbnail
@@ -2678,6 +2709,7 @@ function applyQueueCollapsed() {
 function renderDetail() {
   const clip = activeBucket().clips.find(c => c._rowNum === S.selectedIdx);
   if (!clip) return;
+  const bucket = activeBucket();
   document.getElementById('detailEmpty').style.display = 'none';
   const dc = document.getElementById('detailContent');
   dc.style.display = 'flex';
@@ -2750,16 +2782,42 @@ function renderDetail() {
     </div>
 
     <div class="card">
-      <div class="card-header">
-        ${status === 'approved' ? 'Approved Summary' : status === 'draft' ? 'Pending Draft' : 'AI Generated Description'}
+      <div class="card-header" style="flex-wrap:wrap;align-items:center;row-gap:6px">
+        ${status === 'approved' ? 'Approved Summary' : status === 'draft' ? 'Pending Draft' : status === 'flagged' ? 'AI Generated (Flagged)' : 'AI Generated Description'}
         ${status === 'approved' ? '<span style="font-size:10px;color:var(--green);font-weight:500;margin-left:4px;background:var(--green-light);padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">✓ Approved</span>' : ''}
         ${status === 'draft' ? '<span style="font-size:10px;color:#8C7635;font-weight:500;margin-left:4px;background:var(--yellow-light);padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">Awaiting review</span>' : ''}
-        ${status === 'unprocessed' ? `<span style="font-size:10px;font-weight:500;margin-left:4px;background:${S.aiModel.includes('opus') ? 'var(--accent-light)' : 'var(--green-light)'};color:${S.aiModel.includes('opus') ? 'var(--accent2)' : 'var(--green)'};padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">⚡ ${S.aiModel.includes('opus') ? 'Opus' : 'Sonnet'}</span>` : ''}
-        <div style="margin-left:auto;display:flex;gap:6px;">
+        ${(() => {
+          // Show metadata about the existing draft (what model + did it use the transcript?)
+          const dm = getReviewField(clip, 'draftModel') || '';
+          const usedTrans = !!getReviewField(clip, 'draftUsedTranscript') || (bucket.reviewData[String(clip._rowNum)]?.draftUsedTranscript === true);
+          if (dm && (status === 'draft' || status === 'approved' || status === 'flagged')) {
+            const isOpus = dm.includes('opus');
+            const modelLabel = isOpus ? 'Opus' : 'Sonnet';
+            const modelBg = isOpus ? 'var(--accent-light)' : 'var(--green-light)';
+            const modelColor = isOpus ? 'var(--accent2)' : 'var(--green)';
+            const transLabel = usedTrans ? '📄 Transcript' : '✏️ Description-only';
+            return `<span style="font-size:10px;font-weight:500;margin-left:4px;background:${modelBg};color:${modelColor};padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">⚡ ${modelLabel}</span>
+                    <span style="font-size:10px;font-weight:500;margin-left:4px;background:var(--bg2);color:var(--tx3);padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">${transLabel}</span>`;
+          }
+          // Unprocessed — show currently selected model as preview
+          if (status === 'unprocessed') {
+            return `<span style="font-size:10px;font-weight:500;margin-left:4px;background:${S.aiModel.includes('opus') ? 'var(--accent-light)' : 'var(--green-light)'};color:${S.aiModel.includes('opus') ? 'var(--accent2)' : 'var(--green)'};padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">⚡ ${S.aiModel.includes('opus') ? 'Opus' : 'Sonnet'}</span>`;
+          }
+          return '';
+        })()}
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${(() => {
+            const hasTranscript = !!S.transcriptLoaded[clip._rowNum];
+            const useT = !!_useTranscriptForClip[clip._rowNum];
+            return `<label class="transcript-toggle ${useT ? 'on' : ''}" title="${hasTranscript ? 'Toggle: send transcript to AI on next Generate' : 'No transcript loaded — turning ON will fetch it'}" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;font-weight:500;color:var(--tx2);background:var(--bg2);padding:6px 12px;border-radius:var(--radius-pill);box-shadow:var(--shadow-inner);user-select:none">
+              <input type="checkbox" ${useT ? 'checked' : ''} onchange="toggleUseTranscript(${clip._rowNum})" style="margin:0;cursor:pointer;accent-color:var(--accent)">
+              <span>Use transcript</span>
+              ${hasTranscript ? `<span style="color:var(--green);font-size:10px">●</span>` : `<span style="color:var(--tx4);font-size:10px">○</span>`}
+            </label>`;
+          })()}
           ${(activeBucket().rulesArr?.filter(r=>r.active).length||0) === 0
             ? `<button class="btn btn-sm" disabled title="No active rules for this clip type. Add rules in the Rules section first.">✨ Generate (no rules yet)</button>`
             : `<button class="btn btn-sm btn-primary" onclick="regenerateClip(${clip._rowNum})">${hasDraft ? '🔄 Regenerate' : '✨ Generate'}</button>`}
-          ${!S.transcriptLoaded[clip._rowNum] ? `<button class="btn btn-sm" onclick="loadTranscript(${clip._rowNum})">🔍 Pull Transcript</button>` : `<span style="font-size:11px;color:var(--green)">✓ Transcript loaded</span>`}
         </div>
       </div>
       <div class="card-body">
@@ -3024,22 +3082,21 @@ function onDraftInput(rowNum) {
 // ══════════════════════════════════════════════
 async function loadTranscript(rowNum) {
   const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
-  if (!clip) return;
-  showToast('Loading transcript…');
-  try {
-    const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!AC${rowNum}:AC${rowNum}`);
-    const transcript = data.values?.[0]?.[0] || '';
-    S.transcriptLoaded[rowNum] = transcript;
-    showToast('Transcript loaded ✓', 'success');
-    renderDetail();
-  } catch(e) { showToast('Failed to load transcript', 'error'); }
+  if (!clip) throw new Error('Clip not found');
+  const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!AC${rowNum}:AC${rowNum}`);
+  const transcript = data.values?.[0]?.[0] || '';
+  if (!transcript || !transcript.trim()) {
+    throw new Error('No transcript available for this clip');
+  }
+  S.transcriptLoaded[rowNum] = transcript;
+  return transcript;
 }
 
 // ══════════════════════════════════════════════
 // AI PROCESSING
 // ══════════════════════════════════════════════
-function buildAIPrompt(clip, extraContext) {
-  const transcript = S.transcriptLoaded[clip._rowNum];
+function buildAIPrompt(clip, extraContext, useTranscript) {
+  const transcript = useTranscript ? S.transcriptLoaded[clip._rowNum] : null;
   const rulesText = buildRulesPrompt(clip.typeKey);
   let prompt = (rulesText || 'You are an editor rewriting Jewish educational video summaries. Rewrite the summary provided concisely.') + '\n\n---\n\nNow rewrite this summary:\n\n' + clip.description;
   if (transcript) prompt += '\n\n---\n\nAdditional context from transcript:\n' + transcript.substring(0, 3000);
@@ -3068,7 +3125,7 @@ async function callAI(messages, opts = {}) {
   return text;
 }
 
-async function evaluateAndDraft(clip, regenCount = 0) {
+async function evaluateAndDraft(clip, regenCount = 0, useTranscript = false) {
   // First pass: evaluate if description is sufficient — eval is deterministic-ish, lower temp
   const evalPrompt = `You are evaluating a video description to decide if it has enough content to rewrite as a 90-word summary.
 
@@ -3087,11 +3144,16 @@ Do not include any other text.`;
     evalResult = JSON.parse(clean);
   } catch { evalResult = { ok: true }; } // default to trying
 
-  if (!evalResult.ok) return { flagged: true, reason: evalResult.reason || 'Description too short or vague' };
+  // If description is too thin AND we have transcript loaded, try anyway with the transcript
+  const haveTranscript = !!S.transcriptLoaded[clip._rowNum];
+  if (!evalResult.ok && !(useTranscript && haveTranscript)) {
+    return { flagged: true, reason: evalResult.reason || 'Description too short or vague', usedTranscript: false };
+  }
 
   // Second pass: rewrite — high temperature to ensure variance between regenerations
   // On subsequent regenerations, add explicit instruction to produce a different variation
-  let prompt = buildAIPrompt(clip);
+  const transcriptActuallyUsed = useTranscript && haveTranscript;
+  let prompt = buildAIPrompt(clip, undefined, transcriptActuallyUsed);
   if (regenCount > 0) {
     prompt += `\n\n---\n\nThis is regeneration attempt #${regenCount + 1}. Produce a meaningfully DIFFERENT version than what you would produce on the first attempt — different sentence structure, different opening, different emphasis. Do not repeat the same wording from previous attempts.`;
   }
@@ -3105,10 +3167,11 @@ Do not include any other text.`;
     return {
       flagged: true,
       reason: `Draft is only ${wc} words (minimum ${minWords}) — original may need more context, or try regenerating`,
-      draft: cleanedDraft, // include the draft anyway so user can see what was generated
+      draft: cleanedDraft,
+      usedTranscript: transcriptActuallyUsed,
     };
   }
-  return { flagged: false, draft: cleanedDraft };
+  return { flagged: false, draft: cleanedDraft, usedTranscript: transcriptActuallyUsed };
 }
 
 // Per-type minimum word count for auto-flagging. Stored in localStorage so each user can tune.
@@ -3119,6 +3182,39 @@ function getMinWordCount(typeKey) {
   const n = parseInt(v);
   return isNaN(n) ? 90 : n;
 }
+// Per-clip toggle: should the next AI call include the transcript?
+// Stored in memory (not persisted) — defaults off, user toggles per clip.
+const _useTranscriptForClip = {};
+
+// Batch-mode toggle — applies to ALL clips processed in a batch run.
+// Persisted in localStorage so the choice is sticky between sessions.
+let _batchUseTranscript = localStorage.getItem('jem_cse_batch_transcript') === '1';
+
+function toggleBatchTranscript() {
+  const cb = document.getElementById('batchTranscriptCb');
+  _batchUseTranscript = !!cb?.checked;
+  localStorage.setItem('jem_cse_batch_transcript', _batchUseTranscript ? '1' : '0');
+  const label = document.getElementById('batchTranscriptToggle');
+  if (label) label.classList.toggle('on', _batchUseTranscript);
+  showToast(_batchUseTranscript ? 'Batch will use transcripts' : 'Batch will use description only');
+}
+
+async function toggleUseTranscript(rowNum) {
+  const willBeOn = !_useTranscriptForClip[rowNum];
+  _useTranscriptForClip[rowNum] = willBeOn;
+  if (willBeOn && !S.transcriptLoaded[rowNum]) {
+    // Auto-fetch transcript
+    showToast('Fetching transcript…');
+    try {
+      await loadTranscript(rowNum);
+    } catch(e) {
+      _useTranscriptForClip[rowNum] = false;
+      showToast('Could not load transcript: ' + (e.message || e), 'error');
+    }
+  }
+  renderDetail();
+}
+
 function setMinWordCount(typeKey, n) {
   if (n === '' || n === null || n === undefined) {
     localStorage.removeItem('jem_cse_minwc_' + typeKey);
@@ -3178,14 +3274,17 @@ function smartenQuotes(text) {
 }
 
 async function processClip(clip) {
-  const result = await evaluateAndDraft(clip);
+  const useTranscript = !!_useTranscriptForClip[clip._rowNum];
+  const result = await evaluateAndDraft(clip, 0, useTranscript);
   const id = String(clip._rowNum);
   const bucket = S.byType[clip.typeKey];
   if (!bucket) return;
+  // Record metadata regardless of flagged status (so we know what produced this draft)
+  setReviewField(clip, 'draftModel', result.draft ? S.aiModel : '');
+  setReviewField(clip, 'draftUsedTranscript', !!result.usedTranscript);
   if (result.flagged) {
     setReviewField(clip, 'status', 'flagged');
     setReviewField(clip, 'flagReason', result.reason);
-    // Keep the draft if AI did produce one (e.g. flagged for being short)
     if (result.draft) {
       clip._draft = result.draft;
       setReviewField(clip, 'draftText', result.draft);
@@ -3214,7 +3313,10 @@ async function regenerateClip(rowNum) {
     if (existingDraft) {
       S.regenCounts[rowNum] = (S.regenCounts[rowNum] || 0) + 1;
     }
-    const result = await evaluateAndDraft(clip, S.regenCounts[rowNum] || 0);
+    const useTranscript = !!_useTranscriptForClip[rowNum];
+    const result = await evaluateAndDraft(clip, S.regenCounts[rowNum] || 0, useTranscript);
+    setReviewField(clip, 'draftModel', result.draft ? S.aiModel : '');
+    setReviewField(clip, 'draftUsedTranscript', !!result.usedTranscript);
     if (result.flagged) {
       setReviewField(clip, 'status', 'flagged');
       setReviewField(clip, 'flagReason', result.reason);
@@ -3244,6 +3346,32 @@ async function runBatch() {
   if (!checked.length) { showToast('Select clips first'); return; }
   S.batchRunning = true;
   document.getElementById('batchProgress').style.display = 'block';
+
+  // If batch transcript mode is ON, pre-fetch all transcripts so processClip won't have to
+  // fetch them one at a time (and so the per-clip toggle reflects the batch choice).
+  if (_batchUseTranscript) {
+    document.getElementById('progressLabel').textContent = `Pre-fetching transcripts…`;
+    let fetched = 0, missing = 0;
+    for (const rowNum of checked) {
+      // Apply the batch choice to each clip's per-clip toggle so processClip picks it up
+      _useTranscriptForClip[rowNum] = true;
+      if (!S.transcriptLoaded[rowNum]) {
+        try {
+          await loadTranscript(rowNum);
+          fetched++;
+        } catch(e) {
+          // No transcript available for this clip — turn its toggle back off
+          _useTranscriptForClip[rowNum] = false;
+          missing++;
+        }
+      }
+    }
+    if (missing > 0) showToast(`${fetched} transcripts loaded, ${missing} clips have no transcript`, 'success');
+  } else {
+    // Batch toggle OFF — make sure every clip in the batch runs description-only
+    for (const rowNum of checked) _useTranscriptForClip[rowNum] = false;
+  }
+
   let done = 0, drafted = 0, flagged = 0;
   for (const rowNum of checked) {
     const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
