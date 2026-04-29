@@ -3452,7 +3452,9 @@ async function approveClip(rowNum) {
     setReviewField(clip, 'status', 'approved');
     setReviewField(clip, 'approvedBy', S.user?.email || '');
     setReviewField(clip, 'approvedAt', new Date().toISOString());
-    setReviewField(clip, 'draftText', '');
+    // Keep the approved draft in draft_text so the review tab has a complete record
+    // (so a second editor can see exactly what was approved without re-loading from main sheet)
+    setReviewField(clip, 'draftText', draft);
     setReviewField(clip, 'descSourceCol', clip.descSourceCol || 'H');
     // Write back to the same column the description was read from (H, A, or Y)
     const targetCol = clipDescColLetter(clip);
@@ -3472,26 +3474,52 @@ async function revertClip(rowNum) {
   if (!clip) return;
   const backup = getReviewField(clip, 'originalBackup');
   const restoreTo = backup || clip.description;
-  if (!await jemConfirm('Revert to original description?<br><br><span style="color:var(--tx3);font-size:12px">This cannot be undone.</span>', { danger: true, okLabel: 'Revert' })) return;
+  if (!await jemConfirm('Revert to original description?<br><br><span style="color:var(--tx3);font-size:12px">This will restore the original to the main sheet and clear all approval/draft records for this clip.</span>', { danger: true, okLabel: 'Revert' })) return;
   showLoading('Reverting…');
   try {
     const targetCol = clipDescColLetter(clip);
+    // Restore the main-sheet description column back to the original
     await sheetsSet(`'${CONFIG.MAIN_TAB}'!${targetCol}${rowNum}:${targetCol}${rowNum}`, [[restoreTo]]);
+    // In-memory cleanup
     clip.rewrite = '';
     clip.description = restoreTo;
     clip._draft = '';
-    setReviewField(clip, 'status', 'unprocessed');
-    setReviewField(clip, 'flagReason', '');
-    setReviewField(clip, 'draftText', '');
     delete S.chatHistory[rowNum];
-    if (S.regenCounts) delete S.regenCounts[rowNum]; // reset so next generate is treated as fresh
-    await saveReviewRow(clip);
+    if (S.regenCounts) delete S.regenCounts[rowNum];
+    if (_useTranscriptForClip) delete _useTranscriptForClip[rowNum];
+    // Remove the entire row from the review tab — this clip now has no record (clean slate)
+    const bucket = activeBucket();
+    delete bucket.reviewData[String(rowNum)];
+    await deleteReviewRow(clip);
     hideLoading();
     renderDetail();
     renderQueue();
     updateAttentionCount();
-    showToast('Reverted to original', 'success');
+    showToast('Reverted to original — record cleared', 'success');
   } catch(e) { hideLoading(); showToast('Revert failed: ' + e.message, 'error'); }
+}
+
+// Remove a single clip's entire row from its type's review tab
+async function deleteReviewRow(clip) {
+  const typeCfg = getTypeByKey(clip.typeKey);
+  if (!typeCfg) return;
+  const tabName = typeCfg.reviewTab;
+  const id = String(clip._rowNum);
+  // Find the row index of this clip's row in the sheet
+  const data = await sheetsGet(`'${tabName}'!A:A`);
+  const rows = data.values || [];
+  let sheetRow = -1;
+  rows.forEach((r, i) => { if (r[0] === id) sheetRow = i + 1; });
+  if (sheetRow < 1) return; // not in sheet, nothing to do
+  // Get this tab's sheetId so we can delete the dimension
+  const meta = await getSheetMeta();
+  const sheetId = meta.sheets?.find(s => s.properties.title === tabName)?.properties.sheetId;
+  if (sheetId === undefined) return;
+  await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: sheetRow - 1, endIndex: sheetRow } } }] })
+  });
 }
 
 // ══════════════════════════════════════════════
