@@ -1172,7 +1172,10 @@
           <span id="rangeInfo" style="font-size:10px;color:var(--tx4);margin-left:auto"></span>
         </div>
         <div class="batch-bar" style="flex-wrap:wrap;row-gap:6px">
-          <button class="btn btn-sm" onclick="selectAll()">Select Range</button>
+          <label id="masterSelectLabel" class="master-select-label" title="Check / uncheck all clips in the current view" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;font-weight:500;color:var(--tx2);background:var(--bg2);padding:6px 12px;border-radius:var(--radius-pill);box-shadow:var(--shadow-inner);user-select:none">
+            <input type="checkbox" id="masterSelectCb" onchange="toggleMasterSelect()" style="margin:0;cursor:pointer;accent-color:var(--accent)">
+            <span id="masterSelectText">Select all</span>
+          </label>
           <button class="btn btn-sm btn-primary" onclick="runBatch()" id="batchBtn">▶ Run AI on Selected</button>
           <label id="batchTranscriptToggle" class="transcript-toggle" title="When ON, the batch will fetch and include transcripts for every selected clip" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:10.5px;font-weight:500;color:var(--tx2);background:var(--bg2);padding:5px 10px;border-radius:var(--radius-pill);box-shadow:var(--shadow-inner);user-select:none">
             <input type="checkbox" id="batchTranscriptCb" onchange="toggleBatchTranscript()" style="margin:0;cursor:pointer;accent-color:var(--accent)">
@@ -2632,6 +2635,7 @@ function renderQueue() {
       </div>
     </div>`;
   }).join('') || `<div class="empty-state">No clips match current filter</div>`;
+  updateMasterSelectState();
 }
 
 function filterQueue() {
@@ -2648,19 +2652,47 @@ function setFilter(f, btn) {
   renderQueue();
 }
 
-function selectAll() {
-  const clips = filteredClips().filter(c => getStatus(c) === 'unprocessed');
-  document.querySelectorAll('.queue-item-cb').forEach(cb => {
-    const row = parseInt(cb.dataset.row);
-    const clip = activeBucket().clips.find(c => c._rowNum === row);
-    if (clip && getStatus(clip) === 'unprocessed') cb.checked = true;
-  });
+// Toggle: check or uncheck all currently-visible queue checkboxes (respects current filter+search).
+// Works on whatever is rendered — Drafts, Flagged, Approved, etc.
+function toggleMasterSelect() {
+  const cbMaster = document.getElementById('masterSelectCb');
+  const shouldCheck = !!cbMaster?.checked;
+  document.querySelectorAll('.queue-item-cb').forEach(cb => { cb.checked = shouldCheck; });
   updateBatchBtn();
+  updateMasterSelectState();
+}
+
+// Keep the master checkbox in sync with the visible items —
+// shows checked, unchecked, or indeterminate based on individual selection state.
+function updateMasterSelectState() {
+  const cbMaster = document.getElementById('masterSelectCb');
+  const txt = document.getElementById('masterSelectText');
+  if (!cbMaster) return;
+  const all = document.querySelectorAll('.queue-item-cb');
+  const checked = document.querySelectorAll('.queue-item-cb:checked');
+  if (all.length === 0) {
+    cbMaster.checked = false;
+    cbMaster.indeterminate = false;
+    if (txt) txt.textContent = 'Select all';
+  } else if (checked.length === 0) {
+    cbMaster.checked = false;
+    cbMaster.indeterminate = false;
+    if (txt) txt.textContent = `Select all (${all.length})`;
+  } else if (checked.length === all.length) {
+    cbMaster.checked = true;
+    cbMaster.indeterminate = false;
+    if (txt) txt.textContent = `Deselect all (${all.length})`;
+  } else {
+    cbMaster.checked = false;
+    cbMaster.indeterminate = true;
+    if (txt) txt.textContent = `${checked.length} of ${all.length} selected`;
+  }
 }
 
 function updateBatchBtn() {
   const checked = document.querySelectorAll('.queue-item-cb:checked').length;
   document.getElementById('batchBtn').textContent = checked > 0 ? `▶ Run AI on ${checked} Selected` : '▶ Run AI on Selected';
+  updateMasterSelectState();
 }
 
 function updateAttentionCount() {
