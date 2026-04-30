@@ -941,6 +941,11 @@ const JEM_LOGO='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAB6CAYAAAD6Wh
 const JEM_CLIENT_ID='219490405407-sd6eps9njdhq3h31g65reiq55h6vbrrn.apps.googleusercontent.com';
 const JEM_SHEET_ID='1xrSKAuAqKmzYX7qbU3AH3KiMq1mgLh1BBo4jUUR8hPY';
 const S={connected:false,clientId:localStorage.getItem('jw_cid')||JEM_CLIENT_ID,sheetId:localStorage.getItem('jw_sid')||JEM_SHEET_ID,claudeKey:localStorage.getItem('jw_ckey')||'',user:null,sheetMeta:null,
+// AI model selection — per-task. Saved to localStorage. Defaults: Opus for audit (strictest rule-following), Sonnet for everything else.
+modelForAudit:localStorage.getItem('jw_model_audit')||'claude-opus-4-7',
+modelForChat:localStorage.getItem('jw_model_chat')||'claude-sonnet-4-6',
+modelForHighlight:localStorage.getItem('jw_model_highlight')||'claude-sonnet-4-6',
+modelForVerify:localStorage.getItem('jw_model_verify')||'claude-sonnet-4-6',
 activeTab:0,headers:[],rows:[],loading:false,
 view:'index',aiOpen:false,
 // Index
@@ -4222,7 +4227,7 @@ or to mark reviewed:
 Always explain what you're doing before the action block. Be concise and helpful.`;
 
   try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2048,system:sys,messages:S.aiMsgs.slice(-12).map(m=>({role:m.role,content:m.content}))})});
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.modelForChat,max_tokens:2048,system:sys,messages:S.aiMsgs.slice(-12).map(m=>({role:m.role,content:m.content}))})});
     if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.error?.message||'API error')}
     const data=await resp.json(),text=data.content.map(c=>c.text||'').join('');
     S.aiMsgs.push({role:'assistant',content:text});
@@ -4888,7 +4893,7 @@ ${batch.map((e,j)=>`[${j}] Entry(TAG):"${e.entryName}" Sec:${e.section} Rel:${e.
 
       const sys1=`You are a professional index editor auditing descriptions for a printed book index.\n\nRULE 1 (FOCUS) IS PARAMOUNT: Each description reflects THIS SPECIFIC TAG's role in the clip — not the clip's main topic. Tags ranked 1-4 by relevancy; even rank-1 (brief mention) tags are legitimate and their descriptions should capture the tag-specific moment. Don't flag a description just because it isn't the clip's central theme.\n\nRule priority tiers:\n${ruleChecklist}\n\nJSON array only. No preamble.`;
 
-      const resp1=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:sys1,messages:[{role:'user',content:prompt1}]})});
+      const resp1=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.modelForAudit,max_tokens:4096,system:sys1,messages:[{role:'user',content:prompt1}]})});
       if(!resp1.ok)throw new Error('API '+resp1.status);
       const d1=await resp1.json(),txt1=d1.content.map(c=>c.text||'').join('');
       let pass1;try{pass1=JSON.parse(txt1.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{const m=txt1.match(/\[[\s\S]*\]/);if(m)pass1=JSON.parse(m[0]);else throw new Error('Pass 1 parse fail')}
@@ -4920,7 +4925,7 @@ JSON array. Each: {idx, status:"ok"|"fix", suggestion:"...", reason:"..."}
 
 ${needsVerify.map((p,j)=>`[${p.idx}] Entry:"${batch[p.idx]?.entryName}" Original:"${p.original||batch[p.idx]?.desc}" Suggestion:"${p.suggestion}" Violations:${JSON.stringify(p.rule_violations||[])}`).join('\n')}`;
 
-        const resp2=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'You are a senior editor reviewing a junior editor\'s work. Be ruthless. If a suggestion is lazy (just lowercased, still casual), reject it and provide a better one. JSON array only.',messages:[{role:'user',content:prompt2}]})});
+        const resp2=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.modelForAudit,max_tokens:4096,system:'You are a senior editor reviewing a junior editor\'s work. Be ruthless. If a suggestion is lazy (just lowercased, still casual), reject it and provide a better one. JSON array only.',messages:[{role:'user',content:prompt2}]})});
 
         if(resp2.ok){
           const d2=await resp2.json(),txt2=d2.content.map(c=>c.text||'').join('');
@@ -4965,7 +4970,7 @@ Answer TRUE if ANY part of the transcript involves the tag "${e.entryName}" in a
 Answer FALSE only if there is zero connection between the description and any mention/context of "${e.entryName}" in the transcript.
 
 Answer with JSON only: {"matches": true/false, "reason": "brief explanation focused on the tag-specific connection"}`;
-            const vResp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,system:'You verify if index descriptions describe the portion of a clip relating to a specific tag. Be VERY generous — descriptions describe tag-specific content, which is often a small detail of the clip, NOT the main topic. Only say false if there is zero connection. JSON only.',messages:[{role:'user',content:vPrompt}]})});
+            const vResp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.modelForVerify,max_tokens:200,system:'You verify if index descriptions describe the portion of a clip relating to a specific tag. Be VERY generous — descriptions describe tag-specific content, which is often a small detail of the clip, NOT the main topic. Only say false if there is zero connection. JSON only.',messages:[{role:'user',content:vPrompt}]})});
             if(vResp.ok){
               const vd=await vResp.json(),vt=vd.content.map(c=>c.text||'').join('');
               try{
@@ -5491,6 +5496,19 @@ function render(force=true){
   if(scrollSave.win)window.scrollTo(0,scrollSave.win);
   // Fix idx-body scroll height
   fixIdxScroll();
+  // If render was triggered by opening/closing the clip panel, scroll the relevant row into view.
+  // This ensures the user doesn't lose their place when the layout changes.
+  if(S._scrollIntoViewKey){
+    const key=S._scrollIntoViewKey;
+    S._scrollIntoViewKey=null;
+    requestAnimationFrame(()=>{
+      const el=document.querySelector(`[data-clippanel="${CSS.escape(key)}"]`);
+      if(el){
+        // Use 'nearest' to avoid scrolling unless actually needed; the row should be in or near viewport already
+        el.scrollIntoView({behavior:'auto',block:'center'});
+      }
+    });
+  }
 }
 function fixIdxScroll(){
   const body=$('.idx-body');
@@ -6615,6 +6633,34 @@ function rSettings(){
   h+=`<button class="btn btn-sm btn-green" id="add-trans" style="margin-top:8px">+ Add Term</button>`;
   h+='</div>';
 
+  // AI Model Selection card — admin can choose which Claude model is used per task
+  h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">🤖 AI Model Selection</h4>';
+  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:12px">Choose which Claude model handles each task. Opus is the strictest at following editorial rules but more expensive. Sonnet is balanced. Haiku is fastest/cheapest.</p>';
+  const modelOpts=[
+    {id:'claude-opus-4-7',label:'Opus 4.7',hint:'Strictest, ~5x cost'},
+    {id:'claude-sonnet-4-6',label:'Sonnet 4.6',hint:'Balanced'},
+    {id:'claude-haiku-4-5-20251001',label:'Haiku 4.5',hint:'Fastest, cheapest'},
+  ];
+  const renderModelRow=(label,key,desc,recommended)=>{
+    const cur=S[key];
+    let row=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:6px 0;border-bottom:1px solid var(--bg-1)">`;
+    row+=`<div style="min-width:160px"><b style="font-size:12px">${label}</b><div style="font-size:10px;color:var(--tx-3)">${desc}</div></div>`;
+    row+=`<select data-modelsetting="${key}" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);background:var(--bg-white);border-radius:4px;font-family:var(--font)">`;
+    modelOpts.forEach(o=>{
+      const star=o.id===recommended?' ★':'';
+      row+=`<option value="${o.id}"${o.id===cur?' selected':''}>${o.label}${star} (${o.hint})</option>`;
+    });
+    row+=`</select>`;
+    row+=`</div>`;
+    return row;
+  };
+  h+=renderModelRow('Audit (single & bulk)','modelForAudit','Strict rule-checking on descriptions','claude-opus-4-7');
+  h+=renderModelRow('AI Chat','modelForChat','Sidebar chat + per-clip mini chat','claude-sonnet-4-6');
+  h+=renderModelRow('Transcript Highlight','modelForHighlight','Find tag-relevant passages','claude-sonnet-4-6');
+  h+=renderModelRow('Verify Pass','modelForVerify','Confirms suggestions match content','claude-sonnet-4-6');
+  h+=`<p style="font-size:10px;color:var(--tx-4);margin-top:8px">★ = recommended default. Changes save instantly.</p>`;
+  h+='</div>';
+
   h+=`<div class="card"><h4 style="margin-bottom:8px">Connection</h4><div style="font-size:12px;color:var(--tx-2)">Sheet: <code>${esc(S.sheetId.slice(0,30))}\u2026</code></div><div style="font-size:12px;color:var(--tx-2)">Claude: <span style="color:${S.claudeKey?'var(--green)':'var(--red)'}">${S.claudeKey?'Connected':'Not set'}</span></div></div>`;
   return h+'</div>';
 }
@@ -7323,9 +7369,18 @@ function bindAll(){
     const rowIdx=+parts.slice(lp+1);
     S.clipPanel={entryName,segType,rowIdx};
     S.notifOpen=false; // Mutually exclusive with notification sidebar
+    // Mark this row to be scrolled into view after re-render so the user doesn't lose their place
+    S._scrollIntoViewKey=`${entryName}|${segType}|${rowIdx}`;
     render();
   });
-  on('#clip-panel-close','click',()=>{S.clipPanel=null;render()});
+  on('#clip-panel-close','click',()=>{
+    // Remember which row's panel we were viewing — scroll back to it after close
+    if(S.clipPanel){
+      S._scrollIntoViewKey=`${S.clipPanel.entryName}|${S.clipPanel.segType}|${S.clipPanel.rowIdx}`;
+    }
+    S.clipPanel=null;
+    render();
+  });
   on('#clip-panel-audit','click',()=>{
     if(!S.clipPanel)return;
     const cp=S.clipPanel;
@@ -7400,7 +7455,7 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
 
     try{
       const msgs=sc.messages.map(m=>({role:m.role,content:m.content}));
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,system:sys,messages:msgs})});
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.modelForChat,max_tokens:800,system:sys,messages:msgs})});
       if(!resp.ok)throw new Error('API '+resp.status);
       const d=await resp.json(),reply=d.content.map(c=>c.text||'').join('');
       let allSuggestions=[];
@@ -8021,7 +8076,7 @@ JSON only. Return: {status:"ok"|"fix"|"generate", suggestion:"...", reason:"whic
 Entry:"${S.testEntry}" Section:${S.testSection}
 Description:"${S.testDesc||'[empty]'}"`;
       const sysPrompt='You are a strict professional index editor. Walk through every rule for this description. JSON only.';
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.modelForAudit,max_tokens:500,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
       const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
       const parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim());
       S.testResult=parsed;
@@ -8065,6 +8120,19 @@ Description:"${S.testDesc||'[empty]'}"`;
   $$('[data-transwrong]').forEach(el=>el.onblur=()=>{const i=+el.dataset.transwrong;RULES.consistency.transliteration[i].wrong=el.value.split(',').map(s=>s.trim()).filter(Boolean);saveRules()});
   $$('[data-transdel]').forEach(el=>el.onclick=()=>{const i=+el.dataset.transdel;RULES.consistency.transliteration.splice(i,1);saveRules();render()});
   on('#add-trans','click',()=>{RULES.consistency.transliteration.push({correct:'',wrong:[]});saveRules();render()});
+
+  // AI Model Selection dropdowns — save instantly to localStorage
+  $$('[data-modelsetting]').forEach(el=>{
+    el.onchange=()=>{
+      const key=el.dataset.modelsetting;
+      const val=el.value;
+      S[key]=val;
+      const lsKey={modelForAudit:'jw_model_audit',modelForChat:'jw_model_chat',modelForHighlight:'jw_model_highlight',modelForVerify:'jw_model_verify'}[key];
+      if(lsKey)localStorage.setItem(lsKey,val);
+      toast(`${key.replace('modelFor','')} model: ${val.replace('claude-','').replace('-20251001','')}`,'success');
+      console.log(`Model setting changed: ${key} = ${val}`);
+    };
+  });
 
   // Import/Export/Reset rules
   on('#export-rules','click',()=>{
@@ -8187,7 +8255,7 @@ CRITICAL: Respond with ONE JSON object only. No markdown fences. No commentary. 
 Example response format:
 {"status":"fix","suggestions":[{"text":"primary alternative","reason":"rule(s) violated + why this choice","tradeoff":"what this emphasizes vs the others"},{"text":"second alternative","reason":"why this works","tradeoff":"what this chooses differently"},{"text":"third alternative","reason":"why this works","tradeoff":"what this chooses differently"}]}`;
     const sysPrompt='You are a strict professional index editor. Generate 3 distinct alternatives with trade-offs when changes are needed. Respond with raw JSON only — no markdown, no prose, no code fences. Start your response with { and nothing else.';
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.modelForAudit,max_tokens:1024,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
     if(!resp.ok)throw new Error('API '+resp.status);
     const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
     // Robust JSON extraction: try direct parse, then strip markdown, then extract first {...} block
@@ -8351,7 +8419,7 @@ JSON array. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", reason:"
 
 ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,800)}"`).join('\n\n')}`;
 
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:`Ruthless professional index editor. Walk through EVERY rule per description.\n\nChecklist:\n${ruleChecklist}\n\nJSON array only.`,messages:[{role:'user',content:prompt}]})});
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.modelForAudit,max_tokens:4096,system:`Ruthless professional index editor. Walk through EVERY rule per description.\n\nChecklist:\n${ruleChecklist}\n\nJSON array only.`,messages:[{role:'user',content:prompt}]})});
       if(!resp.ok)throw new Error('API '+resp.status);
       const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
       let parsed;try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{const m2=txt.match(/\[[\s\S]*\]/);if(m2)parsed=JSON.parse(m2[0]);else throw new Error('Parse fail')}
@@ -8452,7 +8520,7 @@ JSON only, no preamble.`;
   const resp=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
     headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,messages:[{role:'user',content:prompt}]})
+    body:JSON.stringify({model:S.modelForHighlight,max_tokens:800,messages:[{role:'user',content:prompt}]})
   });
   if(!resp.ok)throw new Error('API '+resp.status);
   const data=await resp.json();
@@ -8526,7 +8594,7 @@ JSON array only. Each: {idx, status:"ok"|"fix"|"generate", suggestion:"...", rea
 
 ${batch.map((e,j)=>`[${j}] Entry:"${e.entryName}" Sec:${e.section} Rel:${e.rel}\n  Desc:"${e.desc||'[empty]'}"\n  Transcript:"${(e.transcript||'').slice(0,800)}"`).join('\n\n')}`;
       const sysPrompt='You are a strict professional index editor. For EACH description, walk through EVERY rule. Respond with JSON array only.';
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.modelForAudit,max_tokens:4096,system:sysPrompt,messages:[{role:'user',content:prompt}]})});
       if(!resp.ok)throw new Error('API '+resp.status);
       const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
       let parsed;try{parsed=JSON.parse(txt.replace(/```json?\s*/g,'').replace(/```/g,'').trim())}catch{const m2=txt.match(/\[[\s\S]*\]/);if(m2)parsed=JSON.parse(m2[0]);else throw new Error('Parse fail')}
@@ -8673,7 +8741,7 @@ If no issues found, return empty array [].
 DESCRIPTIONS:
 ${batch.map((d,j)=>`[${j}] ${d.section} > "${d.entry}": "${d.desc}"`).join('\n')}`;
 
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4096,system:'You are a meticulous consistency checker for a book index. Find inconsistencies across descriptions. JSON array only.',messages:[{role:'user',content:prompt}]})});
+      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':S.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:S.modelForAudit,max_tokens:4096,system:'You are a meticulous consistency checker for a book index. Find inconsistencies across descriptions. JSON array only.',messages:[{role:'user',content:prompt}]})});
       if(!resp.ok)throw new Error('API '+resp.status);
       const d=await resp.json(),txt=d.content.map(c=>c.text||'').join('');
       let parsed;
