@@ -524,6 +524,32 @@
   }
   .rule-card-actions .rule-action-btn.delete:hover { background: var(--red-light); color: var(--red); }
 
+  /* Subtitle card (Short Film only) */
+  .subtitle-card {
+    background: var(--panel); border-radius: var(--radius);
+    padding: 10px 14px; box-shadow: var(--shadow-clay);
+    border-left: 3px solid var(--accent);
+  }
+  .subtitle-card.subtitle-missing {
+    background: linear-gradient(180deg, #FBF1E0, #F8EAD3);
+    border-left: 3px solid #D89C5B;
+  }
+  .subtitle-flag-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #D89C5B; color: #fff;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .subtitle-input {
+    flex: 1; min-width: 200px;
+    font-family: 'Lora', 'Source Serif Pro', Georgia, var(--font-serif);
+    font-size: 14.5px; color: #1F1A12;
+    border: none; outline: none; padding: 7px 12px;
+    border-radius: var(--radius); background: #FAF6EC;
+    box-shadow: var(--shadow-inner); transition: box-shadow 0.18s;
+  }
+  .subtitle-input:focus { box-shadow: var(--shadow-inner), 0 0 0 3px var(--accent-soft); }
+
   /* Transcript toggle (in clip detail AI box) */
   .transcript-toggle { transition: all 0.2s; }
   .transcript-toggle:hover { background: var(--bg3); color: var(--tx); }
@@ -1261,6 +1287,7 @@ const CONFIG = {
     THUMBNAIL: 4,     // E
     KEYWORDS: 6,      // G
     DESCRIPTION_H: 7, // H - primary description column
+    SUBTITLE: 8,      // I - Short Film subtitle (under the title)
     TITLE: 9,         // J - clip title
     FILM_ID: 12,      // M - produced/film ID for full-film URL
     FILM_NAME: 13,    // N - parent film name (Film Chapter)
@@ -1864,7 +1891,12 @@ const REVIEW_COLS = { ID: 0, STATUS: 1, ORIGINAL_BACKUP: 2, FLAG_REASON: 3, APPR
 
 async function ensureReviewTab(typeCfg) {
   const tabName = typeCfg.reviewTab;
-  const fullHeader = ['clip_id','status','original_backup','flag_reason','approved_by','approved_at','draft_text','chat_history','desc_source_col','draft_model','draft_used_transcript'];
+  const baseHeader = ['clip_id','status','original_backup','flag_reason','approved_by','approved_at','draft_text','chat_history','desc_source_col','draft_model','draft_used_transcript'];
+  // Short Film also tracks a subtitle (column I in the main sheet)
+  const fullHeader = typeCfg.key === 'short_film'
+    ? [...baseHeader, 'subtitle_original_backup', 'subtitle_current']
+    : baseHeader;
+  const lastCol = typeCfg.key === 'short_film' ? 'M' : 'K';
   const meta = await getSheetMeta();
   const exists = meta.sheets?.some(s => s.properties.title === tabName);
   if (!exists) {
@@ -1874,14 +1906,14 @@ async function ensureReviewTab(typeCfg) {
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName } } }] })
     });
     invalidateSheetMeta();
-    await sheetsSet(`'${tabName}'!A1:K1`, [fullHeader]);
+    await sheetsSet(`'${tabName}'!A1:${lastCol}1`, [fullHeader]);
   } else {
-    // Migration: ensure all columns exist (handles older 9-column tabs)
+    // Migration: ensure all columns exist (handles older 9- or 11-column tabs)
     try {
-      const hdr = await sheetsGet(`'${tabName}'!A1:K1`);
+      const hdr = await sheetsGet(`'${tabName}'!A1:${lastCol}1`);
       const row = hdr.values?.[0] || [];
-      if (row.length < 11) {
-        await sheetsSet(`'${tabName}'!A1:K1`, [fullHeader]);
+      if (row.length < fullHeader.length) {
+        await sheetsSet(`'${tabName}'!A1:${lastCol}1`, [fullHeader]);
       }
     } catch {}
   }
@@ -1892,8 +1924,10 @@ async function loadReviewData(typeCfg) {
   if (!S.byType[typeCfg.key]) S.byType[typeCfg.key] = { clips: [], reviewData: {}, rulesArr: [] };
   const bucket = S.byType[typeCfg.key];
   bucket.reviewData = {};
+  const isShortFilm = typeCfg.key === 'short_film';
+  const range = isShortFilm ? `'${typeCfg.reviewTab}'!A:M` : `'${typeCfg.reviewTab}'!A:K`;
   try {
-    const data = await sheetsGet(`'${typeCfg.reviewTab}'!A:K`);
+    const data = await sheetsGet(range);
     const rows = data.values || [];
     rows.slice(1).forEach(row => {
       if (!row[0]) return;
@@ -1908,11 +1942,15 @@ async function loadReviewData(typeCfg) {
         descSourceCol: row[8] || '',
         draftModel: row[9] || '',
         draftUsedTranscript: row[10] === 'TRUE',
+        subtitleOriginalBackup: isShortFilm ? (row[11] || '') : '',
+        subtitleCurrent: isShortFilm ? (row[12] || '') : '',
       };
       const id = row[0];
       const clip = bucket.clips?.find(c => String(c._rowNum) === id);
       if (clip && row[6]) clip._draft = row[6];
       if (clip && row[8]) clip.descSourceCol = row[8];
+      // For short films: if there's a stored subtitleCurrent (most recent saved), use it as the live subtitle
+      if (clip && isShortFilm && row[12]) clip.subtitle = row[12];
       if (row[7]) {
         try { S.chatHistory[parseInt(id)] = JSON.parse(row[7]); } catch {}
       }
@@ -1927,13 +1965,14 @@ async function saveReviewRow(clip) {
   const bucket = S.byType[typeCfg.key];
   const id = String(clip._rowNum);
   const rd = bucket.reviewData[id] || {};
+  const isShortFilm = typeCfg.key === 'short_film';
   const data = await sheetsGet(`'${typeCfg.reviewTab}'!A:A`);
   const rows = data.values || [];
   let sheetRow = -1;
   rows.forEach((r, i) => { if (r[0] === id) sheetRow = i + 1; });
   const draftText = rd.draftText || '';
   const chatHist = S.chatHistory[parseInt(id)] ? JSON.stringify(S.chatHistory[parseInt(id)]) : '';
-  const values = [[
+  const baseValues = [
     id,
     rd.status || 'unprocessed',
     rd.originalBackup || '',
@@ -1945,12 +1984,16 @@ async function saveReviewRow(clip) {
     rd.descSourceCol || clip.descSourceCol || 'H',
     rd.draftModel || '',
     rd.draftUsedTranscript ? 'TRUE' : 'FALSE',
-  ]];
+  ];
+  const values = isShortFilm
+    ? [[...baseValues, rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '']]
+    : [baseValues];
+  const lastCol = isShortFilm ? 'M' : 'K';
   if (sheetRow > 0) {
-    await sheetsSet(`'${typeCfg.reviewTab}'!A${sheetRow}:K${sheetRow}`, values);
+    await sheetsSet(`'${typeCfg.reviewTab}'!A${sheetRow}:${lastCol}${sheetRow}`, values);
   } else {
     const nextRow = rows.length + 1;
-    await sheetsSet(`'${typeCfg.reviewTab}'!A${nextRow}:K${nextRow}`, values);
+    await sheetsSet(`'${typeCfg.reviewTab}'!A${nextRow}:${lastCol}${nextRow}`, values);
   }
 }
 
@@ -2337,7 +2380,7 @@ async function loadAllData() {
       // Short Film filter: skip clips that are actually intros to a Sicha (column J Title contains "Sicha intro")
       const titleStr = (row[CONFIG.COL.TITLE] || '').toString();
       if (tCfg.key === 'short_film' && /sicha\s*intro/i.test(titleStr)) return;
-      const desc = getDescription(row);
+      const desc = getDescription(row, tCfg.key);
       const clip = {
         _rowNum: i + 2,
         typeKey: tCfg.key,
@@ -2354,6 +2397,10 @@ async function loadAllData() {
         rewrite: '',
       };
       if (tCfg.hasFilmName) clip.filmName = filmName;
+      // Short Film: capture the subtitle (column I)
+      if (tCfg.key === 'short_film') {
+        clip.subtitle = (row[CONFIG.COL.SUBTITLE] || '').toString().trim();
+      }
       S.byType[tCfg.key].clips.push(clip);
     });
 
@@ -2459,14 +2506,22 @@ function formatDuration(ms) {
 }
 
 // Pull description with fallback H → A → Y, also remember which column it came from.
-function getDescription(row) {
+function getDescription(row, typeKey) {
   const h = row[CONFIG.COL.DESCRIPTION_H] || '';
-  if (h.trim()) return { text: h, sourceCol: 'H' };
   const a = row[CONFIG.COL.DESCRIPTION_A] || '';
-  if (a.trim()) return { text: a, sourceCol: 'A' };
   const y = row[CONFIG.COL.DESCRIPTION_Y] || '';
+  // Short Film clips: column A is the source of truth (per JEM editorial workflow)
+  if (typeKey === 'short_film') {
+    if (a.trim()) return { text: a, sourceCol: 'A' };
+    if (h.trim()) return { text: h, sourceCol: 'H' };
+    if (y.trim()) return { text: y, sourceCol: 'Y' };
+    return { text: '', sourceCol: 'A' }; // default to A for short films
+  }
+  // All other types: H first, then A, then Y
+  if (h.trim()) return { text: h, sourceCol: 'H' };
+  if (a.trim()) return { text: a, sourceCol: 'A' };
   if (y.trim()) return { text: y, sourceCol: 'Y' };
-  return { text: '', sourceCol: 'H' }; // default to H if all empty
+  return { text: '', sourceCol: 'H' };
 }
 
 // Spreadsheet column letter for a clip's description
@@ -2809,6 +2864,26 @@ function renderDetail() {
       <div class="detail-meta" style="flex:1">
         ${clip.filmName ? `<div style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px;font-weight:600">${esc(clip.filmName)}</div>` : ''}
         <div class="detail-title" style="font-size:20px;line-height:1.25;margin-bottom:8px">${esc(clip.title)}</div>
+        ${clip.typeKey === 'short_film' ? (() => {
+          const hasSub = !!(clip.subtitle && clip.subtitle.trim());
+          const hasBackup = !!getReviewField(clip, 'subtitleOriginalBackup');
+          return `<div class="subtitle-card ${hasSub ? '' : 'subtitle-missing'}" style="margin-bottom:12px">
+            ${hasSub
+              ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-size:10px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:1.5px;flex-shrink:0">Subtitle</span>
+                  <input type="text" id="subtitleInput_${clip._rowNum}" class="subtitle-input" value="${esc(clip.subtitle)}" oninput="onSubtitleInput(${clip._rowNum})" placeholder="Subtitle">
+                  <button id="subtitleSaveBtn_${clip._rowNum}" class="btn btn-sm btn-primary" onclick="saveSubtitle(${clip._rowNum})" style="display:none">💾 Save</button>
+                  ${hasBackup ? `<button class="btn btn-sm" onclick="revertSubtitle(${clip._rowNum})" title="Restore original subtitle from when the clip was first loaded">↩ Revert</button>` : ''}
+                </div>`
+              : `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span class="subtitle-flag-icon" title="No subtitle in column I — please add one">⚠</span>
+                  <span style="font-size:10px;font-weight:600;color:#A86A2C;text-transform:uppercase;letter-spacing:1.5px">Subtitle missing</span>
+                  <input type="text" id="subtitleInput_${clip._rowNum}" class="subtitle-input" value="" oninput="onSubtitleInput(${clip._rowNum})" placeholder="Add a subtitle for this short film…">
+                  <button id="subtitleSaveBtn_${clip._rowNum}" class="btn btn-sm btn-primary" onclick="saveSubtitle(${clip._rowNum})" style="display:none">💾 Save</button>
+                </div>`
+            }
+          </div>`;
+        })() : ''}
         <div class="detail-meta-row" style="margin-bottom:10px">
           ${formattedDate ? `<span class="detail-meta-item" style="font-size:13px;color:var(--tx2)">${esc(formattedDate)}</span>` : ''}
           ${clip.programNum ? `<span class="detail-meta-item">LT ${esc(clip.programNum)}</span>` : ''}
@@ -3555,6 +3630,83 @@ async function deleteReviewRow(clip) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: sheetRow - 1, endIndex: sheetRow } } }] })
   });
+}
+
+// ══════════════════════════════════════════════
+// SUBTITLE (Short Film only — column I in main sheet)
+// ══════════════════════════════════════════════
+
+// Save the user-edited subtitle: write to main sheet column I, back up the
+// original on first save, mirror current value to review tab.
+async function saveSubtitle(rowNum) {
+  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  if (clip.typeKey !== 'short_film') return;
+  const input = document.getElementById('subtitleInput_' + rowNum);
+  const newVal = (input?.value || '').trim();
+  if (!newVal) {
+    showToast('Subtitle cannot be empty — use Revert to restore original', 'error');
+    return;
+  }
+  showLoading('Saving subtitle…');
+  try {
+    // Save the original to backup if this is the first edit
+    const existingBackup = getReviewField(clip, 'subtitleOriginalBackup');
+    if (!existingBackup) {
+      // The "original" is whatever was in column I when we first loaded the clip
+      // (or what's currently in the subtitleCurrent if a prior session saved one)
+      const existingCurrent = getReviewField(clip, 'subtitleCurrent');
+      const originalToBackup = existingCurrent || clip.subtitle || '';
+      setReviewField(clip, 'subtitleOriginalBackup', originalToBackup);
+    }
+    setReviewField(clip, 'subtitleCurrent', newVal);
+    // Write back to main sheet column I
+    await sheetsSet(`'${CONFIG.MAIN_TAB}'!I${rowNum}:I${rowNum}`, [[newVal]]);
+    await saveReviewRow(clip);
+    clip.subtitle = newVal;
+    hideLoading();
+    renderDetail();
+    showToast('Subtitle saved ✓', 'success');
+  } catch(e) { hideLoading(); showToast('Save failed: ' + e.message, 'error'); }
+}
+
+// Revert subtitle: restore original to main sheet, clear subtitle records
+async function revertSubtitle(rowNum) {
+  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  if (clip.typeKey !== 'short_film') return;
+  const backup = getReviewField(clip, 'subtitleOriginalBackup');
+  if (!backup) {
+    showToast('No original subtitle backup found — nothing to revert to', 'error');
+    return;
+  }
+  if (!await jemConfirm('Revert subtitle to original?<br><br><span style="color:var(--tx3);font-size:12px">This will restore the original subtitle to the main sheet and clear the subtitle edit history for this clip.</span>', { danger: true, okLabel: 'Revert' })) return;
+  showLoading('Reverting subtitle…');
+  try {
+    await sheetsSet(`'${CONFIG.MAIN_TAB}'!I${rowNum}:I${rowNum}`, [[backup]]);
+    setReviewField(clip, 'subtitleOriginalBackup', '');
+    setReviewField(clip, 'subtitleCurrent', '');
+    await saveReviewRow(clip);
+    clip.subtitle = backup;
+    hideLoading();
+    renderDetail();
+    showToast('Subtitle reverted to original', 'success');
+  } catch(e) { hideLoading(); showToast('Revert failed: ' + e.message, 'error'); }
+}
+
+// Detect changes in the subtitle input to enable Save/Revert appropriately
+function onSubtitleInput(rowNum) {
+  const input = document.getElementById('subtitleInput_' + rowNum);
+  const saveBtn = document.getElementById('subtitleSaveBtn_' + rowNum);
+  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  if (!input || !saveBtn || !clip) return;
+  const current = clip.subtitle || '';
+  const v = (input.value || '').trim();
+  if (v && v !== current) {
+    saveBtn.style.display = 'inline-block';
+  } else {
+    saveBtn.style.display = 'none';
+  }
 }
 
 // ══════════════════════════════════════════════
