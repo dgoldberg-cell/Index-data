@@ -1108,7 +1108,7 @@
         </div>
         <div class="dash-actions" style="flex-direction:column;align-items:flex-end;gap:10px">
           <button class="btn btn-primary" onclick="selectTypeView(S.activeType,'queue')">▶ Continue in Queue</button>
-          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--tx3);background:var(--panel);padding:8px 14px;border-radius:var(--radius-pill);box-shadow:var(--shadow-clay)">
+          <div id="minWcWrap" style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--tx3);background:var(--panel);padding:8px 14px;border-radius:var(--radius-pill);box-shadow:var(--shadow-clay)">
             <label for="minWcInput" title="Drafts under this word count are auto-flagged. Set to 0 to disable.">Auto-flag if under</label>
             <input id="minWcInput" type="number" min="0" step="5" style="width:54px;padding:4px 8px;border:none;border-radius:var(--radius-pill);background:var(--bg2);box-shadow:var(--shadow-inner);font-family:var(--font-sans);font-size:11px;text-align:center;color:var(--tx)" oninput="onMinWcChange(this.value)">
             <span>words</span>
@@ -3283,8 +3283,10 @@ Do not include any other text.`;
   const draft = await callAI([{ role: 'user', content: prompt }], { temperature: 1.0 });
   const cleanedDraft = smartenQuotes(draft);
 
-  // Post-generation word count check: flag drafts that are under the configured minimum
-  const minWords = getMinWordCount(clip.typeKey);
+  // Post-generation word count check: flag drafts that are under the configured minimum.
+  // Currently scoped to sichos only — other types have varied source content where short
+  // outputs can still be valid, so we don't auto-flag them by length.
+  const minWords = clip.typeKey === 'sichos' ? getMinWordCount(clip.typeKey) : 0;
   const wc = wordCount(cleanedDraft);
   if (minWords > 0 && wc < minWords) {
     return {
@@ -4779,6 +4781,9 @@ function renderDashboard() {
   // Populate the min word count input for this type
   const minWcInput = document.getElementById('minWcInput');
   if (minWcInput) minWcInput.value = getMinWordCount(typeCfg.key);
+  // Auto-flag-by-length is currently only enforced for Addresses (Sichos) — hide the control for other types
+  const minWcWrap = document.getElementById('minWcWrap');
+  if (minWcWrap) minWcWrap.style.display = typeCfg.key === 'sichos' ? 'flex' : 'none';
   // Count by status
   const counts = { unprocessed: 0, flagged: 0, draft: 0, approved: 0 };
   activeBucket().clips.forEach(c => { counts[getStatus(c)] = (counts[getStatus(c)] || 0) + 1; });
