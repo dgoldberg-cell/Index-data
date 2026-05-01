@@ -2334,6 +2334,9 @@ async function loadAllData() {
       // Film Chapter filter: only include if the parent film name is in our allowed list
       const filmName = (row[CONFIG.COL.FILM_NAME] || '').trim();
       if (tCfg.filterByFilms && !ALLOWED_FILMS.has(filmName)) return;
+      // Short Film filter: skip clips that are actually intros to a Sicha (column J Title contains "Sicha intro")
+      const titleStr = (row[CONFIG.COL.TITLE] || '').toString();
+      if (tCfg.key === 'short_film' && /sicha\s*intro/i.test(titleStr)) return;
       const desc = getDescription(row);
       const clip = {
         _rowNum: i + 2,
