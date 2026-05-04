@@ -373,7 +373,7 @@
   /* Cards — claymorphic */
   .card {
     background: var(--panel); border-radius: var(--radius2);
-    overflow: hidden; box-shadow: var(--shadow-clay);
+    box-shadow: var(--shadow-clay);
   }
   .card-header {
     padding: 14px 22px; background: transparent;
@@ -389,6 +389,9 @@
     background: #FAF6EC; border-radius: var(--radius); padding: 18px 20px;
     box-shadow: var(--shadow-inner);
     letter-spacing: 0.005em;
+    min-height: 60px;
+    white-space: pre-wrap; word-wrap: break-word;
+    display: block;
   }
   .draft-textarea {
     width: 100%; min-height: 80px;
@@ -608,6 +611,13 @@
   .audit-stat-value { font-family: var(--font-serif); font-size: 26px; color: var(--accent2); margin-top: 4px; font-weight: 500; }
   .audit-stats-row { display: flex; gap: 22px; flex-wrap: wrap; }
   .audit-stats-subtitle { font-size: 11px; font-weight: 600; color: var(--tx3); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px; }
+  .audit-spinner {
+    width: 24px; height: 24px; border-radius: 50%;
+    border: 3px solid var(--bg2); border-top-color: var(--accent);
+    animation: audit-spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes audit-spin { to { transform: rotate(360deg); } }
 
   /* Subtitle card (Short Film only) */
   .subtitle-card {
@@ -3137,13 +3147,11 @@ function renderAuditCard(clip, bucket) {
   if (!rd || (!rd.auditOverallScore && !rd.auditViolations?.length)) {
     // Not yet audited — show a simple invitation
     return `<div class="card audit-card audit-unaudited">
-      <div class="card-header">🔍 Audit
-        <span style="font-size:10px;color:var(--tx4);font-weight:normal;margin-left:6px">Two-stage AI audit pipeline (Stage 1: score + checks → Stage 2: rewrite if flagged)</span>
-      </div>
-      <div class="card-body" style="padding:18px 22px;font-size:13px;color:var(--tx3)">
-        Not yet audited. Click <strong>🔍 Run Audit</strong> in the AI box header above to score this summary and (if needed) generate a Stage 2 rewrite.
-        <br><br>
-        Current threshold: <strong>${getAuditThreshold().toFixed(1)}</strong>
+      <div class="card-body" style="padding:12px 18px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--tx3)">
+        <span style="font-size:14px">🔍</span>
+        <span>Not yet audited.</span>
+        <span style="color:var(--tx4)">Click <strong style="color:var(--tx3)">🔍 Run Audit</strong> above to score this summary.</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--tx4)">Threshold ${getAuditThreshold().toFixed(1)}</span>
       </div>
     </div>`;
   }
@@ -3677,7 +3685,7 @@ function computeAuditFlag(clip) {
 // Run the full audit flow on a single clip (Stage 1, optionally Stage 2)
 async function runAudit(clip) {
   if (!clip || clip.typeKey !== 'short_film') return;
-  showLoading('Running audit (Stage 1)…');
+  setAuditInlineProgress(clip._rowNum, 'Running audit (Stage 1)…');
   try {
     const { violations, scores } = await runStage1Audit(clip);
     const threshold = getAuditThreshold();
@@ -3692,27 +3700,53 @@ async function runAudit(clip) {
       setReviewField(clip, 'auditRewrite', '');
       setReviewField(clip, 'auditTooltip', '');
       await saveReviewRow(clip);
-      hideLoading();
+      clearAuditInlineProgress();
       renderDetail();
       renderQueue();
       showToast(`Audit passed — score ${scores.overall.toFixed(1)} ✓`, 'success');
       return;
     }
     // Flagged — proceed to Stage 2
-    showLoading('Stage 1 flagged — running Stage 2 rewrite…');
+    setAuditInlineProgress(clip._rowNum, 'Stage 1 flagged — running Stage 2 rewrite…');
     const { rewrite, tooltip, issuesAddressed } = await runStage2Rewrite(clip, violations, scores);
     setReviewField(clip, 'auditStatus', 'flagged-pending-review');
     setReviewField(clip, 'auditRewrite', rewrite);
     setReviewField(clip, 'auditTooltip', tooltip);
     await saveReviewRow(clip);
-    hideLoading();
+    clearAuditInlineProgress();
     renderDetail();
     renderQueue();
     showToast(`Stage 2 rewrite ready — review the diff`, 'success');
   } catch(e) {
-    hideLoading();
+    clearAuditInlineProgress();
     showToast('Audit failed: ' + e.message, 'error');
   }
+}
+
+// Inline progress indicator that replaces the audit card body during a run.
+// Way less intrusive than a fullscreen overlay.
+function setAuditInlineProgress(rowNum, message) {
+  // Find the audit card on the current detail panel
+  const auditCards = document.querySelectorAll('.audit-card');
+  if (!auditCards.length) return;
+  const card = auditCards[0];
+  const body = card.querySelector('.card-body');
+  if (!body) return;
+  // Remember the original innerHTML so we can restore on error
+  if (!card.dataset.originalHtml) card.dataset.originalHtml = body.innerHTML;
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 0">
+      <div class="audit-spinner"></div>
+      <div style="flex:1">
+        <div style="font-size:13px;color:var(--tx2);font-weight:500">${esc(message)}</div>
+        <div style="font-size:11px;color:var(--tx4);margin-top:3px">This usually takes 5–15 seconds</div>
+      </div>
+    </div>
+  `;
+}
+
+function clearAuditInlineProgress() {
+  document.querySelectorAll('.audit-card').forEach(c => { delete c.dataset.originalHtml; });
 }
 
 // User accepts the Stage 2 rewrite — apply it as the draft (status: draft) to be approved separately
@@ -3766,7 +3800,7 @@ async function forceAuditRewrite(rowNum) {
   const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
   if (!clip) return;
   const rd = activeBucket().reviewData[String(rowNum)];
-  showLoading('Forcing Stage 2 rewrite…');
+  setAuditInlineProgress(rowNum, 'Forcing Stage 2 rewrite…');
   try {
     const violations = rd?.auditViolations || [];
     const scores = rd?.auditSubScores || { overall: 0, promo_level: 5, voice_quality: 5, opener_strength: 5, documentary_feel: 5 };
@@ -3777,11 +3811,11 @@ async function forceAuditRewrite(rowNum) {
     setReviewField(clip, 'auditTooltip', tooltip);
     if (!rd?.auditRunAt) setReviewField(clip, 'auditRunAt', new Date().toISOString());
     await saveReviewRow(clip);
-    hideLoading();
+    clearAuditInlineProgress();
     renderDetail();
     renderQueue();
     showToast('Forced rewrite ready — review the diff', 'success');
-  } catch(e) { hideLoading(); showToast('Force rewrite failed: ' + e.message, 'error'); }
+  } catch(e) { clearAuditInlineProgress(); showToast('Force rewrite failed: ' + e.message, 'error'); }
 }
 
 // Re-evaluate flagged status across all audited clips when threshold changes.
