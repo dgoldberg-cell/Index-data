@@ -2821,7 +2821,7 @@ function renderQueue() {
       : `<div class="queue-item-thumb-placeholder">🎬</div>`;
     const preview = (clip.rewrite || clip.description || '').substring(0, 80);
     const dur = formatDuration(clip.durationMs);
-    return `<div class="queue-item ${S.selectedIdx === clip._rowNum ? 'selected' : ''}" onclick="selectClip(${clip._rowNum})">
+    return `<div class="queue-item ${S.selectedIdx === clip._rowNum ? 'selected' : ''}" onclick="selectClip(${clip._rowNum}, event)">
       <input type="checkbox" class="queue-item-cb" data-row="${clip._rowNum}" onclick="event.stopPropagation()" onchange="updateBatchBtn()">
       ${thumbHTML}
       <div class="queue-item-body">
@@ -2902,7 +2902,15 @@ function updateMasterSelectState() {
 
 function updateBatchBtn() {
   const checked = document.querySelectorAll('.queue-item-cb:checked').length;
-  document.getElementById('batchBtn').textContent = checked > 0 ? `▶ Run AI on ${checked} Selected` : '▶ Run AI on Selected';
+  const btn = document.getElementById('batchBtn');
+  if (!btn) return;
+  // Short Film batch action is "Run Audit"; everywhere else it's "Run AI"
+  const isAudit = S.activeType === 'short_film';
+  const action = isAudit ? '🔍 Run Audit' : '▶ Run AI';
+  btn.textContent = checked > 0 ? `${action} on ${checked} Selected` : `${action} on Selected`;
+  // Hide transcript toggle for short_film batch (audit always uses transcript)
+  const transcriptToggle = document.getElementById('batchTranscriptToggle');
+  if (transcriptToggle) transcriptToggle.style.display = isAudit ? 'none' : 'flex';
   updateMasterSelectState();
 }
 
@@ -2917,10 +2925,58 @@ function updateAttentionCount() {
 // ══════════════════════════════════════════════
 // DETAIL PANEL
 // ══════════════════════════════════════════════
-function selectClip(rowNum) {
+// Anchor for shift-click range selection — last clip whose checkbox was toggled.
+// Shift+click on another clip will toggle every clip in the visible range from the anchor.
+let _shiftAnchorRow = null;
+
+function selectClip(rowNum, event) {
+  // Shift+click on a queue bubble: extend checkbox selection from last anchor to clicked
+  if (event && event.shiftKey) {
+    event.preventDefault();
+    if (window.getSelection) try { window.getSelection().removeAllRanges(); } catch {}
+    toggleRangeSelection(rowNum);
+    return;
+  }
   S.selectedIdx = rowNum;
+  // Remember this row as the anchor for the next shift-click
+  _shiftAnchorRow = rowNum;
   renderQueue();
   renderDetail();
+}
+
+// Toggle every visible queue item between the shift anchor and the clicked clip.
+// If no anchor is set yet, the clicked clip becomes the anchor and is checked.
+function toggleRangeSelection(rowNum) {
+  const items = [...document.querySelectorAll('.queue-item-cb')];
+  if (!items.length) return;
+  // No anchor → just check this one and set as anchor
+  if (_shiftAnchorRow == null) {
+    const cb = items.find(c => parseInt(c.dataset.row) === rowNum);
+    if (cb) { cb.checked = !cb.checked; }
+    _shiftAnchorRow = rowNum;
+    updateBatchBtn();
+    return;
+  }
+  // Find the visual indices of anchor and target
+  const anchorIdx = items.findIndex(c => parseInt(c.dataset.row) === _shiftAnchorRow);
+  const targetIdx = items.findIndex(c => parseInt(c.dataset.row) === rowNum);
+  if (anchorIdx === -1 || targetIdx === -1) {
+    // Anchor is off-screen / on a different page — fall back to single check
+    const cb = items.find(c => parseInt(c.dataset.row) === rowNum);
+    if (cb) { cb.checked = !cb.checked; }
+    _shiftAnchorRow = rowNum;
+    updateBatchBtn();
+    return;
+  }
+  const lo = Math.min(anchorIdx, targetIdx);
+  const hi = Math.max(anchorIdx, targetIdx);
+  // Decide whether we're checking or unchecking based on the target's current state
+  const targetCb = items[targetIdx];
+  const checkAll = !targetCb.checked;
+  for (let i = lo; i <= hi; i++) {
+    items[i].checked = checkAll;
+  }
+  updateBatchBtn();
 }
 
 // Navigate to the next/previous clip in the queue (respecting current filter+search+sort)
@@ -4237,6 +4293,10 @@ async function runBatch() {
   if (S.batchRunning) return;
   const checked = [...document.querySelectorAll('.queue-item-cb:checked')].map(cb => parseInt(cb.dataset.row));
   if (!checked.length) { showToast('Select clips first'); return; }
+  // Short Film batch button runs Audit (Stage 1 + Stage 2 if flagged) instead of Generate
+  if (S.activeType === 'short_film') {
+    return runBatchAudit(checked);
+  }
   S.batchRunning = true;
   document.getElementById('batchProgress').style.display = 'block';
 
@@ -4283,6 +4343,59 @@ async function runBatch() {
   document.getElementById('progressLabel').textContent = `Done — ${drafted} drafted, ${flagged} flagged`;
   S.batchRunning = false;
   showToast(`Batch complete: ${drafted} drafted, ${flagged} flagged`, 'success');
+  setTimeout(() => { document.getElementById('batchProgress').style.display = 'none'; }, 4000);
+}
+
+// Run the two-stage audit pipeline on every selected clip (Short Film only).
+// Sequential (one at a time) — could be parallelized but the API rate limits
+// + sheet-write throttling already in place make sequential safer.
+async function runBatchAudit(checked) {
+  S.batchRunning = true;
+  document.getElementById('batchProgress').style.display = 'block';
+  let done = 0, passed = 0, flagged = 0, errors = 0;
+  for (const rowNum of checked) {
+    const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+    if (!clip) { done++; continue; }
+    document.getElementById('progressLabel').textContent = `Auditing ${done+1}/${checked.length} — ${clip.title.substring(0,40)}…`;
+    document.getElementById('progressFill').style.width = ((done/checked.length)*100) + '%';
+    try {
+      // runAudit handles Stage 1, decides flagged/passed, runs Stage 2 if needed,
+      // and saves to sheet — but we don't want it to render or toast for each clip
+      // in a batch. Inline the logic with batch-friendly side effects.
+      const { violations, scores } = await runStage1Audit(clip);
+      const threshold = getAuditThreshold();
+      const isFlagged = violations.length > 0 || scores.overall < threshold;
+      setReviewField(clip, 'auditOverallScore', scores.overall);
+      setReviewField(clip, 'auditSubScores', scores);
+      setReviewField(clip, 'auditViolations', violations);
+      setReviewField(clip, 'auditThresholdAtRun', threshold);
+      setReviewField(clip, 'auditRunAt', new Date().toISOString());
+      if (!isFlagged) {
+        setReviewField(clip, 'auditStatus', 'passed');
+        setReviewField(clip, 'auditRewrite', '');
+        setReviewField(clip, 'auditTooltip', '');
+        passed++;
+      } else {
+        const { rewrite, tooltip } = await runStage2Rewrite(clip, violations, scores);
+        setReviewField(clip, 'auditStatus', 'flagged-pending-review');
+        setReviewField(clip, 'auditRewrite', rewrite);
+        setReviewField(clip, 'auditTooltip', tooltip);
+        flagged++;
+      }
+      await saveReviewRow(clip);
+    } catch(e) {
+      console.error('Batch audit error on row', rowNum, e);
+      errors++;
+    }
+    done++;
+    renderQueue();
+  }
+  document.getElementById('progressFill').style.width = '100%';
+  document.getElementById('progressLabel').textContent = `Done — ${passed} passed, ${flagged} flagged${errors ? ', ' + errors + ' errors' : ''}`;
+  S.batchRunning = false;
+  if (S.selectedIdx) renderDetail();
+  renderAuditStats();
+  showToast(`Batch audit complete: ${passed} passed, ${flagged} flagged${errors ? ', ' + errors + ' errors' : ''}`, errors > 0 ? 'error' : 'success');
   setTimeout(() => { document.getElementById('batchProgress').style.display = 'none'; }, 4000);
 }
 
@@ -5903,6 +6016,7 @@ function switchView(view, btn, opts) {
     document.getElementById('queueView').style.display = 'flex';
     renderQueue();
     applyQueueCollapsed();
+    updateBatchBtn();
     if (S.selectedIdx) renderDetail(); else { document.getElementById('detailEmpty').style.display = 'flex'; document.getElementById('detailContent').style.display = 'none'; }
   }
   else if (view === 'attention') { document.getElementById('attentionView').style.display = 'block'; renderAttentionView(); }
@@ -6015,14 +6129,34 @@ function showToast(msg, type) {
 // INIT
 // ══════════════════════════════════════════════
 // Keyboard shortcuts for queue navigation
+//   ↓ / →  / j   navigate to next clip
+//   ↑ / ←  / k   navigate to previous clip
+//   Shift+↓ / Shift+↑  same navigation, but also TOGGLES the new clip's checkbox
+//                      (range-select behavior, like Shift+click in a list)
 window.addEventListener('keydown', (e) => {
   // Skip if user is typing in an input/textarea/contenteditable
   const ae = document.activeElement;
   if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (S.currentView !== 'queue' || !S.selectedIdx) return;
-  if (e.key === 'j' || e.key === 'ArrowRight') { e.preventDefault(); navigateClip('next'); }
-  else if (e.key === 'k' || e.key === 'ArrowLeft') { e.preventDefault(); navigateClip('prev'); }
+
+  const goNext = (e.key === 'j' || e.key === 'ArrowRight' || e.key === 'ArrowDown');
+  const goPrev = (e.key === 'k' || e.key === 'ArrowLeft' || e.key === 'ArrowUp');
+  if (!goNext && !goPrev) return;
+  e.preventDefault();
+  // If Shift is held, check the CURRENT clip's box first (so we capture a starting point),
+  // then navigate, then check the new one too — that gives the natural "extend selection" behavior
+  if (e.shiftKey) {
+    const currentCb = document.querySelector(`.queue-item-cb[data-row="${S.selectedIdx}"]`);
+    if (currentCb && !currentCb.checked) currentCb.checked = true;
+    navigateClip(goNext ? 'next' : 'prev');
+    // After navigation, queue rerenders — checkbox elements are recreated, find new one
+    const newCb = document.querySelector(`.queue-item-cb[data-row="${S.selectedIdx}"]`);
+    if (newCb) newCb.checked = true;
+    updateBatchBtn();
+  } else {
+    navigateClip(goNext ? 'next' : 'prev');
+  }
 });
 
 window.addEventListener('popstate', (e) => {
