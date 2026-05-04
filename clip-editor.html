@@ -532,92 +532,6 @@
   }
   .rule-card-actions .rule-action-btn.delete:hover { background: var(--red-light); color: var(--red); }
 
-  /* ── AUDIT (Short Film two-stage pipeline) ── */
-  .audit-card { background: var(--panel); border-radius: var(--radius2); box-shadow: var(--shadow-clay); }
-  .audit-card.audit-unaudited { opacity: 0.95; }
-  .audit-badge {
-    display: inline-block; font-size: 10px; font-weight: 600;
-    padding: 2px 10px; border-radius: var(--radius-pill);
-    text-transform: none; letter-spacing: 0.2px; margin-left: 6px;
-  }
-  .audit-passed { background: var(--green-light); color: var(--green); }
-  .audit-flagged { background: #FBE5C8; color: #A86A2C; }
-  .audit-accepted { background: var(--green-light); color: var(--green); }
-  .audit-rejected { background: var(--bg2); color: var(--tx3); }
-  .audit-summary-row { display: flex; gap: 22px; align-items: flex-start; }
-  .audit-overall-score {
-    flex-shrink: 0; min-width: 110px;
-    background: linear-gradient(180deg, var(--accent-light), var(--accent-soft));
-    padding: 16px; border-radius: var(--radius2);
-    text-align: center; box-shadow: var(--shadow-pill);
-  }
-  .audit-overall-num {
-    display: block; font-family: var(--font-serif);
-    font-size: 38px; font-weight: 500; color: var(--accent2); line-height: 1;
-  }
-  .audit-overall-label { font-size: 12px; color: var(--tx3); margin-top: 4px; display: block; }
-  .audit-subscores { flex: 1; display: flex; flex-direction: column; gap: 6px; }
-  .audit-subscore-row { display: flex; align-items: center; gap: 10px; }
-  .audit-sub-label { width: 110px; font-size: 12px; color: var(--tx3); flex-shrink: 0; }
-  .audit-sub-bar {
-    flex: 1; height: 6px; background: var(--bg2); border-radius: 3px;
-    overflow: hidden; box-shadow: var(--shadow-inner);
-  }
-  .audit-sub-fill {
-    height: 100%; background: linear-gradient(90deg, #C58A7E, var(--accent), var(--green));
-    border-radius: 3px; transition: width 0.3s ease;
-  }
-  .audit-sub-num { width: 22px; text-align: right; font-weight: 600; font-size: 13px; color: var(--tx2); }
-  .audit-violations {
-    margin-top: 14px; padding: 12px 14px; background: #FBF1E0;
-    border-left: 3px solid #D89C5B; border-radius: var(--radius);
-  }
-  .audit-violations-label { font-size: 11px; font-weight: 600; color: #A86A2C; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-  .audit-violation { font-size: 12.5px; color: var(--tx2); padding: 3px 0; line-height: 1.45; }
-  .audit-violation-num { font-family: monospace; font-size: 10px; color: var(--tx4); background: var(--bg2); padding: 1px 6px; border-radius: var(--radius-pill); margin-right: 4px; }
-  .audit-diff-block {
-    margin-top: 16px; padding: 14px 16px; background: var(--bg2);
-    border-radius: var(--radius2); box-shadow: var(--shadow-inner);
-  }
-  .audit-diff-header { font-size: 12px; font-weight: 600; color: var(--tx2); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
-  .audit-diff-text {
-    font-family: 'Lora', Georgia, var(--font-serif);
-    font-size: 14.5px; line-height: 1.65; color: #1F1A12;
-    background: #FAF6EC; padding: 12px 16px; border-radius: var(--radius);
-    box-shadow: var(--shadow-inner); margin-bottom: 8px;
-  }
-  .audit-diff-text ins {
-    background: #C8E6C9; color: #1B5E20; padding: 1px 3px;
-    border-radius: 3px; text-decoration: none; font-weight: 500;
-  }
-  .audit-diff-text del {
-    background: #FFCDD2; color: #B71C1C; padding: 1px 3px;
-    border-radius: 3px; text-decoration: line-through;
-  }
-  .audit-tooltip-icon {
-    font-size: 13px; color: var(--accent2); cursor: help;
-    background: var(--accent-light); border-radius: 50%;
-    width: 18px; height: 18px; display: inline-flex;
-    align-items: center; justify-content: center;
-  }
-  .audit-tooltip-text { font-size: 11.5px; color: var(--tx3); font-style: italic; padding: 4px 0; }
-  .audit-decision-row { display: flex; gap: 8px; margin-top: 10px; }
-  .audit-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-  .audit-stat-card {
-    background: var(--bg2); padding: 14px; border-radius: var(--radius);
-    box-shadow: var(--shadow-inner); text-align: center;
-  }
-  .audit-stat-label { font-size: 10px; color: var(--tx4); text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600; }
-  .audit-stat-value { font-family: var(--font-serif); font-size: 26px; color: var(--accent2); margin-top: 4px; font-weight: 500; }
-  .audit-stats-row { display: flex; gap: 22px; flex-wrap: wrap; }
-  .audit-stats-subtitle { font-size: 11px; font-weight: 600; color: var(--tx3); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px; }
-  .audit-spinner {
-    width: 24px; height: 24px; border-radius: 50%;
-    border: 3px solid var(--bg2); border-top-color: var(--accent);
-    animation: audit-spin 0.8s linear infinite;
-    flex-shrink: 0;
-  }
-  @keyframes audit-spin { to { transform: rotate(360deg); } }
 
   /* Subtitle card (Short Film only) */
   .subtitle-card {
@@ -1208,23 +1122,10 @@
             <input id="minWcInput" type="number" min="0" step="5" style="width:54px;padding:4px 8px;border:none;border-radius:var(--radius-pill);background:var(--bg2);box-shadow:var(--shadow-inner);font-family:var(--font-sans);font-size:11px;text-align:center;color:var(--tx)" oninput="onMinWcChange(this.value)">
             <span>words</span>
           </div>
-          <div id="auditThresholdWrap" style="display:none;align-items:center;gap:10px;font-size:11px;color:var(--tx3);background:var(--panel);padding:8px 14px;border-radius:var(--radius-pill);box-shadow:var(--shadow-clay)">
-            <label title="Lower = more lenient (fewer flags). Higher = stricter.">Audit strictness</label>
-            <input id="auditThresholdSlider" type="range" min="1" max="10" step="0.5" oninput="onThresholdChange(this.value)" style="width:120px;accent-color:var(--accent)">
-            <span style="font-weight:600;color:var(--tx2)">≥ <span id="auditThresholdValue">5.0</span></span>
-          </div>
         </div>
       </div>
 
       <div class="dash-stats" id="dashStats"></div>
-
-      <div id="auditStatsWrap" style="display:none;background:var(--panel);border-radius:var(--radius2);padding:18px 22px;margin-bottom:22px;box-shadow:var(--shadow-clay)">
-        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
-          <h3 style="font-family:var(--font-serif);font-size:18px;font-weight:500;margin:0;color:var(--tx)">Audit Stats</h3>
-          <span style="font-size:11px;color:var(--tx4)">— Short Films audit pipeline overview</span>
-        </div>
-        <div id="auditStatsPanel"></div>
-      </div>
 
       <div class="dash-progressbar-wrap">
         <div class="dash-progressbar-label"><span>Overall progress</span> <span id="dashOverallPct">—</span></div>
@@ -2000,15 +1901,11 @@ const REVIEW_COLS = { ID: 0, STATUS: 1, ORIGINAL_BACKUP: 2, FLAG_REASON: 3, APPR
 async function ensureReviewTab(typeCfg) {
   const tabName = typeCfg.reviewTab;
   const baseHeader = ['clip_id','status','original_backup','flag_reason','approved_by','approved_at','draft_text','chat_history','desc_source_col','draft_model','draft_used_transcript'];
-  // Short Film also tracks subtitle (cols L-M) and audit pipeline data (cols N-W)
+  // Short Film also tracks a subtitle (column I in the main sheet)
   const fullHeader = typeCfg.key === 'short_film'
-    ? [...baseHeader,
-       'subtitle_original_backup', 'subtitle_current',
-       'audit_status', 'audit_threshold_at_run', 'audit_overall_score',
-       'audit_sub_scores', 'audit_violations', 'audit_rewrite',
-       'audit_tooltip', 'audit_decision_at', 'audit_decided_by', 'audit_run_at']
+    ? [...baseHeader, 'subtitle_original_backup', 'subtitle_current']
     : baseHeader;
-  const lastCol = typeCfg.key === 'short_film' ? 'W' : 'K';
+  const lastCol = typeCfg.key === 'short_film' ? 'M' : 'K';
   const meta = await getSheetMeta();
   const exists = meta.sheets?.some(s => s.properties.title === tabName);
   if (!exists) {
@@ -2037,17 +1934,12 @@ async function loadReviewData(typeCfg) {
   const bucket = S.byType[typeCfg.key];
   bucket.reviewData = {};
   const isShortFilm = typeCfg.key === 'short_film';
-  const range = isShortFilm ? `'${typeCfg.reviewTab}'!A:W` : `'${typeCfg.reviewTab}'!A:K`;
+  const range = isShortFilm ? `'${typeCfg.reviewTab}'!A:M` : `'${typeCfg.reviewTab}'!A:K`;
   try {
     const data = await sheetsGet(range);
     const rows = data.values || [];
     rows.slice(1).forEach(row => {
       if (!row[0]) return;
-      let auditSubScores = null, auditViolations = null;
-      if (isShortFilm) {
-        try { auditSubScores = row[16] ? JSON.parse(row[16]) : null; } catch {}
-        try { auditViolations = row[17] ? JSON.parse(row[17]) : null; } catch {}
-      }
       bucket.reviewData[row[0]] = {
         status: row[1] || 'unprocessed',
         originalBackup: row[2] || '',
@@ -2061,17 +1953,6 @@ async function loadReviewData(typeCfg) {
         draftUsedTranscript: row[10] === 'TRUE',
         subtitleOriginalBackup: isShortFilm ? (row[11] || '') : '',
         subtitleCurrent: isShortFilm ? (row[12] || '') : '',
-        // Audit pipeline (Short Film only)
-        auditStatus: isShortFilm ? (row[13] || 'unaudited') : 'unaudited',
-        auditThresholdAtRun: isShortFilm ? parseFloat(row[14] || '0') || 0 : 0,
-        auditOverallScore: isShortFilm ? parseFloat(row[15] || '0') || 0 : 0,
-        auditSubScores: auditSubScores,
-        auditViolations: auditViolations,
-        auditRewrite: isShortFilm ? (row[18] || '') : '',
-        auditTooltip: isShortFilm ? (row[19] || '') : '',
-        auditDecisionAt: isShortFilm ? (row[20] || '') : '',
-        auditDecidedBy: isShortFilm ? (row[21] || '') : '',
-        auditRunAt: isShortFilm ? (row[22] || '') : '',
       };
       const id = row[0];
       const clip = bucket.clips?.find(c => String(c._rowNum) === id);
@@ -2114,20 +1995,9 @@ async function saveReviewRow(clip) {
     rd.draftUsedTranscript ? 'TRUE' : 'FALSE',
   ];
   const values = isShortFilm
-    ? [[...baseValues,
-        rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '',
-        rd.auditStatus || 'unaudited',
-        rd.auditThresholdAtRun ? String(rd.auditThresholdAtRun) : '',
-        rd.auditOverallScore ? String(rd.auditOverallScore) : '',
-        rd.auditSubScores ? JSON.stringify(rd.auditSubScores) : '',
-        rd.auditViolations ? JSON.stringify(rd.auditViolations) : '',
-        rd.auditRewrite || '',
-        rd.auditTooltip || '',
-        rd.auditDecisionAt || '',
-        rd.auditDecidedBy || '',
-        rd.auditRunAt || '']]
+    ? [[...baseValues, rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '']]
     : [baseValues];
-  const lastCol = isShortFilm ? 'W' : 'K';
+  const lastCol = isShortFilm ? 'M' : 'K';
   if (sheetRow > 0) {
     await sheetsSet(`'${typeCfg.reviewTab}'!A${sheetRow}:${lastCol}${sheetRow}`, values);
   } else {
@@ -2685,7 +2555,7 @@ function setReviewField(clip, field, val) {
   const bucket = S.byType[clip.typeKey];
   if (!bucket) return;
   const id = String(clip._rowNum);
-  if (!bucket.reviewData[id]) bucket.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '', draftText: '', chatHistory: '', descSourceCol: clip.descSourceCol || 'H', draftModel: '', draftUsedTranscript: false, subtitleOriginalBackup: '', subtitleCurrent: '', auditStatus: 'unaudited', auditThresholdAtRun: 0, auditOverallScore: 0, auditSubScores: null, auditViolations: null, auditRewrite: '', auditTooltip: '', auditDecisionAt: '', auditDecidedBy: '', auditRunAt: '' };
+  if (!bucket.reviewData[id]) bucket.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '', draftText: '', chatHistory: '', descSourceCol: clip.descSourceCol || 'H', draftModel: '', draftUsedTranscript: false, subtitleOriginalBackup: '', subtitleCurrent: '' };
   bucket.reviewData[id][field] = val;
 }
 
@@ -2828,21 +2698,7 @@ function renderQueue() {
         <div class="queue-item-title">${esc(clip.title)}</div>
         <div class="queue-item-meta">LT ${esc(clip.programNum)}${dur ? ' · ' + esc(dur) : ''}</div>
         <div class="queue-item-preview">${esc(preview)}…</div>
-        <div style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-          ${statusBadgeHTML(status)}
-          ${(() => {
-            if (clip.typeKey !== 'short_film') return '';
-            const rd = activeBucket().reviewData[String(clip._rowNum)];
-            if (!rd || !rd.auditOverallScore) return '';
-            const t = getAuditThreshold();
-            const violations = rd.auditViolations || [];
-            const passes = violations.length === 0 && rd.auditOverallScore >= t;
-            if (rd.auditStatus === 'accepted') return `<span class="audit-badge audit-accepted" title="Audit rewrite accepted">✓ rewrite ${rd.auditOverallScore.toFixed(1)}</span>`;
-            if (rd.auditStatus === 'rejected') return `<span class="audit-badge audit-rejected" title="Audit rewrite rejected">✕ ${rd.auditOverallScore.toFixed(1)}</span>`;
-            if (passes) return `<span class="audit-badge audit-passed" title="Audit passed at threshold ${t.toFixed(1)}">🔍 ${rd.auditOverallScore.toFixed(1)}</span>`;
-            return `<span class="audit-badge audit-flagged" title="Audit flagged at threshold ${t.toFixed(1)}">🔍 ⚠ ${rd.auditOverallScore.toFixed(1)}</span>`;
-          })()}
-        </div>
+        <div style="margin-top:4px">${statusBadgeHTML(status)}</div>
       </div>
     </div>`;
   }).join('') || `<div class="empty-state">No clips match current filter</div>`;
@@ -2904,13 +2760,10 @@ function updateBatchBtn() {
   const checked = document.querySelectorAll('.queue-item-cb:checked').length;
   const btn = document.getElementById('batchBtn');
   if (!btn) return;
-  // Short Film batch action is "Run Audit"; everywhere else it's "Run AI"
-  const isAudit = S.activeType === 'short_film';
-  const action = isAudit ? '🔍 Run Audit' : '▶ Run AI';
-  btn.textContent = checked > 0 ? `${action} on ${checked} Selected` : `${action} on Selected`;
-  // Hide transcript toggle for short_film batch (audit always uses transcript)
+  btn.textContent = checked > 0 ? `▶ Run AI on ${checked} Selected` : '▶ Run AI on Selected';
+  // Transcript toggle is always relevant for the regular Generate flow
   const transcriptToggle = document.getElementById('batchTranscriptToggle');
-  if (transcriptToggle) transcriptToggle.style.display = isAudit ? 'none' : 'flex';
+  if (transcriptToggle) transcriptToggle.style.display = 'flex';
   updateMasterSelectState();
 }
 
@@ -3150,7 +3003,6 @@ function renderDetail() {
           ${(activeBucket().rulesArr?.filter(r=>r.active).length||0) === 0
             ? `<button class="btn btn-sm" disabled title="No active rules for this clip type. Add rules in the Rules section first.">✨ Generate (no rules yet)</button>`
             : `<button class="btn btn-sm btn-primary" onclick="regenerateClip(${clip._rowNum})">${hasDraft ? '🔄 Regenerate' : '✨ Generate'}</button>`}
-          ${clip.typeKey === 'short_film' ? `<button class="btn btn-sm" onclick="runAudit(activeBucket().clips.find(c=>c._rowNum===${clip._rowNum}))" title="Run two-stage audit pipeline (Stage 1: score, Stage 2: rewrite if flagged)">🔍 Run Audit</button>` : ''}
         </div>
       </div>
       <div class="card-body">
@@ -3166,7 +3018,7 @@ function renderDetail() {
       </div>
     </div>
 
-    ${clip.typeKey === 'short_film' ? renderAuditCard(clip, bucket) : ''}
+    ${clip.typeKey === 'short_film' ? '' : ''}
 
     <div class="card">
       <div class="card-header">
@@ -3196,89 +3048,6 @@ function renderDetail() {
   renderClipNotes(clip);
   // Auto-grow the draft textarea to fit its initial content (no scroll bar)
   setTimeout(() => autoGrowTextarea(document.getElementById('draftTA_' + clip._rowNum)), 0);
-}
-
-function renderAuditCard(clip, bucket) {
-  const rd = bucket?.reviewData?.[String(clip._rowNum)];
-  if (!rd || (!rd.auditOverallScore && !rd.auditViolations?.length)) {
-    // Not yet audited — show a simple invitation
-    return `<div class="card audit-card audit-unaudited">
-      <div class="card-body" style="padding:12px 18px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--tx3)">
-        <span style="font-size:14px">🔍</span>
-        <span>Not yet audited.</span>
-        <span style="color:var(--tx4)">Click <strong style="color:var(--tx3)">🔍 Run Audit</strong> above to score this summary.</span>
-        <span style="margin-left:auto;font-size:10px;color:var(--tx4)">Threshold ${getAuditThreshold().toFixed(1)}</span>
-      </div>
-    </div>`;
-  }
-  const status = rd.auditStatus || 'unaudited';
-  const threshold = getAuditThreshold();
-  const score = rd.auditOverallScore || 0;
-  const sub = rd.auditSubScores || {};
-  const violations = rd.auditViolations || [];
-  // Determine current pass/fail using LIVE threshold (not the one at-time-of-audit)
-  const passesNow = violations.length === 0 && score >= threshold;
-  const statusBadge = (() => {
-    if (status === 'passed' || (status === 'unaudited' && passesNow)) return `<span class="audit-badge audit-passed">✓ Passed</span>`;
-    if (status === 'accepted') return `<span class="audit-badge audit-accepted">✓ Rewrite accepted</span>`;
-    if (status === 'rejected') return `<span class="audit-badge audit-rejected">✕ Rewrite rejected (kept original)</span>`;
-    if (status === 'flagged-pending-review') return `<span class="audit-badge audit-flagged">⚠ Flagged — review pending</span>`;
-    if (status === 'flagged-no-rewrite') return `<span class="audit-badge audit-flagged">⚠ Flagged at current threshold</span>`;
-    return passesNow ? `<span class="audit-badge audit-passed">✓ Passed</span>` : `<span class="audit-badge audit-flagged">⚠ Flagged</span>`;
-  })();
-  const subRow = (label, key) => {
-    const v = sub[key] || 0;
-    const fillPct = (v / 10) * 100;
-    return `<div class="audit-subscore-row">
-      <span class="audit-sub-label">${label}</span>
-      <div class="audit-sub-bar"><div class="audit-sub-fill" style="width:${fillPct}%"></div></div>
-      <span class="audit-sub-num">${v}</span>
-    </div>`;
-  };
-  const auditedAt = rd.auditRunAt ? new Date(rd.auditRunAt).toLocaleString() : '';
-  const orig = clip._draft || clip.description || '';
-  return `<div class="card audit-card">
-    <div class="card-header">🔍 Audit
-      ${statusBadge}
-      <span style="font-size:10px;color:var(--tx4);font-weight:normal;margin-left:6px">Threshold: ${threshold.toFixed(1)} ${rd.auditThresholdAtRun && rd.auditThresholdAtRun !== threshold ? `(was ${rd.auditThresholdAtRun.toFixed(1)} at audit)` : ''}</span>
-      <div style="margin-left:auto;display:flex;gap:6px">
-        <button class="btn btn-sm" onclick="runAudit(activeBucket().clips.find(c=>c._rowNum===${clip._rowNum}))" title="Re-run the audit (Stage 1 + Stage 2 if flagged)">↻ Re-run</button>
-        ${status === 'passed' || status === 'rejected' ? `<button class="btn btn-sm" onclick="forceAuditRewrite(${clip._rowNum})" title="Force a Stage 2 rewrite even though this passed">✨ Force rewrite</button>` : ''}
-      </div>
-    </div>
-    <div class="card-body" style="padding:18px 22px">
-      <div class="audit-summary-row">
-        <div class="audit-overall-score">
-          <span class="audit-overall-num">${score.toFixed(1)}</span>
-          <span class="audit-overall-label">/ 10</span>
-        </div>
-        <div class="audit-subscores">
-          ${subRow('Promo level', 'promo_level')}
-          ${subRow('Voice quality', 'voice_quality')}
-          ${subRow('Opener strength', 'opener_strength')}
-          ${subRow('Documentary feel', 'documentary_feel')}
-        </div>
-      </div>
-      ${violations.length ? `<div class="audit-violations">
-        <div class="audit-violations-label">Binary violations (${violations.length}):</div>
-        ${violations.map(v => `<div class="audit-violation"><span class="audit-violation-num">#${esc(String(v.rule_number))}</span> <strong>${esc(v.rule_title || '')}</strong> — ${esc(v.reason || '')}</div>`).join('')}
-      </div>` : `<div style="font-size:11px;color:var(--green);margin-top:10px">✓ No binary violations</div>`}
-      ${rd.auditRewrite && (status === 'flagged-pending-review' || status === 'flagged-no-rewrite') ? `
-        <div class="audit-diff-block">
-          <div class="audit-diff-header">
-            Stage 2 rewrite — review and decide:
-            ${rd.auditTooltip ? `<span class="audit-tooltip-icon" title="${esc(rd.auditTooltip)}">ⓘ</span>` : ''}
-          </div>
-          <div class="audit-diff-text">${diffWords(orig, rd.auditRewrite)}</div>
-          ${rd.auditTooltip ? `<div class="audit-tooltip-text">${esc(rd.auditTooltip)}</div>` : ''}
-          <div class="audit-decision-row">
-            <button class="btn btn-sm btn-green" onclick="acceptAuditRewrite(${clip._rowNum})">✓ Accept rewrite</button>
-            <button class="btn btn-sm" onclick="rejectAuditRewrite(${clip._rowNum})">✕ Reject (keep original)</button>
-          </div>
-        </div>` : ''}
-      ${auditedAt ? `<div style="font-size:10px;color:var(--tx4);margin-top:10px">Last audited: ${esc(auditedAt)}</div>` : ''}
-    </div>
-  </div>`;
 }
 
 function renderClipNotes(clip) {
@@ -3558,435 +3327,6 @@ async function callAI(messages, opts = {}) {
   return text;
 }
 
-// ══════════════════════════════════════════════
-// SHORT FILM AUDIT PIPELINE (Stage 1: audit, Stage 2: rewrite)
-// Two-call AI flow that scores summaries and only rewrites failures.
-// ══════════════════════════════════════════════
-
-const AUDIT_STAGE1_TAB = 'stage1_audit_rules';
-const AUDIT_STAGE2_TAB = 'stage2_rewrite_rules';
-const DEFAULT_AUDIT_THRESHOLD = 5.0;
-
-// Cache for the two new rule sets — loaded on demand
-let _stage1Rules = null;
-let _stage2Rules = null;
-
-// User-configurable threshold for flagging (1.0 - 10.0). Persisted in localStorage.
-function getAuditThreshold() {
-  const v = parseFloat(localStorage.getItem('jem_cse_audit_threshold'));
-  if (isNaN(v) || v < 1 || v > 10) return DEFAULT_AUDIT_THRESHOLD;
-  return v;
-}
-function setAuditThreshold(v) {
-  const n = parseFloat(v);
-  if (isNaN(n) || n < 1 || n > 10) return;
-  localStorage.setItem('jem_cse_audit_threshold', String(n));
-}
-
-// Load Stage 1 / Stage 2 rules from their respective tabs.
-// Tabs are user-managed; we only read.
-async function loadAuditRules() {
-  // Stage 1
-  try {
-    const data = await sheetsGet(`'${AUDIT_STAGE1_TAB}'!A:F`);
-    const rows = data.values || [];
-    if (rows.length < 2) { _stage1Rules = []; }
-    else {
-      _stage1Rules = rows.slice(1).filter(r => r[0]).map(r => ({
-        number: r[0], category: r[1] || '', type: r[2] || 'binary',
-        title: r[3] || '', rule: r[4] || '',
-        active: !r[5] || String(r[5]).toUpperCase() === 'TRUE',
-      }));
-    }
-  } catch(e) {
-    console.warn('Stage 1 audit rules load failed:', e);
-    _stage1Rules = [];
-  }
-  // Stage 2
-  try {
-    const data = await sheetsGet(`'${AUDIT_STAGE2_TAB}'!A:E`);
-    const rows = data.values || [];
-    if (rows.length < 2) { _stage2Rules = []; }
-    else {
-      _stage2Rules = rows.slice(1).filter(r => r[0]).map(r => ({
-        number: r[0], category: r[1] || '', title: r[2] || '',
-        rule: r[3] || '',
-        active: !r[4] || String(r[4]).toUpperCase() === 'TRUE',
-      }));
-    }
-  } catch(e) {
-    console.warn('Stage 2 rewrite rules load failed:', e);
-    _stage2Rules = [];
-  }
-}
-
-// Build the Stage 1 prompt from currently-active rules
-function buildStage1Prompt(summary, transcript) {
-  const binaryRules = (_stage1Rules || []).filter(r => r.active && r.type === 'binary');
-  const scoreRules = (_stage1Rules || []).filter(r => r.active && r.type === 'score');
-  const truncatedTranscript = (transcript || '').substring(0, 2000);
-  let p = 'You are auditing a short film summary against a checklist.\n\n';
-  p += 'Your job has two parts:\n\n';
-  p += 'PART 1 — BINARY CHECKS:\n';
-  p += 'For each binary rule below, decide if it is violated. Return true/false plus a one-line reason if true.\n\n';
-  binaryRules.forEach(r => {
-    p += `${r.number}. ${r.title}\n${r.rule}\n\n`;
-  });
-  p += 'PART 2 — QUALITY SCORE:\n';
-  p += 'Score the summary on a 1-10 scale per the scoring rule below. Compute four sub-dimensions, then average into the overall score. Use the FULL 1-10 range — do not cluster everything in 5-7.\n\n';
-  scoreRules.forEach(r => {
-    p += `${r.title}\n${r.rule}\n\n`;
-  });
-  p += 'OUTPUT FORMAT (JSON only, no commentary):\n';
-  p += '{\n';
-  p += '  "binary_violations": [\n';
-  p += '    {"rule_number": 5, "rule_title": "Opens with The Rebbe...", "reason": "..."}\n';
-  p += '  ],\n';
-  p += '  "scores": {\n';
-  p += '    "overall": 7.3,\n';
-  p += '    "promo_level": 8,\n';
-  p += '    "voice_quality": 7,\n';
-  p += '    "opener_strength": 8,\n';
-  p += '    "documentary_feel": 6\n';
-  p += '  }\n';
-  p += '}\n\n';
-  p += 'If no binary violations, return an empty array for "binary_violations".\n';
-  p += 'Return scores rounded to one decimal place for "overall", integers for sub-scores.\n\n';
-  p += 'SUMMARY TO AUDIT:\n' + (summary || '') + '\n\n';
-  if (truncatedTranscript) p += 'TRANSCRIPT (for context only):\n' + truncatedTranscript + '\n';
-  return p;
-}
-
-// Build the Stage 2 prompt — only called when Stage 1 flagged
-function buildStage2Prompt(summary, transcript, violations, scores) {
-  const rules = (_stage2Rules || []).filter(r => r.active);
-  let p = 'You are rewriting a short film summary that failed Stage 1 audit.\n\n';
-  p += 'ISSUES FOUND BY STAGE 1:\n\n';
-  p += 'Binary violations:\n';
-  if (!violations || !violations.length) p += '(none)\n\n';
-  else {
-    violations.forEach(v => { p += `- Rule ${v.rule_number} (${v.rule_title}): ${v.reason}\n`; });
-    p += '\n';
-  }
-  p += 'Score breakdown (1-10, higher is better):\n';
-  p += `- Overall: ${scores?.overall ?? '?'}\n`;
-  p += `- Promo level: ${scores?.promo_level ?? '?'}\n`;
-  p += `- Voice quality: ${scores?.voice_quality ?? '?'}\n`;
-  p += `- Opener strength: ${scores?.opener_strength ?? '?'}\n`;
-  p += `- Documentary feel: ${scores?.documentary_feel ?? '?'}\n\n`;
-  p += 'Focus your edit on the issues with the lowest scores and the binary violations. Make the MINIMUM change necessary. Preserve everything good about the original.\n\n';
-  p += 'FULL RULE SET FOR REWRITES:\n\n';
-  rules.forEach(r => {
-    p += `${r.number}. [${r.category}] ${r.title}\n${r.rule}\n\n`;
-  });
-  p += 'OUTPUT FORMAT (JSON only):\n';
-  p += '{\n';
-  p += '  "rewrite": "[the rewritten summary, 25-35 words]",\n';
-  p += '  "tooltip": "[short human-readable explanation, under 200 chars, of which issues were addressed and what changed]",\n';
-  p += '  "issues_addressed": ["binary rule 5", "low promo_level (3)"]\n';
-  p += '}\n\n';
-  p += 'ORIGINAL SUMMARY:\n' + (summary || '') + '\n\n';
-  if (transcript) p += 'TRANSCRIPT:\n' + transcript + '\n';
-  return p;
-}
-
-// Run Stage 1 audit on a clip. Returns { passed, scores, violations } or throws.
-async function runStage1Audit(clip) {
-  if (!_stage1Rules) await loadAuditRules();
-  if (!_stage1Rules?.length) throw new Error(`Stage 1 rules tab "${AUDIT_STAGE1_TAB}" is empty or missing`);
-  const summary = clip._draft || clip.description || '';
-  if (!summary.trim()) throw new Error('No summary to audit (description and draft are both empty)');
-  // Need transcript — fetch if not yet loaded
-  if (!S.transcriptLoaded[clip._rowNum]) {
-    try { await loadTranscript(clip._rowNum); } catch { /* transcript optional for audit */ }
-  }
-  const transcript = S.transcriptLoaded[clip._rowNum] || '';
-  const prompt = buildStage1Prompt(summary, transcript);
-  const raw = await callAI([{ role: 'user', content: prompt }], { temperature: 0.2, maxTokens: 2000 });
-  const parsed = parseAuditJSON(raw, 'Stage 1');
-  const violations = parsed.binary_violations || [];
-  const scores = parsed.scores || { overall: 0, promo_level: 0, voice_quality: 0, opener_strength: 0, documentary_feel: 0 };
-  return { violations, scores };
-}
-
-// Run Stage 2 rewrite. Only call after Stage 1 has flagged.
-async function runStage2Rewrite(clip, violations, scores) {
-  if (!_stage2Rules) await loadAuditRules();
-  if (!_stage2Rules?.length) throw new Error(`Stage 2 rules tab "${AUDIT_STAGE2_TAB}" is empty or missing`);
-  const summary = clip._draft || clip.description || '';
-  const transcript = S.transcriptLoaded[clip._rowNum] || '';
-  const prompt = buildStage2Prompt(summary, transcript, violations, scores);
-  const raw = await callAI([{ role: 'user', content: prompt }], { temperature: 0.7, maxTokens: 2500 });
-  const parsed = parseAuditJSON(raw, 'Stage 2');
-  return {
-    rewrite: smartenQuotes(parsed.rewrite || ''),
-    tooltip: parsed.tooltip || '',
-    issuesAddressed: parsed.issues_addressed || [],
-  };
-}
-
-// Robust JSON extraction from AI responses.
-// Handles ```json fences, leading/trailing prose, and truncated JSON
-// (will repair common truncation patterns: missing closing braces/brackets/quotes).
-function parseAuditJSON(raw, stageLabel) {
-  if (!raw || !raw.trim()) throw new Error(`${stageLabel} returned empty response`);
-  // Strip markdown code fences
-  let text = raw.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
-  // Find the first { and the last reasonable place to consider "the JSON"
-  const firstBrace = text.indexOf('{');
-  if (firstBrace < 0) throw new Error(`${stageLabel} returned no JSON object: ` + raw.substring(0, 200));
-  text = text.substring(firstBrace);
-  // First, try to parse as-is
-  try { return JSON.parse(text); } catch {}
-  // Truncated: try to repair by closing open structures
-  const repaired = repairTruncatedJSON(text);
-  try { return JSON.parse(repaired); }
-  catch (e) {
-    throw new Error(`${stageLabel} returned invalid JSON: ` + text.substring(0, 200));
-  }
-}
-
-// Best-effort repair of truncated JSON: closes unterminated strings, arrays, objects.
-// Not a full JSON repair library — handles the common LLM-truncation case.
-function repairTruncatedJSON(s) {
-  let depth = 0;        // brace/bracket nesting
-  const stack = [];     // tracks '{' or '['
-  let inString = false;
-  let escaped = false;
-  let lastValidEnd = -1;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (escaped) { escaped = false; continue; }
-    if (c === '\\') { escaped = true; continue; }
-    if (inString) {
-      if (c === '"') inString = false;
-      continue;
-    }
-    if (c === '"') { inString = true; continue; }
-    if (c === '{' || c === '[') { stack.push(c); }
-    else if (c === '}') {
-      if (stack[stack.length - 1] === '{') stack.pop();
-      if (stack.length === 0) lastValidEnd = i;
-    }
-    else if (c === ']') {
-      if (stack[stack.length - 1] === '[') stack.pop();
-      if (stack.length === 0) lastValidEnd = i;
-    }
-  }
-  // If truncated cleanly, just close everything still open
-  let out = s;
-  if (inString) out += '"';
-  // Strip trailing comma if present (common: "...," then truncation)
-  out = out.replace(/,\s*$/, '');
-  while (stack.length > 0) {
-    const opener = stack.pop();
-    out += (opener === '{') ? '}' : ']';
-  }
-  return out;
-}
-
-// Compute pass/fail from existing scores using the current threshold (no AI call)
-function computeAuditFlag(clip) {
-  const rd = activeBucket()?.reviewData?.[String(clip._rowNum)];
-  if (!rd || !rd.auditOverallScore) return null; // never audited
-  const threshold = getAuditThreshold();
-  const violations = rd.auditViolations || [];
-  const flagged = violations.length > 0 || rd.auditOverallScore < threshold;
-  return { flagged, threshold, score: rd.auditOverallScore, violations };
-}
-
-// Run the full audit flow on a single clip (Stage 1, optionally Stage 2)
-async function runAudit(clip) {
-  if (!clip || clip.typeKey !== 'short_film') return;
-  setAuditInlineProgress(clip._rowNum, 'Running audit (Stage 1)…');
-  try {
-    const { violations, scores } = await runStage1Audit(clip);
-    const threshold = getAuditThreshold();
-    const flagged = violations.length > 0 || scores.overall < threshold;
-    setReviewField(clip, 'auditOverallScore', scores.overall);
-    setReviewField(clip, 'auditSubScores', scores);
-    setReviewField(clip, 'auditViolations', violations);
-    setReviewField(clip, 'auditThresholdAtRun', threshold);
-    setReviewField(clip, 'auditRunAt', new Date().toISOString());
-    if (!flagged) {
-      setReviewField(clip, 'auditStatus', 'passed');
-      setReviewField(clip, 'auditRewrite', '');
-      setReviewField(clip, 'auditTooltip', '');
-      await saveReviewRow(clip);
-      clearAuditInlineProgress();
-      renderDetail();
-      renderQueue();
-      showToast(`Audit passed — score ${scores.overall.toFixed(1)} ✓`, 'success');
-      return;
-    }
-    // Flagged — proceed to Stage 2
-    setAuditInlineProgress(clip._rowNum, 'Stage 1 flagged — running Stage 2 rewrite…');
-    const { rewrite, tooltip, issuesAddressed } = await runStage2Rewrite(clip, violations, scores);
-    setReviewField(clip, 'auditStatus', 'flagged-pending-review');
-    setReviewField(clip, 'auditRewrite', rewrite);
-    setReviewField(clip, 'auditTooltip', tooltip);
-    await saveReviewRow(clip);
-    clearAuditInlineProgress();
-    renderDetail();
-    renderQueue();
-    showToast(`Stage 2 rewrite ready — review the diff`, 'success');
-  } catch(e) {
-    clearAuditInlineProgress();
-    showToast('Audit failed: ' + e.message, 'error');
-  }
-}
-
-// Inline progress indicator that replaces the audit card body during a run.
-// Way less intrusive than a fullscreen overlay.
-function setAuditInlineProgress(rowNum, message) {
-  // Find the audit card on the current detail panel
-  const auditCards = document.querySelectorAll('.audit-card');
-  if (!auditCards.length) return;
-  const card = auditCards[0];
-  const body = card.querySelector('.card-body');
-  if (!body) return;
-  // Remember the original innerHTML so we can restore on error
-  if (!card.dataset.originalHtml) card.dataset.originalHtml = body.innerHTML;
-  body.innerHTML = `
-    <div style="display:flex;align-items:center;gap:14px;padding:12px 0">
-      <div class="audit-spinner"></div>
-      <div style="flex:1">
-        <div style="font-size:13px;color:var(--tx2);font-weight:500">${esc(message)}</div>
-        <div style="font-size:11px;color:var(--tx4);margin-top:3px">This usually takes 5–15 seconds</div>
-      </div>
-    </div>
-  `;
-}
-
-function clearAuditInlineProgress() {
-  document.querySelectorAll('.audit-card').forEach(c => { delete c.dataset.originalHtml; });
-}
-
-// User accepts the Stage 2 rewrite — apply it as the draft (status: draft) to be approved separately
-async function acceptAuditRewrite(rowNum) {
-  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
-  if (!clip) return;
-  const rd = activeBucket().reviewData[String(rowNum)];
-  if (!rd?.auditRewrite) return;
-  const newDraft = rd.auditRewrite;
-  showLoading('Accepting rewrite…');
-  try {
-    if (!getReviewField(clip, 'originalBackup')) {
-      setReviewField(clip, 'originalBackup', clip.description);
-    }
-    clip._draft = newDraft;
-    setReviewField(clip, 'draftText', newDraft);
-    setReviewField(clip, 'status', 'draft');
-    setReviewField(clip, 'auditStatus', 'accepted');
-    setReviewField(clip, 'auditDecisionAt', new Date().toISOString());
-    setReviewField(clip, 'auditDecidedBy', S.user?.email || '');
-    await saveReviewRow(clip);
-    hideLoading();
-    renderDetail();
-    renderQueue();
-    showToast('Rewrite accepted — review and approve to commit', 'success');
-  } catch(e) { hideLoading(); showToast('Accept failed: ' + e.message, 'error'); }
-}
-
-// User rejects the rewrite — keep original, mark as audit-run-but-rejected
-async function rejectAuditRewrite(rowNum) {
-  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
-  if (!clip) return;
-  if (!await jemConfirm('Reject this rewrite and keep the original summary?', { okLabel: 'Reject' })) return;
-  showLoading('Rejecting rewrite…');
-  try {
-    setReviewField(clip, 'auditStatus', 'rejected');
-    setReviewField(clip, 'auditDecisionAt', new Date().toISOString());
-    setReviewField(clip, 'auditDecidedBy', S.user?.email || '');
-    setReviewField(clip, 'auditRewrite', '');
-    setReviewField(clip, 'auditTooltip', '');
-    await saveReviewRow(clip);
-    hideLoading();
-    renderDetail();
-    renderQueue();
-    showToast('Rewrite rejected — original kept', 'success');
-  } catch(e) { hideLoading(); showToast('Reject failed: ' + e.message, 'error'); }
-}
-
-// Force a rewrite even on a passed clip — bypasses Stage 1 (uses last scores or fresh ones)
-async function forceAuditRewrite(rowNum) {
-  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
-  if (!clip) return;
-  const rd = activeBucket().reviewData[String(rowNum)];
-  setAuditInlineProgress(rowNum, 'Forcing Stage 2 rewrite…');
-  try {
-    const violations = rd?.auditViolations || [];
-    const scores = rd?.auditSubScores || { overall: 0, promo_level: 5, voice_quality: 5, opener_strength: 5, documentary_feel: 5 };
-    if (!_stage2Rules) await loadAuditRules();
-    const { rewrite, tooltip } = await runStage2Rewrite(clip, violations, scores);
-    setReviewField(clip, 'auditStatus', 'flagged-pending-review');
-    setReviewField(clip, 'auditRewrite', rewrite);
-    setReviewField(clip, 'auditTooltip', tooltip);
-    if (!rd?.auditRunAt) setReviewField(clip, 'auditRunAt', new Date().toISOString());
-    await saveReviewRow(clip);
-    clearAuditInlineProgress();
-    renderDetail();
-    renderQueue();
-    showToast('Forced rewrite ready — review the diff', 'success');
-  } catch(e) { clearAuditInlineProgress(); showToast('Force rewrite failed: ' + e.message, 'error'); }
-}
-
-// Re-evaluate flagged status across all audited clips when threshold changes.
-// No AI calls — just compares cached scores against new threshold.
-function reevaluateAuditFlags() {
-  const bucket = S.byType.short_film;
-  if (!bucket) return;
-  const threshold = getAuditThreshold();
-  let changed = 0;
-  bucket.clips.forEach(clip => {
-    const rd = bucket.reviewData[String(clip._rowNum)];
-    if (!rd || !rd.auditOverallScore) return;
-    // Don't override accepted/rejected decisions — only adjust passed/flagged
-    if (rd.auditStatus === 'accepted' || rd.auditStatus === 'rejected') return;
-    const violations = rd.auditViolations || [];
-    const wouldFlag = violations.length > 0 || rd.auditOverallScore < threshold;
-    const newStatus = wouldFlag
-      ? (rd.auditRewrite ? 'flagged-pending-review' : 'flagged-no-rewrite')
-      : 'passed';
-    if (rd.auditStatus !== newStatus) { rd.auditStatus = newStatus; changed++; }
-  });
-  if (changed > 0) {
-    if (S.activeType === 'short_film') {
-      renderQueue();
-      if (S.selectedIdx) renderDetail();
-    }
-  }
-}
-
-// Compute simple inline diff: returns HTML with <ins>added</ins> and <del>removed</del> markers
-function diffWords(oldStr, newStr) {
-  const a = (oldStr || '').split(/(\s+)/);
-  const b = (newStr || '').split(/(\s+)/);
-  // Longest common subsequence (DP) — small inputs, this is fine
-  const m = a.length, n = b.length;
-  const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-  for (let i = m - 1; i >= 0; i--) {
-    for (let j = n - 1; j >= 0; j--) {
-      if (a[i] === b[j]) dp[i][j] = dp[i+1][j+1] + 1;
-      else dp[i][j] = Math.max(dp[i+1][j], dp[i][j+1]);
-    }
-  }
-  const out = [];
-  let i = 0, j = 0;
-  while (i < m && j < n) {
-    if (a[i] === b[j]) { out.push({ t: 'same', v: a[i] }); i++; j++; }
-    else if (dp[i+1][j] >= dp[i][j+1]) { out.push({ t: 'del', v: a[i] }); i++; }
-    else { out.push({ t: 'ins', v: b[j] }); j++; }
-  }
-  while (i < m) { out.push({ t: 'del', v: a[i++] }); }
-  while (j < n) { out.push({ t: 'ins', v: b[j++] }); }
-  return out.map(p => {
-    if (p.t === 'same') return esc(p.v);
-    if (p.t === 'ins') return `<ins>${esc(p.v)}</ins>`;
-    return `<del>${esc(p.v)}</del>`;
-  }).join('');
-}
-
 async function evaluateAndDraft(clip, regenCount = 0, useTranscript = false) {
   // First pass: evaluate if description is sufficient — eval is deterministic-ish, lower temp
   const evalPrompt = `You are evaluating a video description to decide if it has enough content to rewrite as a 90-word summary.
@@ -4089,91 +3429,6 @@ function setMinWordCount(typeKey, n) {
 
 // Debounced handler for the dashboard's min word count input
 let _minWcSaveTimer = null;
-// Audit threshold slider handler — re-evaluates flags WITHOUT re-running AI
-let _thresholdSaveTimer = null;
-function onThresholdChange(val) {
-  const v = parseFloat(val);
-  if (isNaN(v)) return;
-  setAuditThreshold(v);
-  const valEl = document.getElementById('auditThresholdValue');
-  if (valEl) valEl.textContent = v.toFixed(1);
-  // Re-evaluate cached scores against new threshold (no AI calls)
-  reevaluateAuditFlags();
-  if (S.activeType === 'short_film' && S.selectedIdx) renderDetail();
-  if (_thresholdSaveTimer) clearTimeout(_thresholdSaveTimer);
-  _thresholdSaveTimer = setTimeout(() => {
-    showToast(`Audit threshold: flag if score < ${v.toFixed(1)}`, 'success');
-    if (S.activeType === 'short_film') renderAuditStats();
-  }, 400);
-}
-
-// Build audit-stats summary (for the Short Film dashboard)
-function renderAuditStats() {
-  const el = document.getElementById('auditStatsPanel');
-  if (!el) return;
-  const bucket = S.byType.short_film;
-  if (!bucket) { el.innerHTML = ''; return; }
-  const audited = bucket.clips.filter(c => {
-    const rd = bucket.reviewData[String(c._rowNum)];
-    return rd && rd.auditOverallScore;
-  });
-  if (!audited.length) {
-    el.innerHTML = '<div class="empty-state" style="padding:18px;font-size:13px">No audits run yet on Short Films. Click 🔍 Run Audit on any clip to begin.</div>';
-    return;
-  }
-  const threshold = getAuditThreshold();
-  let totalScore = 0, passing = 0;
-  const violationCounts = {};
-  let acceptedCount = 0, rejectedCount = 0;
-  const subTotals = { promo_level: 0, voice_quality: 0, opener_strength: 0, documentary_feel: 0 };
-  audited.forEach(c => {
-    const rd = bucket.reviewData[String(c._rowNum)];
-    totalScore += rd.auditOverallScore;
-    const violations = rd.auditViolations || [];
-    if (violations.length === 0 && rd.auditOverallScore >= threshold) passing++;
-    violations.forEach(v => {
-      const k = v.rule_title || ('Rule ' + v.rule_number);
-      violationCounts[k] = (violationCounts[k] || 0) + 1;
-    });
-    const sub = rd.auditSubScores;
-    if (sub) {
-      subTotals.promo_level += sub.promo_level || 0;
-      subTotals.voice_quality += sub.voice_quality || 0;
-      subTotals.opener_strength += sub.opener_strength || 0;
-      subTotals.documentary_feel += sub.documentary_feel || 0;
-    }
-    if (rd.auditStatus === 'accepted') acceptedCount++;
-    if (rd.auditStatus === 'rejected') rejectedCount++;
-  });
-  const avgScore = (totalScore / audited.length).toFixed(2);
-  const passRate = ((passing / audited.length) * 100).toFixed(0);
-  const topViolations = Object.entries(violationCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  const acceptRatio = (acceptedCount + rejectedCount) > 0
-    ? ((acceptedCount / (acceptedCount + rejectedCount)) * 100).toFixed(0) : null;
-  const subAvg = (k) => audited.length ? (subTotals[k] / audited.length).toFixed(1) : '0.0';
-  el.innerHTML = `
-    <div class="audit-stats-grid">
-      <div class="audit-stat-card"><div class="audit-stat-label">Audited</div><div class="audit-stat-value">${audited.length}</div></div>
-      <div class="audit-stat-card"><div class="audit-stat-label">Pass rate @ ${threshold.toFixed(1)}</div><div class="audit-stat-value">${passRate}%</div></div>
-      <div class="audit-stat-card"><div class="audit-stat-label">Avg score</div><div class="audit-stat-value">${avgScore}</div></div>
-      ${acceptRatio !== null ? `<div class="audit-stat-card"><div class="audit-stat-label">Accept ratio</div><div class="audit-stat-value">${acceptRatio}%</div></div>` : ''}
-    </div>
-    <div class="audit-stats-row" style="margin-top:14px">
-      <div style="flex:1">
-        <div class="audit-stats-subtitle">Average sub-scores</div>
-        <div class="audit-subscore-row"><span class="audit-sub-label">Promo</span><div class="audit-sub-bar"><div class="audit-sub-fill" style="width:${subAvg('promo_level')*10}%"></div></div><span class="audit-sub-num">${subAvg('promo_level')}</span></div>
-        <div class="audit-subscore-row"><span class="audit-sub-label">Voice</span><div class="audit-sub-bar"><div class="audit-sub-fill" style="width:${subAvg('voice_quality')*10}%"></div></div><span class="audit-sub-num">${subAvg('voice_quality')}</span></div>
-        <div class="audit-subscore-row"><span class="audit-sub-label">Opener</span><div class="audit-sub-bar"><div class="audit-sub-fill" style="width:${subAvg('opener_strength')*10}%"></div></div><span class="audit-sub-num">${subAvg('opener_strength')}</span></div>
-        <div class="audit-subscore-row"><span class="audit-sub-label">Doc feel</span><div class="audit-sub-bar"><div class="audit-sub-fill" style="width:${subAvg('documentary_feel')*10}%"></div></div><span class="audit-sub-num">${subAvg('documentary_feel')}</span></div>
-      </div>
-      ${topViolations.length ? `<div style="flex:1">
-        <div class="audit-stats-subtitle">Most common violations</div>
-        ${topViolations.map(([title, n]) => `<div style="font-size:12px;color:var(--tx2);padding:4px 0">${esc(title)} <span style="color:var(--tx4);font-size:10px">(${n})</span></div>`).join('')}
-      </div>` : ''}
-    </div>
-  `;
-}
-
 function onMinWcChange(val) {
   const typeKey = S.activeType;
   if (_minWcSaveTimer) clearTimeout(_minWcSaveTimer);
@@ -4293,10 +3548,6 @@ async function runBatch() {
   if (S.batchRunning) return;
   const checked = [...document.querySelectorAll('.queue-item-cb:checked')].map(cb => parseInt(cb.dataset.row));
   if (!checked.length) { showToast('Select clips first'); return; }
-  // Short Film batch button runs Audit (Stage 1 + Stage 2 if flagged) instead of Generate
-  if (S.activeType === 'short_film') {
-    return runBatchAudit(checked);
-  }
   S.batchRunning = true;
   document.getElementById('batchProgress').style.display = 'block';
 
@@ -4343,59 +3594,6 @@ async function runBatch() {
   document.getElementById('progressLabel').textContent = `Done — ${drafted} drafted, ${flagged} flagged`;
   S.batchRunning = false;
   showToast(`Batch complete: ${drafted} drafted, ${flagged} flagged`, 'success');
-  setTimeout(() => { document.getElementById('batchProgress').style.display = 'none'; }, 4000);
-}
-
-// Run the two-stage audit pipeline on every selected clip (Short Film only).
-// Sequential (one at a time) — could be parallelized but the API rate limits
-// + sheet-write throttling already in place make sequential safer.
-async function runBatchAudit(checked) {
-  S.batchRunning = true;
-  document.getElementById('batchProgress').style.display = 'block';
-  let done = 0, passed = 0, flagged = 0, errors = 0;
-  for (const rowNum of checked) {
-    const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
-    if (!clip) { done++; continue; }
-    document.getElementById('progressLabel').textContent = `Auditing ${done+1}/${checked.length} — ${clip.title.substring(0,40)}…`;
-    document.getElementById('progressFill').style.width = ((done/checked.length)*100) + '%';
-    try {
-      // runAudit handles Stage 1, decides flagged/passed, runs Stage 2 if needed,
-      // and saves to sheet — but we don't want it to render or toast for each clip
-      // in a batch. Inline the logic with batch-friendly side effects.
-      const { violations, scores } = await runStage1Audit(clip);
-      const threshold = getAuditThreshold();
-      const isFlagged = violations.length > 0 || scores.overall < threshold;
-      setReviewField(clip, 'auditOverallScore', scores.overall);
-      setReviewField(clip, 'auditSubScores', scores);
-      setReviewField(clip, 'auditViolations', violations);
-      setReviewField(clip, 'auditThresholdAtRun', threshold);
-      setReviewField(clip, 'auditRunAt', new Date().toISOString());
-      if (!isFlagged) {
-        setReviewField(clip, 'auditStatus', 'passed');
-        setReviewField(clip, 'auditRewrite', '');
-        setReviewField(clip, 'auditTooltip', '');
-        passed++;
-      } else {
-        const { rewrite, tooltip } = await runStage2Rewrite(clip, violations, scores);
-        setReviewField(clip, 'auditStatus', 'flagged-pending-review');
-        setReviewField(clip, 'auditRewrite', rewrite);
-        setReviewField(clip, 'auditTooltip', tooltip);
-        flagged++;
-      }
-      await saveReviewRow(clip);
-    } catch(e) {
-      console.error('Batch audit error on row', rowNum, e);
-      errors++;
-    }
-    done++;
-    renderQueue();
-  }
-  document.getElementById('progressFill').style.width = '100%';
-  document.getElementById('progressLabel').textContent = `Done — ${passed} passed, ${flagged} flagged${errors ? ', ' + errors + ' errors' : ''}`;
-  S.batchRunning = false;
-  if (S.selectedIdx) renderDetail();
-  renderAuditStats();
-  showToast(`Batch audit complete: ${passed} passed, ${flagged} flagged${errors ? ', ' + errors + ' errors' : ''}`, errors > 0 ? 'error' : 'success');
   setTimeout(() => { document.getElementById('batchProgress').style.display = 'none'; }, 4000);
 }
 
@@ -5665,17 +4863,6 @@ function renderDashboard() {
   // Auto-flag-by-length is currently only enforced for Addresses (Sichos) — hide the control for other types
   const minWcWrap = document.getElementById('minWcWrap');
   if (minWcWrap) minWcWrap.style.display = typeCfg.key === 'sichos' ? 'flex' : 'none';
-  // Audit threshold slider — Short Films only
-  const auditWrap = document.getElementById('auditThresholdWrap');
-  if (auditWrap) auditWrap.style.display = typeCfg.key === 'short_film' ? 'flex' : 'none';
-  const auditSlider = document.getElementById('auditThresholdSlider');
-  const auditValue = document.getElementById('auditThresholdValue');
-  if (auditSlider) auditSlider.value = getAuditThreshold();
-  if (auditValue) auditValue.textContent = getAuditThreshold().toFixed(1);
-  // Audit stats panel — Short Films only
-  const auditStatsWrap = document.getElementById('auditStatsWrap');
-  if (auditStatsWrap) auditStatsWrap.style.display = typeCfg.key === 'short_film' ? 'block' : 'none';
-  if (typeCfg.key === 'short_film') renderAuditStats();
   // Count by status
   const counts = { unprocessed: 0, flagged: 0, draft: 0, approved: 0 };
   activeBucket().clips.forEach(c => { counts[getStatus(c)] = (counts[getStatus(c)] || 0) + 1; });
@@ -6210,7 +5397,6 @@ async function init() {
       await loadAllData();
       try { await registerTeamMember(); } catch(e) { console.warn('Team register failed:', e); }
       try { await ensureNotesTab(); await loadNotes(); updateNotesBadge(); } catch(e) { console.warn('Notes load failed:', e); }
-      try { await loadAuditRules(); } catch(e) { console.warn('Audit rules load failed:', e); }
       // Re-render dashboard now that we know admin status
       if (S.currentView === 'dashboard') renderDashboard();
     } catch(e) {
