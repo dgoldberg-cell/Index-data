@@ -391,13 +391,14 @@
     letter-spacing: 0.005em;
   }
   .draft-textarea {
-    width: 100%; min-height: 160px;
+    width: 100%; min-height: 80px;
     font-family: 'Lora', 'Source Serif Pro', Georgia, var(--font-serif);
     font-size: 15.5px; color: #1F1A12; line-height: 1.75;
     border: none; border-radius: var(--radius);
-    padding: 18px 20px; background: #FAF6EC; resize: vertical; outline: none;
+    padding: 18px 20px; background: #FAF6EC; outline: none;
     box-shadow: var(--shadow-inner); transition: box-shadow 0.18s;
     letter-spacing: 0.005em;
+    resize: none; overflow: hidden;
   }
   .draft-textarea:focus { box-shadow: var(--shadow-inner), 0 0 0 3px var(--accent-soft); }
   .draft-textarea::placeholder {
@@ -3127,6 +3128,8 @@ function renderDetail() {
 
   renderChatMessages(clip._rowNum);
   renderClipNotes(clip);
+  // Auto-grow the draft textarea to fit its initial content (no scroll bar)
+  setTimeout(() => autoGrowTextarea(document.getElementById('draftTA_' + clip._rowNum)), 0);
 }
 
 function renderAuditCard(clip, bucket) {
@@ -3416,11 +3419,21 @@ function updateNotesBadge() {
   else badge.style.display = 'none';
 }
 
+function autoGrowTextarea(ta) {
+  if (!ta) return;
+  // Reset to a small height first so shrinking works too
+  ta.style.height = 'auto';
+  // Grow to fit content. scrollHeight includes padding.
+  ta.style.height = ta.scrollHeight + 'px';
+}
+
 function onDraftInput(rowNum) {
   const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
   if (!clip) return;
-  const val = document.getElementById('draftTA_' + rowNum)?.value || '';
+  const ta = document.getElementById('draftTA_' + rowNum);
+  const val = ta?.value || '';
   clip._draft = val;
+  autoGrowTextarea(ta);
   const wc = wordCount(val);
   const wcEl = document.getElementById('wc_' + rowNum);
   if (wcEl) {
