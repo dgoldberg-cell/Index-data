@@ -3482,11 +3482,11 @@ async function callAI(messages, opts = {}) {
   if (!S.claudeKey) throw new Error('No API key — please sign out and add your Anthropic key');
   const body = {
     model: S.aiModel,
-    max_tokens: 1500,
+    max_tokens: opts.maxTokens ?? 1500,
     temperature: opts.temperature ?? 1.0, // explicit so we get true variance on regenerations
     messages,
   };
-  console.log('[callAI] model:', body.model, 'temp:', body.temperature, 'msgs:', messages.length);
+  console.log('[callAI] model:', body.model, 'temp:', body.temperature, 'max_tokens:', body.max_tokens, 'msgs:', messages.length);
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': S.claudeKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
@@ -3495,7 +3495,10 @@ async function callAI(messages, opts = {}) {
   const data = await r.json();
   if (data.error) throw new Error(data.error.message);
   const text = data.content?.find(b => b.type === 'text')?.text || '';
-  console.log('[callAI] response length:', text.length, 'preview:', text.substring(0, 80));
+  const stopReason = data.stop_reason || '';
+  console.log('[callAI] response length:', text.length, 'stop_reason:', stopReason, 'preview:', text.substring(0, 80));
+  // Surface truncation cleanly so callers can handle / retry
+  if (stopReason === 'max_tokens') console.warn('[callAI] response was truncated at max_tokens — output may be incomplete');
   return text;
 }
 
@@ -3643,11 +3646,8 @@ async function runStage1Audit(clip) {
   }
   const transcript = S.transcriptLoaded[clip._rowNum] || '';
   const prompt = buildStage1Prompt(summary, transcript);
-  const raw = await callAI([{ role: 'user', content: prompt }], { temperature: 0.2 });
-  const clean = raw.replace(/```json|```/g, '').trim();
-  let parsed;
-  try { parsed = JSON.parse(clean); }
-  catch(e) { throw new Error('Stage 1 returned invalid JSON: ' + clean.substring(0, 200)); }
+  const raw = await callAI([{ role: 'user', content: prompt }], { temperature: 0.2, maxTokens: 2000 });
+  const parsed = parseAuditJSON(raw, 'Stage 1');
   const violations = parsed.binary_violations || [];
   const scores = parsed.scores || { overall: 0, promo_level: 0, voice_quality: 0, opener_strength: 0, documentary_feel: 0 };
   return { violations, scores };
@@ -3660,16 +3660,73 @@ async function runStage2Rewrite(clip, violations, scores) {
   const summary = clip._draft || clip.description || '';
   const transcript = S.transcriptLoaded[clip._rowNum] || '';
   const prompt = buildStage2Prompt(summary, transcript, violations, scores);
-  const raw = await callAI([{ role: 'user', content: prompt }], { temperature: 0.7 });
-  const clean = raw.replace(/```json|```/g, '').trim();
-  let parsed;
-  try { parsed = JSON.parse(clean); }
-  catch(e) { throw new Error('Stage 2 returned invalid JSON: ' + clean.substring(0, 200)); }
+  const raw = await callAI([{ role: 'user', content: prompt }], { temperature: 0.7, maxTokens: 2500 });
+  const parsed = parseAuditJSON(raw, 'Stage 2');
   return {
     rewrite: smartenQuotes(parsed.rewrite || ''),
     tooltip: parsed.tooltip || '',
     issuesAddressed: parsed.issues_addressed || [],
   };
+}
+
+// Robust JSON extraction from AI responses.
+// Handles ```json fences, leading/trailing prose, and truncated JSON
+// (will repair common truncation patterns: missing closing braces/brackets/quotes).
+function parseAuditJSON(raw, stageLabel) {
+  if (!raw || !raw.trim()) throw new Error(`${stageLabel} returned empty response`);
+  // Strip markdown code fences
+  let text = raw.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+  // Find the first { and the last reasonable place to consider "the JSON"
+  const firstBrace = text.indexOf('{');
+  if (firstBrace < 0) throw new Error(`${stageLabel} returned no JSON object: ` + raw.substring(0, 200));
+  text = text.substring(firstBrace);
+  // First, try to parse as-is
+  try { return JSON.parse(text); } catch {}
+  // Truncated: try to repair by closing open structures
+  const repaired = repairTruncatedJSON(text);
+  try { return JSON.parse(repaired); }
+  catch (e) {
+    throw new Error(`${stageLabel} returned invalid JSON: ` + text.substring(0, 200));
+  }
+}
+
+// Best-effort repair of truncated JSON: closes unterminated strings, arrays, objects.
+// Not a full JSON repair library — handles the common LLM-truncation case.
+function repairTruncatedJSON(s) {
+  let depth = 0;        // brace/bracket nesting
+  const stack = [];     // tracks '{' or '['
+  let inString = false;
+  let escaped = false;
+  let lastValidEnd = -1;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (escaped) { escaped = false; continue; }
+    if (c === '\\') { escaped = true; continue; }
+    if (inString) {
+      if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') { inString = true; continue; }
+    if (c === '{' || c === '[') { stack.push(c); }
+    else if (c === '}') {
+      if (stack[stack.length - 1] === '{') stack.pop();
+      if (stack.length === 0) lastValidEnd = i;
+    }
+    else if (c === ']') {
+      if (stack[stack.length - 1] === '[') stack.pop();
+      if (stack.length === 0) lastValidEnd = i;
+    }
+  }
+  // If truncated cleanly, just close everything still open
+  let out = s;
+  if (inString) out += '"';
+  // Strip trailing comma if present (common: "...," then truncation)
+  out = out.replace(/,\s*$/, '');
+  while (stack.length > 0) {
+    const opener = stack.pop();
+    out += (opener === '{') ? '}' : ']';
+  }
+  return out;
 }
 
 // Compute pass/fail from existing scores using the current threshold (no AI call)
