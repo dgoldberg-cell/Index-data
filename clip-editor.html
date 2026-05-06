@@ -393,6 +393,33 @@
     white-space: pre-wrap; word-wrap: break-word;
     display: block;
   }
+  /* Editable variant — same look, but a real textarea so the user can type in it */
+  textarea.orig-text-editable {
+    width: 100%; box-sizing: border-box;
+    border: none; outline: none;
+    resize: none; overflow: hidden;
+    transition: box-shadow 0.18s;
+    font-family: 'Lora', 'Source Serif Pro', Georgia, var(--font-serif);
+  }
+  textarea.orig-text-editable:focus {
+    box-shadow: var(--shadow-inner), 0 0 0 3px var(--accent-soft);
+  }
+  textarea.orig-text-editable.is-edited {
+    box-shadow: var(--shadow-inner), 0 0 0 2px var(--accent);
+  }
+  .orig-edited-badge {
+    font-size: 10px; font-weight: 600;
+    background: var(--accent-light); color: var(--accent2);
+    padding: 2px 10px; border-radius: var(--radius-pill);
+    text-transform: none; letter-spacing: 0;
+  }
+  .btn-link-revert {
+    background: transparent; border: none; cursor: pointer;
+    font-size: 10.5px; color: var(--tx3); padding: 2px 6px;
+    text-transform: none; letter-spacing: 0; font-weight: 500;
+    margin-left: auto;
+  }
+  .btn-link-revert:hover { color: var(--accent2); text-decoration: underline; }
   .draft-textarea {
     width: 100%; min-height: 80px;
     font-family: 'Lora', 'Source Serif Pro', Georgia, var(--font-serif);
@@ -2892,9 +2919,19 @@ function renderDetail() {
   const formattedDate = formatClipDate(clip.date);
   const duration = formatDuration(clip.durationMs);
 
-  // Original text: if approved and we have a backed-up original, show the backup; otherwise show current clip.description
-  // (For approved clips clip.description was overwritten with the approved text)
+  // Original text: if approved, show the pre-approval backup (read-only historical reference).
+  // Otherwise show the current sheet description.
   const originalText = (status === 'approved' && originalBackup) ? originalBackup : clip.description;
+
+  // What to display IN the editable original card:
+  //   - If approved → the (read-only) original from backup
+  //   - Else if there's an active draft (manual or AI) → show the draft, since orig and AI
+  //     boxes mirror each other and represent "the current draft you'll approve"
+  //   - Else → the unmodified original (a fresh canvas to tweak)
+  const origDisplayValue = (status === 'approved')
+    ? originalText
+    : (clip._draft || originalText);
+  const origIsEdited = (status !== 'approved') && origDisplayValue !== originalText && origDisplayValue.length > 0;
 
   // AI box value:
   //   - If there's a current draft → show it (so a second person can review the same draft)
@@ -2959,9 +2996,19 @@ function renderDetail() {
     ${status === 'flagged' ? `<div class="flag-banner"><div class="flag-icon">🚩</div><div><strong>Needs Attention:</strong> ${esc(flagReason)}<br><small>Use the AI chat below to provide more context, then regenerate.</small></div></div>` : ''}
 
     <div class="card">
-      <div class="card-header">Original Description</div>
+      <div class="card-header" style="display:flex;align-items:center;gap:8px">
+        <span>Original Description</span>
+        ${status !== 'approved' ? `<span id="origEdited_${clip._rowNum}" class="orig-edited-badge" style="${origIsEdited ? '' : 'display:none'}">✎ Edited — unsaved</span>
+        <button class="btn-link-revert" onclick="resetOriginalEdit(${clip._rowNum})" id="origReset_${clip._rowNum}" style="${origIsEdited ? '' : 'display:none'}" title="Discard your edits and restore the description as it currently is on the sheet">↺ Discard edits</button>` : ''}
+      </div>
       <div class="card-body">
-        <div class="orig-text">${esc(originalText) || '<em style="color:var(--tx4)">No description</em>'}</div>
+        <textarea
+          id="origTA_${clip._rowNum}"
+          class="orig-text orig-text-editable ${origIsEdited ? 'is-edited' : ''}"
+          data-original="${esc(originalText)}"
+          data-row="${clip._rowNum}"
+          ${status === 'approved' ? 'readonly' : `oninput="onOriginalEdit(${clip._rowNum})"`}
+          placeholder="No description — type one here…">${esc(origDisplayValue)}</textarea>
         ${originalBackup && status === 'approved' ? `<div style="font-size:11px;color:var(--tx3);margin-top:6px">📦 Pre-approval original (backed up)</div>` : ''}
       </div>
     </div>
@@ -3047,7 +3094,10 @@ function renderDetail() {
   renderChatMessages(clip._rowNum);
   renderClipNotes(clip);
   // Auto-grow the draft textarea to fit its initial content (no scroll bar)
-  setTimeout(() => autoGrowTextarea(document.getElementById('draftTA_' + clip._rowNum)), 0);
+  setTimeout(() => {
+    autoGrowTextarea(document.getElementById('draftTA_' + clip._rowNum));
+    autoGrowTextarea(document.getElementById('origTA_' + clip._rowNum));
+  }, 0);
 }
 
 function renderClipNotes(clip) {
@@ -3260,6 +3310,71 @@ function autoGrowTextarea(ta) {
   ta.style.height = ta.scrollHeight + 'px';
 }
 
+// User typed in the Original Description card.
+// The orig card is a working surface — edits go straight into clip._draft,
+// the same place AI drafts live. Both textareas (orig + AI) mirror the same draft value.
+function onOriginalEdit(rowNum) {
+  const ta = document.getElementById('origTA_' + rowNum);
+  if (!ta) return;
+  const original = ta.dataset.original || '';
+  const current = ta.value;
+  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  autoGrowTextarea(ta);
+  const badge = document.getElementById('origEdited_' + rowNum);
+  const reset = document.getElementById('origReset_' + rowNum);
+  // Mirror this value into the AI draft textarea so both stay in sync
+  const draftTA = document.getElementById('draftTA_' + rowNum);
+  if (current === original) {
+    // Back to baseline — clear the draft entirely (treats as if user never edited)
+    clip._draft = '';
+    clip._draftSource = null;
+    if (draftTA) { draftTA.value = ''; autoGrowTextarea(draftTA); }
+    const wcEl = document.getElementById('wc_' + rowNum);
+    if (wcEl) { wcEl.textContent = ''; wcEl.className = 'word-count'; }
+    ta.classList.remove('is-edited');
+    if (badge) badge.style.display = 'none';
+    if (reset) reset.style.display = 'none';
+    queueDraftSave(clip);
+    return;
+  }
+  // New manual edit — this becomes the draft (same as AI generated one would be)
+  clip._draft = current;
+  clip._draftSource = 'manual-orig-edit';
+  ta.classList.add('is-edited');
+  if (badge) badge.style.display = 'inline-block';
+  if (reset) reset.style.display = 'inline-block';
+  if (draftTA && draftTA.value !== current) {
+    draftTA.value = current;
+    autoGrowTextarea(draftTA);
+    const wcEl = document.getElementById('wc_' + rowNum);
+    const wc = wordCount(current);
+    if (wcEl) {
+      wcEl.textContent = current.trim() ? (wc + ' words' + (wc > 110 ? ' — over limit!' : wc > 90 ? ' ✓' : '')) : '';
+      wcEl.className = 'word-count' + (wc > 110 ? ' over' : '');
+    }
+  }
+  queueDraftSave(clip);
+}
+
+// Discard the user's manual edits to the original card and put the original text back.
+function resetOriginalEdit(rowNum) {
+  const ta = document.getElementById('origTA_' + rowNum);
+  if (!ta) return;
+  const original = ta.dataset.original || '';
+  ta.value = original;
+  onOriginalEdit(rowNum);
+}
+
+// Discard the user's manual edits to the original card and put the original text back.
+function resetOriginalEdit(rowNum) {
+  const ta = document.getElementById('origTA_' + rowNum);
+  if (!ta) return;
+  const original = ta.dataset.original || '';
+  ta.value = original;
+  onOriginalEdit(rowNum);
+}
+
 function onDraftInput(rowNum) {
   const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
   if (!clip) return;
@@ -3272,6 +3387,24 @@ function onDraftInput(rowNum) {
   if (wcEl) {
     wcEl.textContent = val.trim() ? (wc + ' words' + (wc > 110 ? ' — over limit!' : wc > 90 ? ' ✓' : '')) : '';
     wcEl.className = 'word-count' + (wc > 110 ? ' over' : '');
+  }
+  // Mirror into the editable Original card so both panels stay in sync
+  const origTA = document.getElementById('origTA_' + rowNum);
+  if (origTA && origTA.value !== val) {
+    origTA.value = val;
+    autoGrowTextarea(origTA);
+    const original = origTA.dataset.original || '';
+    const badge = document.getElementById('origEdited_' + rowNum);
+    const reset = document.getElementById('origReset_' + rowNum);
+    if (val !== original && val.length > 0) {
+      origTA.classList.add('is-edited');
+      if (badge) badge.style.display = 'inline-block';
+      if (reset) reset.style.display = 'inline-block';
+    } else {
+      origTA.classList.remove('is-edited');
+      if (badge) badge.style.display = 'none';
+      if (reset) reset.style.display = 'none';
+    }
   }
   queueDraftSave(clip);
 }
