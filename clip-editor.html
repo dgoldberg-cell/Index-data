@@ -413,6 +413,24 @@
   }
   .draft-source-manual { background: var(--accent-light); color: var(--accent2); }
   .draft-source-ai { background: var(--green-light); color: var(--green); }
+
+  /* Move-to-type dropdown */
+  .move-menu {
+    position: absolute; top: 100%; right: 0; margin-top: 4px;
+    background: var(--panel); border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(80, 60, 30, 0.18), var(--shadow-clay);
+    min-width: 200px; padding: 6px; z-index: 100;
+    border: 1px solid var(--border);
+  }
+  .move-menu-item {
+    padding: 8px 12px; font-size: 12.5px; color: var(--tx2);
+    border-radius: var(--radius); cursor: pointer; transition: background 0.12s;
+    text-transform: none; letter-spacing: 0; font-weight: 500;
+  }
+  .move-menu-item:hover { background: var(--accent-light); color: var(--accent2); }
+  .move-menu-item.move-menu-restore { color: var(--tx3); }
+  .move-menu-item.move-menu-restore:hover { background: var(--bg2); color: var(--tx); }
+  .move-menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
   .draft-textarea {
     width: 100%; min-height: 80px;
     font-family: 'Lora', 'Source Serif Pro', Georgia, var(--font-serif);
@@ -1137,6 +1155,7 @@
         </div>
         <div class="dash-actions" style="flex-direction:column;align-items:flex-end;gap:10px">
           <button class="btn btn-primary" onclick="selectTypeView(S.activeType,'queue')">▶ Continue in Queue</button>
+          <button class="btn btn-sm" onclick="selectTypeView(S.activeType,'export')" style="margin-top:6px" title="Export approved clips of this type as a sheet tab or CSV download">⬇ Export approved clips</button>
           <div id="minWcWrap" style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--tx3);background:var(--panel);padding:8px 14px;border-radius:var(--radius-pill);box-shadow:var(--shadow-clay)">
             <label for="minWcInput" title="Drafts under this word count are auto-flagged. Set to 0 to disable.">Auto-flag if under</label>
             <input id="minWcInput" type="number" min="0" step="5" style="width:54px;padding:4px 8px;border:none;border-radius:var(--radius-pill);background:var(--bg2);box-shadow:var(--shadow-inner);font-family:var(--font-sans);font-size:11px;text-align:center;color:var(--tx)" oninput="onMinWcChange(this.value)">
@@ -1262,9 +1281,10 @@
   <!-- EXPORT VIEW -->
   <div id="exportView" style="display:none;">
     <div class="export-header" style="flex-wrap:wrap">
-      <div class="export-title">Export — Sichos Summaries</div>
-      <button class="btn btn-primary" onclick="generateSheetExport()">Generate Sheet Tab</button>
-      <button class="btn" onclick="exportHTML()">⬇ Export as HTML</button>
+      <div class="export-title" id="exportTitle">Export</div>
+      <button class="btn btn-primary" onclick="generateSheetExport()" title="Create a new tab in this spreadsheet with one column per field">📊 Generate Sheet Tab</button>
+      <button class="btn" onclick="downloadCsv()" title="Download a CSV file with one column per field">⬇ Download CSV</button>
+      <button class="btn" onclick="exportHTML()">⬇ HTML</button>
       <button class="btn" onclick="window.print()">🖨 Print</button>
       <label style="font-size:11px;color:var(--tx3);display:flex;align-items:center;gap:5px;margin-left:6px;cursor:pointer">
         <input type="checkbox" id="exportShowOriginal" onchange="renderExportView()" style="accent-color:var(--accent)"> Show original description column
@@ -1328,6 +1348,7 @@ const CONFIG = {
   },
   TEAM_TAB: '_Team',
   NOTES_TAB: '_CSE_Notes',
+  TYPE_OVERRIDES_TAB: '_TypeOverrides',
   ADMIN_EMAILS: ['dgoldberg@jemedia.org', 'es@jemedia.org'],
   ENTRIES_PER_PAGE: 10, // book view
 };
@@ -2195,6 +2216,165 @@ function getGeneralNotes() {
 }
 
 // ══════════════════════════════════════════════
+// TYPE OVERRIDES (workspace-only re-routing of clips between buckets)
+//
+// The official clip type lives in column AD of the main sheet and is never modified
+// by this tool. But the editorial team sometimes needs to re-categorize a clip just
+// for the workspace — e.g. a Film Chapter that's actually an Address.
+//
+// Overrides live in the _TypeOverrides tab (created on demand). Schema:
+//   clip_row | clip_id | source_type | target_type | moved_by | moved_at
+// During clip load, we apply any matching override so the clip lands in target_type's bucket.
+// ══════════════════════════════════════════════
+const TYPE_OVERRIDE_HEADERS = ['clip_row','clip_id','source_type','target_type','moved_by','moved_at'];
+let _typeOverrides = {}; // { [rowNum: string]: { sourceType, targetType, movedBy, movedAt } }
+
+async function ensureTypeOverridesTab() {
+  const meta = await getSheetMeta();
+  const exists = meta.sheets?.some(s => s.properties.title === CONFIG.TYPE_OVERRIDES_TAB);
+  if (!exists) {
+    await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: CONFIG.TYPE_OVERRIDES_TAB, gridProperties: { frozenRowCount: 1 } } } }] })
+    });
+    invalidateSheetMeta();
+    await sheetsSet(`'${CONFIG.TYPE_OVERRIDES_TAB}'!A1:F1`, [TYPE_OVERRIDE_HEADERS]);
+  }
+}
+
+async function loadTypeOverrides() {
+  _typeOverrides = {};
+  try {
+    const data = await sheetsGet(`'${CONFIG.TYPE_OVERRIDES_TAB}'!A:F`);
+    const rows = data.values || [];
+    rows.slice(1).forEach(row => {
+      if (!row[0] || !row[3]) return;
+      _typeOverrides[String(row[0])] = {
+        clipId: row[1] || '',
+        sourceType: row[2] || '',
+        targetType: row[3],
+        movedBy: row[4] || '',
+        movedAt: row[5] || '',
+      };
+    });
+  } catch(e) {
+    // Tab doesn't exist yet — that's fine, just no overrides
+  }
+}
+
+// Move a clip from its current bucket to a different one, persisting the override.
+async function moveClipToType(rowNum, targetTypeKey) {
+  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  const sourceTypeKey = clip.typeKey;
+  if (sourceTypeKey === targetTypeKey) return;
+  const targetTypeCfg = getTypeByKey(targetTypeKey);
+  if (!targetTypeCfg) return;
+  const sourceTypeCfg = getTypeByKey(sourceTypeKey);
+
+  showLoading(`Moving to ${targetTypeCfg.displayName}…`);
+  try {
+    await ensureTypeOverridesTab();
+    // Write/update the override row
+    const data = await sheetsGet(`'${CONFIG.TYPE_OVERRIDES_TAB}'!A:A`);
+    const rows = data.values || [];
+    let sheetRow = -1;
+    rows.forEach((r, i) => { if (r[0] === String(rowNum)) sheetRow = i + 1; });
+    const values = [[
+      String(rowNum),
+      clip.clipId || '',
+      sourceTypeKey,
+      targetTypeKey,
+      S.user?.email || '',
+      new Date().toISOString(),
+    ]];
+    if (sheetRow > 0) {
+      await sheetsSet(`'${CONFIG.TYPE_OVERRIDES_TAB}'!A${sheetRow}:F${sheetRow}`, values);
+    } else {
+      const nextRow = (rows.length || 0) + 1;
+      await sheetsSet(`'${CONFIG.TYPE_OVERRIDES_TAB}'!A${nextRow}:F${nextRow}`, values);
+    }
+    // Update local in-memory state
+    _typeOverrides[String(rowNum)] = {
+      clipId: clip.clipId, sourceType: sourceTypeKey, targetType: targetTypeKey,
+      movedBy: S.user?.email || '', movedAt: new Date().toISOString(),
+    };
+    // Move the clip object between buckets
+    const sourceBucket = S.byType[sourceTypeKey];
+    const targetBucket = S.byType[targetTypeKey];
+    if (sourceBucket) sourceBucket.clips = sourceBucket.clips.filter(c => c._rowNum !== rowNum);
+    clip.typeKey = targetTypeKey;
+    clip.clipType = targetTypeCfg.adValue; // for display only — main sheet untouched
+    if (targetBucket) targetBucket.clips.push(clip);
+    // Keep selection sane: this clip is no longer in the active bucket
+    S.selectedIdx = null;
+    hideLoading();
+    renderQueue();
+    renderDetail();
+    showToast(`Moved to ${targetTypeCfg.displayName} (workspace only — main sheet unchanged)`, 'success');
+  } catch(e) { hideLoading(); showToast('Move failed: ' + e.message, 'error'); }
+}
+
+// Remove an override — restores the clip to its original (sheet-declared) type.
+async function clearTypeOverride(rowNum) {
+  const override = _typeOverrides[String(rowNum)];
+  if (!override) return;
+  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  const originalTypeCfg = getTypeByKey(override.sourceType);
+  if (!originalTypeCfg) return;
+  showLoading(`Restoring to ${originalTypeCfg.displayName}…`);
+  try {
+    // Find and delete the row in the override tab
+    const data = await sheetsGet(`'${CONFIG.TYPE_OVERRIDES_TAB}'!A:A`);
+    const rows = data.values || [];
+    let sheetRow = -1;
+    rows.forEach((r, i) => { if (r[0] === String(rowNum)) sheetRow = i + 1; });
+    if (sheetRow > 0) {
+      const meta = await getSheetMeta();
+      const sheetId = meta.sheets?.find(s => s.properties.title === CONFIG.TYPE_OVERRIDES_TAB)?.properties.sheetId;
+      if (sheetId !== undefined) {
+        await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: sheetRow - 1, endIndex: sheetRow } } }] })
+        });
+      }
+    }
+    delete _typeOverrides[String(rowNum)];
+    // Move clip back to original bucket
+    const currentBucket = S.byType[clip.typeKey];
+    const originalBucket = S.byType[override.sourceType];
+    if (currentBucket) currentBucket.clips = currentBucket.clips.filter(c => c._rowNum !== rowNum);
+    clip.typeKey = override.sourceType;
+    clip.clipType = originalTypeCfg.adValue;
+    if (originalBucket) originalBucket.clips.push(clip);
+    S.selectedIdx = null;
+    hideLoading();
+    renderQueue();
+    renderDetail();
+    showToast(`Restored to ${originalTypeCfg.displayName}`, 'success');
+  } catch(e) { hideLoading(); showToast('Restore failed: ' + e.message, 'error'); }
+}
+
+// Show/hide the "Move to…" dropdown next to a clip's Watch button.
+function toggleMoveMenu(rowNum) {
+  const menu = document.getElementById('moveMenu_' + rowNum);
+  if (!menu) return;
+  const isOpen = menu.style.display === 'block';
+  // Close any other open menus first
+  document.querySelectorAll('.move-menu').forEach(m => { m.style.display = 'none'; });
+  menu.style.display = isOpen ? 'none' : 'block';
+}
+
+// Close move menus when clicking elsewhere on the page
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.move-menu') || e.target.closest('[id^="moveBtn_"]')) return;
+  document.querySelectorAll('.move-menu').forEach(m => { m.style.display = 'none'; });
+});
+
+// ══════════════════════════════════════════════
 // AI RULES (stored in sheet tab so any device picks up edits)
 // ══════════════════════════════════════════════
 async function loadRulesForType(typeCfg) {
@@ -2373,6 +2553,10 @@ async function migrateLegacyTabs() {
 async function loadAllData() {
   showLoading('Migrating tabs (if needed)…');
   try { await migrateLegacyTabs(); } catch(e) { console.warn('Tab migration error:', e); }
+  // Load type overrides BEFORE we route clips into buckets — overrides change
+  // which bucket each clip lands in. The override tab is created on demand
+  // (loadTypeOverrides silently does nothing if it doesn't exist yet).
+  try { await loadTypeOverrides(); } catch(e) { console.warn('Type overrides load error:', e); }
   showLoading('Reading sheet data…');
   try {
     const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!A:AD`);
@@ -2401,17 +2585,25 @@ async function loadAllData() {
     });
     rows.slice(1).forEach((row, i) => {
       const clipTypeStr = (row[CONFIG.COL.CLIP_TYPE] || '').trim();
-      const tCfg = getTypeByAd(clipTypeStr);
+      let tCfg = getTypeByAd(clipTypeStr);
       if (!tCfg) return;
+      // Apply per-clip type override (workspace-only re-routing) — see _TypeOverrides tab
+      const rowNum = i + 2;
+      const override = _typeOverrides[String(rowNum)];
+      if (override && override.targetType) {
+        const overriddenCfg = getTypeByKey(override.targetType);
+        if (overriddenCfg) tCfg = overriddenCfg;
+      }
       // Film Chapter filter: only include if the parent film name is in our allowed list
       const filmName = (row[CONFIG.COL.FILM_NAME] || '').trim();
+      // Don't apply the films-allowlist filter to clips that have been moved away from film_chapter
       if (tCfg.filterByFilms && !ALLOWED_FILMS.has(filmName)) return;
       // Short Film filter: skip clips that are actually intros to a Sicha (column J Title contains "Sicha intro")
       const titleStr = (row[CONFIG.COL.TITLE] || '').toString();
       if (tCfg.key === 'short_film' && /sicha\s*intro/i.test(titleStr)) return;
       const desc = getDescription(row, tCfg.key);
       const clip = {
-        _rowNum: i + 2,
+        _rowNum: rowNum,
         typeKey: tCfg.key,
         clipId: (row[CONFIG.COL.CLIP_ID] || '').toString().trim(),
         description: desc.text,
@@ -2424,8 +2616,10 @@ async function loadAllData() {
         clipType: clipTypeStr,
         title: row[CONFIG.COL.TITLE] || ('Clip #' + (i+2)),
         rewrite: '',
+        // Track the original (sheet-declared) type so we can show "moved from X" in the UI
+        originalTypeKey: override ? override.sourceType : tCfg.key,
       };
-      if (tCfg.hasFilmName) clip.filmName = filmName;
+      if (tCfg.hasFilmName || (override && override.sourceType === 'film_chapter')) clip.filmName = filmName;
       // Short Film: capture the subtitle (column I)
       if (tCfg.key === 'short_film') {
         clip.subtitle = (row[CONFIG.COL.SUBTITLE] || '').toString().trim();
@@ -2535,10 +2729,31 @@ function formatDuration(ms) {
 }
 
 // Pull description with fallback H → A → Y, also remember which column it came from.
+// Strip stray mid-sentence line breaks from imported descriptions.
+// Many descriptions in the source sheet have hard line breaks every ~70 chars
+// (legacy formatting). Those breaks make the text look fragmented in the UI.
+//
+// Rule: if a line break (or run of breaks) is NOT immediately preceded by a
+// sentence-ending character (. ! ? : ;), the break gets collapsed into a single space.
+// Breaks that DO follow sentence-endings are preserved as paragraph separators.
+function sanitizeDescription(s) {
+  if (!s) return '';
+  // Normalize CRLF and CR to LF first
+  let text = s.replace(/\r\n?/g, '\n');
+  // Collapse mid-sentence line breaks: any \n (with possible trailing whitespace)
+  // that is preceded by a non-sentence-ending character → replace with a single space.
+  text = text.replace(/([^.!?:;\n])[ \t]*\n+[ \t]*/g, '$1 ');
+  // Tidy up: collapse any 3+ consecutive line breaks into 2 (max one blank line)
+  text = text.replace(/\n{3,}/g, '\n\n');
+  // Squash multiple spaces that may have been introduced
+  text = text.replace(/[ \t]{2,}/g, ' ');
+  return text.trim();
+}
+
 function getDescription(row, typeKey) {
-  const h = row[CONFIG.COL.DESCRIPTION_H] || '';
-  const a = row[CONFIG.COL.DESCRIPTION_A] || '';
-  const y = row[CONFIG.COL.DESCRIPTION_Y] || '';
+  const h = sanitizeDescription(row[CONFIG.COL.DESCRIPTION_H] || '');
+  const a = sanitizeDescription(row[CONFIG.COL.DESCRIPTION_A] || '');
+  const y = sanitizeDescription(row[CONFIG.COL.DESCRIPTION_Y] || '');
   // Short Film clips: column A is the source of truth (per JEM editorial workflow)
   if (typeKey === 'short_film') {
     if (a.trim()) return { text: a, sourceCol: 'A' };
@@ -2973,7 +3188,26 @@ function renderDetail() {
           ${clip.programNum ? `<span class="detail-meta-item">LT ${esc(clip.programNum)}</span>` : ''}
           <span class="detail-meta-item">${statusBadgeHTML(status)}</span>
           ${clip.clipId ? `<a class="detail-meta-item" href="https://videos.jem.tv/video-player?clip=${esc(clip.clipId)}" target="_blank" rel="noopener" style="font-weight:600;color:var(--accent2);text-decoration:none;background:var(--accent-light);padding:4px 12px;border-radius:var(--radius-pill);transition:all 0.15s">▶ Watch on JEM.tv</a>` : ''}
+          ${(() => {
+            // "Move to" dropdown — re-categorize the clip in the workspace only
+            const otherTypes = CLIP_TYPES.filter(t => t.key !== clip.typeKey);
+            const isMoved = !!_typeOverrides[String(clip._rowNum)];
+            const sourceTypeCfg = isMoved ? getTypeByKey(_typeOverrides[String(clip._rowNum)].sourceType) : null;
+            return `<span class="detail-meta-item" style="position:relative;display:inline-block">
+              <button class="btn btn-sm" onclick="toggleMoveMenu(${clip._rowNum})" id="moveBtn_${clip._rowNum}" title="Re-categorize this clip — workspace only, doesn't change the main sheet" style="font-size:11px">↗ Move to…</button>
+              <div id="moveMenu_${clip._rowNum}" class="move-menu" style="display:none">
+                ${otherTypes.map(t => `<div class="move-menu-item" onclick="moveClipToType(${clip._rowNum}, '${t.key}'); toggleMoveMenu(${clip._rowNum})">${esc(t.displayName)}</div>`).join('')}
+                ${isMoved && sourceTypeCfg ? `<div class="move-menu-divider"></div><div class="move-menu-item move-menu-restore" onclick="clearTypeOverride(${clip._rowNum}); toggleMoveMenu(${clip._rowNum})">↩ Restore to ${esc(sourceTypeCfg.displayName)} (original)</div>` : ''}
+              </div>
+            </span>`;
+          })()}
         </div>
+        ${(() => {
+          const override = _typeOverrides[String(clip._rowNum)];
+          if (!override) return '';
+          const src = getTypeByKey(override.sourceType);
+          return `<div style="font-size:11px;color:var(--tx3);margin-bottom:6px;background:var(--accent-soft);display:inline-block;padding:3px 10px;border-radius:var(--radius-pill)">📍 Originally categorized as <strong>${src ? esc(src.displayName) : esc(override.sourceType)}</strong> in the main sheet — moved here in the workspace only</div>`;
+        })()}
         ${tags.length ? `<div class="tag-bubbles">${tags.map(t=>`<span class="tag-bubble">${esc(t)}</span>`).join('')}</div>` : ''}
       </div>
     </div>
@@ -4041,6 +4275,9 @@ function goToClip(rowNum) {
 // EXPORT VIEW
 // ══════════════════════════════════════════════
 function renderExportView() {
+  const typeCfg = activeTypeCfg();
+  const titleEl = document.getElementById('exportTitle');
+  if (titleEl && typeCfg) titleEl.textContent = `Export — ${typeCfg.displayName}`;
   let approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
   if (S.activeType === 'film_chapter' && _filmOrderCache) {
     const byFilm = {};
@@ -4075,18 +4312,26 @@ function renderExportView() {
 }
 
 async function generateSheetExport() {
-  const approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
+  const typeCfg = activeTypeCfg();
+  const typeKey = S.activeType;
+  let approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
+  // For Film Chapters: respect the saved chapter ordering per film
+  if (typeKey === 'film_chapter' && _filmOrderCache) {
+    const byFilm = {};
+    approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
+    const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
+    approved = [];
+    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => getStatus(c) === 'approved')); });
+  }
   if (!approved.length) { showToast('No approved clips to export', 'error'); return; }
-  const tabName = 'Sichos Summary Export';
+  const tabName = `${typeCfg.displayName} Export`;
   showLoading('Creating sheet tab…');
   try {
-    // Check if tab exists; if so delete it first so we get a fresh export
+    // Recreate the tab fresh each time — exports are snapshots, not append-only
     const meta = await getSheetMeta();
     const existing = meta.sheets?.find(s => s.properties.title === tabName);
     const requests = [];
-    if (existing) {
-      requests.push({ deleteSheet: { sheetId: existing.properties.sheetId } });
-    }
+    if (existing) requests.push({ deleteSheet: { sheetId: existing.properties.sheetId } });
     requests.push({ addSheet: { properties: { title: tabName, gridProperties: { frozenRowCount: 1 } } } });
     const batchRes = await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
       method: 'POST',
@@ -4096,93 +4341,141 @@ async function generateSheetExport() {
     invalidateSheetMeta();
     const newSheetId = batchRes.replies?.find(r => r.addSheet)?.addSheet?.properties?.sheetId;
 
-    // Build header + rows
-    const header = ['Thumbnail', 'Title', 'LT Program', 'Duration', 'Secular Date', 'Hebrew Date', 'Tags', 'Original Description', 'New Description', 'Approved By', 'Approved At'];
+    // ── Build per-type column schema ──────────────────────────────────────────
+    // Every type gets: Thumbnail, Title, then type-specific identifiers, then
+    // (Subtitle for short_film), New Description, Tags, Date, Duration, Watch URL,
+    // Approved By, Approved At.
+    const isShortFilm = typeKey === 'short_film';
+    const isFilmChapter = typeKey === 'film_chapter';
+    const header = ['Thumbnail', 'Title'];
+    if (isFilmChapter) header.push('Film', 'Chapter Title');
+    else header.push('Program');
+    if (isShortFilm) header.push('Subtitle');
+    header.push('New Description', 'Tags', 'Date', 'Duration', 'Watch URL', 'Approved By', 'Approved At');
+
     const rows = approved.map(clip => {
       const tags = parseTags(clip).join(', ');
-      const formatted = formatClipDate(clip.date);
-      let secular = '', hebrew = '';
-      if (formatted.includes(' - ')) { [secular, hebrew] = formatted.split(' - '); }
-      else { secular = formatted; }
-      const summary = clip.rewrite || '';
-      const original = getReviewField(clip, 'originalBackup') || '';
-      return [
+      const summary = clip.rewrite || clip._draft || clip.description || '';
+      const watchUrl = clip.clipId ? `https://videos.jem.tv/video-player?clip=${clip.clipId}` : '';
+      const row = [
         clip.thumbnail || '',
         clip.title || '',
-        clip.programNum ? 'LT ' + clip.programNum : '',
-        formatDuration(clip.durationMs),
-        secular,
-        hebrew,
-        tags,
-        original,
-        summary,
-        getReviewField(clip, 'approvedBy'),
-        getReviewField(clip, 'approvedAt'),
       ];
+      if (isFilmChapter) {
+        row.push(clip.filmName || '', clip.title || '');
+      } else {
+        row.push(clip.programNum ? 'LT ' + clip.programNum : '');
+      }
+      if (isShortFilm) {
+        row.push(clip.subtitle || '');
+      }
+      row.push(
+        summary,
+        tags,
+        formatClipDate(clip.date),
+        formatDuration(clip.durationMs),
+        watchUrl,
+        getReviewField(clip, 'approvedBy') || '',
+        getReviewField(clip, 'approvedAt') || ''
+      );
+      return row;
     });
-    const allRows = [header, ...rows];
 
     // Write data
     showLoading('Writing data…');
-    await sheetsSet(`'${tabName}'!A1`, allRows);
+    await sheetsSet(`'${tabName}'!A1`, [header, ...rows]);
 
-    // Format: hide original-description column (column H = index 7 zero-based), bold header, freeze
+    // Format: bold + tinted header, freeze top row, wrap text on description column,
+    // set sensible column widths.
     if (newSheetId !== undefined) {
+      const descColIdx = header.indexOf('New Description');
+      const titleColIdx = header.indexOf('Title');
+      const tagsColIdx = header.indexOf('Tags');
       const fmtRequests = [
         { repeatCell: {
             range: { sheetId: newSheetId, startRowIndex: 0, endRowIndex: 1 },
             cell: { userEnteredFormat: { textFormat: { bold: true }, backgroundColor: { red: 0.94, green: 0.92, blue: 0.86 } } },
             fields: 'userEnteredFormat(textFormat,backgroundColor)'
-          }
-        },
-        { updateDimensionProperties: {
-            range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 },
-            properties: { hiddenByUser: true },
-            fields: 'hiddenByUser'
-          }
-        },
-        // Wrap text on long columns (Original + New Description = H, I = index 7,8)
+        } },
+        // Wrap description and tags
         { repeatCell: {
-            range: { sheetId: newSheetId, startColumnIndex: 7, endColumnIndex: 9 },
-            cell: { userEnteredFormat: { wrapStrategy: 'WRAP' } },
-            fields: 'userEnteredFormat.wrapStrategy'
-          }
-        },
-        // Set column widths
-        { updateDimensionProperties: {
-            range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 },
-            properties: { pixelSize: 200 },
-            fields: 'pixelSize'
-          }
-        },
-        { updateDimensionProperties: {
-            range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 },
-            properties: { pixelSize: 220 },
-            fields: 'pixelSize'
-          }
-        },
-        { updateDimensionProperties: {
-            range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 8, endIndex: 9 },
-            properties: { pixelSize: 480 },
-            fields: 'pixelSize'
-          }
-        },
+            range: { sheetId: newSheetId, startColumnIndex: descColIdx, endColumnIndex: descColIdx + 1 },
+            cell: { userEnteredFormat: { wrapStrategy: 'WRAP', verticalAlignment: 'TOP' } },
+            fields: 'userEnteredFormat(wrapStrategy,verticalAlignment)'
+        } },
+        { repeatCell: {
+            range: { sheetId: newSheetId, startColumnIndex: tagsColIdx, endColumnIndex: tagsColIdx + 1 },
+            cell: { userEnteredFormat: { wrapStrategy: 'WRAP', verticalAlignment: 'TOP' } },
+            fields: 'userEnteredFormat(wrapStrategy,verticalAlignment)'
+        } },
+        // Column widths
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 180 }, fields: 'pixelSize' } },
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: titleColIdx, endIndex: titleColIdx + 1 }, properties: { pixelSize: 220 }, fields: 'pixelSize' } },
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: descColIdx, endIndex: descColIdx + 1 }, properties: { pixelSize: 480 }, fields: 'pixelSize' } },
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: tagsColIdx, endIndex: tagsColIdx + 1 }, properties: { pixelSize: 280 }, fields: 'pixelSize' } },
       ];
       await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requests: fmtRequests })
       });
     }
 
     hideLoading();
-    showToast(`Exported ${approved.length} clips to "${tabName}" tab`, 'success');
+    showToast(`Exported ${approved.length} ${typeCfg.displayName} clips to "${tabName}" tab`, 'success');
     window.open(`https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/edit#gid=${newSheetId || ''}`, '_blank');
   } catch(e) {
     hideLoading();
     showToast('Export failed: ' + e.message, 'error');
     console.error(e);
   }
+}
+
+// Download the same data as a CSV file (useful for sharing outside Google Sheets)
+function downloadCsv() {
+  const typeCfg = activeTypeCfg();
+  const typeKey = S.activeType;
+  let approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
+  if (typeKey === 'film_chapter' && _filmOrderCache) {
+    const byFilm = {};
+    approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
+    const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
+    approved = [];
+    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => getStatus(c) === 'approved')); });
+  }
+  if (!approved.length) { showToast('No approved clips to export', 'error'); return; }
+  const isShortFilm = typeKey === 'short_film';
+  const isFilmChapter = typeKey === 'film_chapter';
+  const header = ['Title'];
+  if (isFilmChapter) header.push('Film', 'Chapter Title');
+  else header.push('Program');
+  if (isShortFilm) header.push('Subtitle');
+  header.push('New Description', 'Tags', 'Date', 'Duration', 'Watch URL');
+  // CSV-escape: wrap in quotes if value contains comma, quote, or newline; double-up internal quotes
+  const csvCell = (v) => {
+    const s = String(v ?? '');
+    if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  };
+  const lines = [header.map(csvCell).join(',')];
+  approved.forEach(clip => {
+    const tags = parseTags(clip).join(', ');
+    const summary = clip.rewrite || clip._draft || clip.description || '';
+    const watchUrl = clip.clipId ? `https://videos.jem.tv/video-player?clip=${clip.clipId}` : '';
+    const row = [clip.title || ''];
+    if (isFilmChapter) row.push(clip.filmName || '', clip.title || '');
+    else row.push(clip.programNum ? 'LT ' + clip.programNum : '');
+    if (isShortFilm) row.push(clip.subtitle || '');
+    row.push(summary, tags, formatClipDate(clip.date), formatDuration(clip.durationMs), watchUrl);
+    lines.push(row.map(csvCell).join(','));
+  });
+  const csv = lines.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `JEM_${typeCfg.displayName.replace(/\s+/g, '_')}_Export_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast(`Downloaded ${approved.length} ${typeCfg.displayName} clips as CSV`, 'success');
 }
 
 function exportHTML() {
