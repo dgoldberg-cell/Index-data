@@ -1632,6 +1632,9 @@ let S = {
   batchRunning: false,
   rangeStart: 0,
   rangeSize: 50,
+  // When true, the queue shows ALL filtered clips (no pagination). The default.
+  // When false, falls back to paginated mode using rangeStart + rangeSize.
+  rangeShowAll: localStorage.getItem('jem_cse_range_show_all') !== '0',
   team: [],
   notes: [],
   filmsMap: {}, // filmName -> { filmId, durationMs, thumbnail, date }
@@ -3062,6 +3065,7 @@ function allMatchingClips() {
 }
 function filteredClips() {
   const all = allMatchingClips();
+  if (S.rangeShowAll) return all;
   return all.slice(S.rangeStart, S.rangeStart + S.rangeSize);
 }
 function buildRangeOptions() {
@@ -3069,19 +3073,29 @@ function buildRangeOptions() {
   const sel = document.getElementById('rangeSelect');
   if (!sel) return;
   const size = S.rangeSize;
-  let html = '';
+  // "All" sentinel — the default. Shows every filtered clip in a single list.
+  let html = `<option value="all" ${S.rangeShowAll ? 'selected' : ''}>All${total ? ' (' + total + ')' : ''}</option>`;
   for (let i = 0; i < total; i += size) {
     const end = Math.min(i + size, total);
-    html += `<option value="${i}" ${i === S.rangeStart ? 'selected' : ''}>${i + 1}–${end}</option>`;
+    const selected = (!S.rangeShowAll && i === S.rangeStart) ? 'selected' : '';
+    html += `<option value="${i}" ${selected}>${i + 1}–${end}</option>`;
   }
-  if (!html) html = '<option>—</option>';
   sel.innerHTML = html;
   const info = document.getElementById('rangeInfo');
   if (info) info.textContent = total ? `of ${total}` : '';
 }
 function onRangeChange() {
   const sel = document.getElementById('rangeSelect');
-  S.rangeStart = parseInt(sel.value) || 0;
+  const v = sel.value;
+  if (v === 'all') {
+    S.rangeShowAll = true;
+    S.rangeStart = 0;
+    localStorage.setItem('jem_cse_range_show_all', '1');
+  } else {
+    S.rangeShowAll = false;
+    S.rangeStart = parseInt(v) || 0;
+    localStorage.setItem('jem_cse_range_show_all', '0');
+  }
   renderQueue();
 }
 
@@ -3102,7 +3116,7 @@ function renderQueue() {
   const clips = filteredClips();
   const total = allMatchingClips().length;
   const el = document.getElementById('queueList');
-  document.getElementById('clipCount').textContent = `${clips.length} of ${total}` + (S.userFilter ? ` · filtered by ${S.userFilter}` : '');
+  document.getElementById('clipCount').textContent = (S.rangeShowAll ? `${total} clips` : `${clips.length} of ${total}`) + (S.userFilter ? ` · filtered by ${S.userFilter}` : '');
   // Sync the batch transcript toggle with persisted state
   const batchCb = document.getElementById('batchTranscriptCb');
   const batchLabel = document.getElementById('batchTranscriptToggle');
@@ -3315,9 +3329,12 @@ function navigateClip(direction) {
     return;
   }
   S.selectedIdx = next.clip._rowNum;
-  // Adjust pagination if needed so the selected clip is visible in the queue list
-  const pageStart = Math.floor(next.idx / S.rangeSize) * S.rangeSize;
-  if (pageStart !== S.rangeStart) S.rangeStart = pageStart;
+  // Adjust pagination if needed so the selected clip is visible in the queue list.
+  // Skip when "All" mode is active — everything is already visible.
+  if (!S.rangeShowAll) {
+    const pageStart = Math.floor(next.idx / S.rangeSize) * S.rangeSize;
+    if (pageStart !== S.rangeStart) S.rangeStart = pageStart;
+  }
   renderQueue();
   renderDetail();
 }
@@ -3746,7 +3763,7 @@ function jumpToClipFromNote(typeKey, rowNum) {
   S.rangeStart = 0;
   const all = S.byType[typeKey]?.clips || [];
   const idx = all.findIndex(c => c._rowNum === rowNum);
-  if (idx >= 0) S.rangeStart = Math.floor(idx / S.rangeSize) * S.rangeSize;
+  if (idx >= 0 && !S.rangeShowAll) S.rangeStart = Math.floor(idx / S.rangeSize) * S.rangeSize;
   switchView('queue', null);
 }
 
@@ -5648,7 +5665,7 @@ function openClipFromMember(typeKey, rowNum) {
   // Find page that contains this clip
   const all = activeBucket().clips;
   const idx = all.findIndex(c => c._rowNum === rowNum);
-  if (idx >= 0) S.rangeStart = Math.floor(idx / S.rangeSize) * S.rangeSize;
+  if (idx >= 0 && !S.rangeShowAll) S.rangeStart = Math.floor(idx / S.rangeSize) * S.rangeSize;
   switchView('queue', null);
 }
 
@@ -5847,7 +5864,7 @@ function openProgramFirstClip(progNum) {
   const all = allMatchingClips();
   const idx = all.findIndex(c => c._rowNum === clips[0]._rowNum);
   if (idx >= 0) {
-    S.rangeStart = Math.floor(idx / S.rangeSize) * S.rangeSize;
+    if (!S.rangeShowAll) S.rangeStart = Math.floor(idx / S.rangeSize) * S.rangeSize;
   }
   renderQueue();
   selectClip(clips[0]._rowNum);
