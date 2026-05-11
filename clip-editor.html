@@ -288,7 +288,9 @@
   .detail-thumb-col {
     display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0;
   }
-  /* Sticky bottom strip — a small rounded card, pins to top of detail scroll area. */
+  /* Sticky bottom strip — a small rounded card, pins to top of detail scroll area.
+     When stuck, two pseudo-elements extend its opaque coverage above and below so
+     no content scrolls visibly through the page-background gaps around it. */
   .detail-sticky-strip {
     position: sticky; top: 0; z-index: 5;
     display: flex; align-items: center; gap: 10px;
@@ -297,11 +299,14 @@
     border-radius: var(--radius2);
     box-shadow: var(--shadow-clay);
   }
+  /* Below the strip: an opaque page-color band that fills the flex gap, plus a
+     soft shadow tail just under it. Only visible when stuck. */
   .detail-sticky-strip::after {
-    content: ''; position: absolute; left: 0; right: 0; bottom: -10px; height: 10px;
-    background: linear-gradient(to bottom, rgba(60, 40, 20, 0.07), transparent);
+    content: ''; position: absolute; left: -24px; right: -24px; top: 100%; height: 18px;
+    background:
+      linear-gradient(to bottom, rgba(60, 40, 20, 0.08), transparent 12px),
+      var(--bg);
     pointer-events: none; opacity: 0; transition: opacity 0.15s;
-    border-radius: var(--radius2);
   }
   .detail-sticky-strip.is-stuck::after { opacity: 1; }
   .detail-sticky-strip .nav-spacer { flex: 1; }
@@ -386,6 +391,7 @@
        .detail-header-top arranges thumbnail (left) and meta column (right). */
     background: var(--panel); border-radius: var(--radius2); padding: 22px;
     box-shadow: var(--shadow-clay);
+    margin-top: 18px; /* breathing room from the top of the scroll panel */
   }
   .detail-thumb {
     width: 160px; height: 100px; border-radius: 14px; object-fit: cover;
@@ -1406,7 +1412,7 @@
         <div class="detail-empty-icon">🎬</div>
         <div style="font-size:14px;color:var(--tx3)">Select a clip to begin editing</div>
       </div>
-      <div id="detailContent" style="display:none; flex:1; overflow-y:auto; padding:24px; flex-direction:column; gap:20px;"></div>
+      <div id="detailContent" style="display:none; flex:1; overflow-y:auto; padding:0 24px 24px; flex-direction:column; gap:18px;"></div>
     </div>
   </div>
 
