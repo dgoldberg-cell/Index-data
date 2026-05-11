@@ -276,14 +276,11 @@
   }
   #queueCollapseBtn:hover { background: var(--bg2); color: var(--tx); }
 
-  /* ── Merged Detail Header ─────────────────────────────────────────
-     The existing .detail-header below is the rounded panel containing both
-     the thumbnail/title row AND the Prev/Next nav strip. The .detail-header-top
-     inner block holds the thumbnail/title side-by-side and scrolls away with
-     the page. The .detail-sticky-strip pins to the top of the scroll area so
-     Prev/Next stays reachable.
-     IMPORTANT: do NOT put overflow:hidden on .detail-header or any ancestor —
-     it cancels position:sticky on the strip.
+  /* ── Detail Header + Sticky Nav ──────────────────────────────────
+     The .detail-header card holds the thumbnail/title/meta and scrolls away
+     with the page. Below it sits the .detail-sticky-strip — a separate small
+     rounded card that pins to the top of the scroll area so Prev/Next stays
+     reachable as the user scrolls down through Original + New Summary.
   */
   .detail-header-top {
     display: flex; gap: 22px; align-items: flex-start;
@@ -291,29 +288,22 @@
   .detail-thumb-col {
     display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0;
   }
-  /* When the header is in the new merged layout, override the default padding to
-     reserve bottom space for the sticky strip and tighten things up. */
-  .detail-header.detail-header-sticky {
-    padding: 18px 22px 0;
-  }
-  /* Sticky bottom strip — Prev / position / Next. Pins to top: 0 of the
-     scrolling ancestor (#detailContent). */
+  /* Sticky bottom strip — a small rounded card, pins to top of detail scroll area. */
   .detail-sticky-strip {
     position: sticky; top: 0; z-index: 5;
     display: flex; align-items: center; gap: 10px;
-    margin: 14px -22px 0;       /* extend to edge of header card */
-    padding: 10px 22px;
+    padding: 10px 16px;
     background: var(--panel);
-    border-top: 1px solid var(--border);
-    border-radius: 0 0 var(--radius2) var(--radius2);
+    border-radius: var(--radius2);
+    box-shadow: var(--shadow-clay);
   }
   .detail-sticky-strip::after {
-    content: ''; position: absolute; left: 0; right: 0; bottom: -8px; height: 8px;
-    background: linear-gradient(to bottom, rgba(60, 40, 20, 0.06), transparent);
+    content: ''; position: absolute; left: 0; right: 0; bottom: -10px; height: 10px;
+    background: linear-gradient(to bottom, rgba(60, 40, 20, 0.07), transparent);
     pointer-events: none; opacity: 0; transition: opacity 0.15s;
+    border-radius: var(--radius2);
   }
   .detail-sticky-strip.is-stuck::after { opacity: 1; }
-  .detail-sticky-strip.is-stuck { border-radius: 0; }
   .detail-sticky-strip .nav-spacer { flex: 1; }
   .detail-nav-position { font-size: 12px; color: var(--tx3); font-weight: 500; }
 
@@ -392,9 +382,8 @@
   .detail-content { flex: 1; overflow-y: auto; padding: 8px 4px; display: flex; flex-direction: column; gap: 18px; }
 
   .detail-header {
-    /* Outer panel of the merged header — block layout so its child rows
-       (.detail-header-top, .detail-sticky-strip) stack vertically.
-       The inner .detail-header-top handles the side-by-side thumbnail/title row. */
+    /* The rounded panel holding the thumbnail/title/meta row. The inner
+       .detail-header-top arranges thumbnail (left) and meta column (right). */
     background: var(--panel); border-radius: var(--radius2); padding: 22px;
     box-shadow: var(--shadow-clay);
   }
@@ -3436,7 +3425,7 @@ function renderDetail() {
   const _posLabel = _navIdx >= 0 ? `${_navIdx + 1} of ${_navList.length}` : '';
 
   dc.innerHTML = `
-    <div class="detail-header detail-header-sticky">
+    <div class="detail-header">
       <div class="detail-header-top">
         <div class="detail-thumb-col">
           ${thumbHTML}
@@ -3502,14 +3491,14 @@ function renderDetail() {
           ${tags.length ? `<div class="tag-bubbles">${tags.map(t=>`<span class="tag-bubble">${esc(t)}</span>`).join('')}</div>` : ''}
         </div>
       </div><!-- /.detail-header-top -->
-      <div class="detail-sticky-strip">
-        <button class="btn btn-sm" onclick="navigateClip('prev')" ${_hasPrev ? '' : 'disabled'} aria-label="Previous clip">← Previous</button>
-        <span class="detail-nav-position">${esc(_posLabel)}</span>
-        <span class="nav-spacer"></span>
-        <button class="btn btn-sm" onclick="toggleQueueList()" title="${_queueCollapsed ? 'Show queue list' : 'Hide queue list'}">${_queueCollapsed ? '☰ Show queue' : '☰ Hide queue'}</button>
-        <button class="btn btn-sm btn-primary" onclick="navigateClip('next')" ${_hasNext ? '' : 'disabled'} aria-label="Next clip">Next →</button>
-      </div>
-    </div><!-- /.detail-header.detail-header-sticky -->
+    </div><!-- /.detail-header -->
+    <div class="detail-sticky-strip">
+      <button class="btn btn-sm" onclick="navigateClip('prev')" ${_hasPrev ? '' : 'disabled'} aria-label="Previous clip">← Previous</button>
+      <span class="detail-nav-position">${esc(_posLabel)}</span>
+      <span class="nav-spacer"></span>
+      <button class="btn btn-sm" onclick="toggleQueueList()" title="${_queueCollapsed ? 'Show queue list' : 'Hide queue list'}">${_queueCollapsed ? '☰ Show queue' : '☰ Hide queue'}</button>
+      <button class="btn btn-sm btn-primary" onclick="navigateClip('next')" ${_hasNext ? '' : 'disabled'} aria-label="Next clip">Next →</button>
+    </div>
 
     ${status === 'flagged' ? `<div class="flag-banner"><div class="flag-icon">🚩</div><div><strong>Needs Attention:</strong> ${esc(flagReason)}<br><small>Use the AI chat below to provide more context, then regenerate.</small></div></div>` : ''}
 
