@@ -276,14 +276,45 @@
   }
   #queueCollapseBtn:hover { background: var(--bg2); color: var(--tx); }
 
-  /* Detail nav bar (Prev / Next) */
-  .detail-nav-bar {
-    display: flex; align-items: center; gap: 10px;
+  /* ── Merged Clip-Header Card ──────────────────────────────────────────
+     The thumbnail/title/meta section sits on top and scrolls away normally.
+     The Prev/Next nav strip is the BOTTOM of the same card and pins to the
+     top of the detail scroll area via `position: sticky` so it stays in reach
+     no matter how far down the user scrolls in the Original + New Summary cards.
+  */
+  .detail-card {
     background: var(--panel); border-radius: var(--radius2);
-    padding: 10px 16px; box-shadow: var(--shadow-clay);
-    margin-bottom: 14px;
+    box-shadow: var(--shadow-clay);
+    overflow: hidden; /* round corners cleanly when strip sticks */
+    /* No margin-bottom — the standalone action-bar below will provide the spacing */
   }
-  .detail-nav-bar .nav-spacer { flex: 1; }
+  .detail-card .detail-header {
+    /* Override the default standalone card styling — header is now inside .detail-card */
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 18px 22px 12px;
+  }
+  .detail-thumb-col {
+    display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0;
+  }
+  /* The sticky bottom strip — Prev / position / Next */
+  .detail-sticky-strip {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    /* Soft shadow appears only when stuck — handled via a small after-element trick */
+  }
+  .detail-sticky-strip::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -8px; height: 8px;
+    background: linear-gradient(to bottom, rgba(60, 40, 20, 0.06), transparent);
+    pointer-events: none; opacity: 0; transition: opacity 0.15s;
+  }
+  /* When the strip is stuck to the top, surface the soft shadow under it */
+  .detail-sticky-strip.is-stuck::after { opacity: 1; }
+  .detail-sticky-strip .nav-spacer { flex: 1; }
   .detail-nav-position { font-size: 12px; color: var(--tx3); font-weight: 500; }
 
   /* ── QUEUE VIEW ── */
@@ -3275,6 +3306,10 @@ function selectClip(rowNum, event) {
   _shiftAnchorRow = rowNum;
   renderQueue();
   renderDetail();
+  // Reset detail panel scroll to the top so the user sees the clip from the title down,
+  // not from wherever they last left off in the previous clip
+  const dc = document.getElementById('detailContent');
+  if (dc) dc.scrollTop = 0;
 }
 
 // Toggle every visible queue item between the shift anchor and the clicked clip.
@@ -3337,6 +3372,9 @@ function navigateClip(direction) {
   }
   renderQueue();
   renderDetail();
+  // Show the new clip from the top — consistent with selectClip behavior
+  const dc = document.getElementById('detailContent');
+  if (dc) dc.scrollTop = 0;
 }
 
 // Toggle the queue list panel collapsed/expanded
@@ -3396,41 +3434,35 @@ function renderDetail() {
   const _posLabel = _navIdx >= 0 ? `${_navIdx + 1} of ${_navList.length}` : '';
 
   dc.innerHTML = `
-    <div class="detail-nav-bar">
-      <button class="btn btn-sm" onclick="navigateClip('prev')" ${_hasPrev ? '' : 'disabled'}>← Previous</button>
-      <span class="detail-nav-position">${esc(_posLabel)}</span>
-      <span class="nav-spacer"></span>
-      <button class="btn btn-sm" onclick="toggleQueueList()" title="${_queueCollapsed ? 'Show queue list' : 'Hide queue list'}">${_queueCollapsed ? '☰ Show queue' : '☰ Hide queue'}</button>
-      <button class="btn btn-sm btn-primary" onclick="navigateClip('next')" ${_hasNext ? '' : 'disabled'}>Next →</button>
-    </div>
-    <div class="detail-header" style="align-items:flex-start">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0">
-        ${thumbHTML}
-        ${duration ? `<div style="font-size:11px;color:var(--tx3);background:var(--bg2);padding:2px 8px;border-radius:10px;font-family:monospace">⏱ ${esc(duration)}</div>` : ''}
-      </div>
-      <div class="detail-meta" style="flex:1">
-        ${clip.filmName ? `<div style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px;font-weight:600">${esc(clip.filmName)}</div>` : ''}
-        <div class="detail-title" style="font-size:20px;line-height:1.25;margin-bottom:8px">${esc(clip.title)}</div>
-        ${clip.typeKey === 'short_film' ? (() => {
-          const hasSub = !!(clip.subtitle && clip.subtitle.trim());
-          const hasBackup = !!getReviewField(clip, 'subtitleOriginalBackup');
-          return `<div class="subtitle-card ${hasSub ? '' : 'subtitle-missing'}" style="margin-bottom:12px">
-            ${hasSub
-              ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                  <span style="font-size:10px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:1.5px;flex-shrink:0">Subtitle</span>
-                  <input type="text" id="subtitleInput_${clip._rowNum}" class="subtitle-input" value="${esc(clip.subtitle)}" oninput="onSubtitleInput(${clip._rowNum})" placeholder="Subtitle">
-                  <button id="subtitleSaveBtn_${clip._rowNum}" class="btn btn-sm btn-primary" onclick="saveSubtitle(${clip._rowNum})" style="display:none">💾 Save</button>
-                  ${hasBackup ? `<button class="btn btn-sm" onclick="revertSubtitle(${clip._rowNum})" title="Restore original subtitle from when the clip was first loaded">↩ Revert</button>` : ''}
-                </div>`
-              : `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                  <span class="subtitle-flag-icon" title="No subtitle in column I — please add one">⚠</span>
-                  <span style="font-size:10px;font-weight:600;color:#A86A2C;text-transform:uppercase;letter-spacing:1.5px">Subtitle missing</span>
-                  <input type="text" id="subtitleInput_${clip._rowNum}" class="subtitle-input" value="" oninput="onSubtitleInput(${clip._rowNum})" placeholder="Add a subtitle for this short film…">
-                  <button id="subtitleSaveBtn_${clip._rowNum}" class="btn btn-sm btn-primary" onclick="saveSubtitle(${clip._rowNum})" style="display:none">💾 Save</button>
-                </div>`
-            }
-          </div>`;
-        })() : ''}
+    <div class="detail-card">
+      <div class="detail-header">
+        <div class="detail-thumb-col">
+          ${thumbHTML}
+          ${duration ? `<div style="font-size:11px;color:var(--tx3);background:var(--bg2);padding:2px 8px;border-radius:10px;font-family:monospace">⏱ ${esc(duration)}</div>` : ''}
+        </div>
+        <div class="detail-meta" style="flex:1">
+          ${clip.filmName ? `<div style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px;font-weight:600">${esc(clip.filmName)}</div>` : ''}
+          <div class="detail-title" style="font-size:20px;line-height:1.25;margin-bottom:8px">${esc(clip.title)}</div>
+          ${clip.typeKey === 'short_film' ? (() => {
+            const hasSub = !!(clip.subtitle && clip.subtitle.trim());
+            const hasBackup = !!getReviewField(clip, 'subtitleOriginalBackup');
+            return `<div class="subtitle-card ${hasSub ? '' : 'subtitle-missing'}" style="margin-bottom:12px">
+              ${hasSub
+                ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span style="font-size:10px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:1.5px;flex-shrink:0">Subtitle</span>
+                    <input type="text" id="subtitleInput_${clip._rowNum}" class="subtitle-input" value="${esc(clip.subtitle)}" oninput="onSubtitleInput(${clip._rowNum})" placeholder="Subtitle">
+                    <button id="subtitleSaveBtn_${clip._rowNum}" class="btn btn-sm btn-primary" onclick="saveSubtitle(${clip._rowNum})" style="display:none">💾 Save</button>
+                    ${hasBackup ? `<button class="btn btn-sm" onclick="revertSubtitle(${clip._rowNum})" title="Restore original subtitle from when the clip was first loaded">↩ Revert</button>` : ''}
+                  </div>`
+                : `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span class="subtitle-flag-icon" title="No subtitle in column I — please add one">⚠</span>
+                    <span style="font-size:10px;font-weight:600;color:#A86A2C;text-transform:uppercase;letter-spacing:1.5px">Subtitle missing</span>
+                    <input type="text" id="subtitleInput_${clip._rowNum}" class="subtitle-input" value="" oninput="onSubtitleInput(${clip._rowNum})" placeholder="Add a subtitle for this short film…">
+                    <button id="subtitleSaveBtn_${clip._rowNum}" class="btn btn-sm btn-primary" onclick="saveSubtitle(${clip._rowNum})" style="display:none">💾 Save</button>
+                  </div>`
+              }
+            </div>`;
+          })() : ''}
         <div class="detail-meta-row" style="margin-bottom:10px">
           ${formattedDate ? `<span class="detail-meta-item" style="font-size:13px;color:var(--tx2)">${esc(formattedDate)}</span>` : ''}
           ${clip.programNum ? `<span class="detail-meta-item">LT ${esc(clip.programNum)}</span>` : ''}
@@ -3465,9 +3497,17 @@ function renderDetail() {
           const src = getTypeByKey(override.sourceType);
           return `<div style="font-size:11px;color:var(--tx3);margin-bottom:6px;background:var(--accent-soft);display:inline-block;padding:3px 10px;border-radius:var(--radius-pill)">📍 Originally categorized as <strong>${src ? esc(src.displayName) : esc(override.sourceType)}</strong> in the main sheet — moved here in the workspace only</div>`;
         })()}
-        ${tags.length ? `<div class="tag-bubbles">${tags.map(t=>`<span class="tag-bubble">${esc(t)}</span>`).join('')}</div>` : ''}
+          ${tags.length ? `<div class="tag-bubbles">${tags.map(t=>`<span class="tag-bubble">${esc(t)}</span>`).join('')}</div>` : ''}
+        </div>
+      </div><!-- /.detail-header -->
+      <div class="detail-sticky-strip">
+        <button class="btn btn-sm" onclick="navigateClip('prev')" ${_hasPrev ? '' : 'disabled'} aria-label="Previous clip">← Previous</button>
+        <span class="detail-nav-position">${esc(_posLabel)}</span>
+        <span class="nav-spacer"></span>
+        <button class="btn btn-sm" onclick="toggleQueueList()" title="${_queueCollapsed ? 'Show queue list' : 'Hide queue list'}">${_queueCollapsed ? '☰ Show queue' : '☰ Hide queue'}</button>
+        <button class="btn btn-sm btn-primary" onclick="navigateClip('next')" ${_hasNext ? '' : 'disabled'} aria-label="Next clip">Next →</button>
       </div>
-    </div>
+    </div><!-- /.detail-card -->
 
     ${status === 'flagged' ? `<div class="flag-banner"><div class="flag-icon">🚩</div><div><strong>Needs Attention:</strong> ${esc(flagReason)}<br><small>Use the AI chat below to provide more context, then regenerate.</small></div></div>` : ''}
 
@@ -3604,7 +3644,35 @@ function renderDetail() {
   setTimeout(() => {
     autoGrowTextarea(document.getElementById('draftTA_' + clip._rowNum));
     autoGrowTextarea(document.getElementById('origTA_' + clip._rowNum));
+    attachStickyStripObserver();
   }, 0);
+}
+
+// Add a subtle drop-shadow to the sticky Prev/Next strip while it's pinned to the top
+// (i.e. the user has scrolled and the header above has gone out of view). Uses a
+// sentinel element inserted into the .detail-card; when the sentinel scrolls past
+// the top of the detail container, the strip is considered "stuck".
+let _stickyObserver = null;
+function attachStickyStripObserver() {
+  if (_stickyObserver) { _stickyObserver.disconnect(); _stickyObserver = null; }
+  const dc = document.getElementById('detailContent');
+  const strip = document.querySelector('.detail-sticky-strip');
+  if (!dc || !strip) return;
+  // Place a 1px sentinel just before the strip
+  let sentinel = strip.previousElementSibling;
+  if (!sentinel || !sentinel.classList?.contains('sticky-sentinel')) {
+    sentinel = document.createElement('div');
+    sentinel.className = 'sticky-sentinel';
+    sentinel.style.cssText = 'height:1px;width:1px;';
+    strip.parentNode.insertBefore(sentinel, strip);
+  }
+  _stickyObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      // When the sentinel is OUT of view → the strip is stuck. When IN view → not stuck.
+      strip.classList.toggle('is-stuck', !entry.isIntersecting);
+    });
+  }, { root: dc, threshold: 0 });
+  _stickyObserver.observe(sentinel);
 }
 
 function renderClipNotes(clip) {
