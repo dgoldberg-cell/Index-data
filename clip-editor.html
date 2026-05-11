@@ -413,11 +413,49 @@
   /* Manual / AI badges on the New Summary card header */
   .draft-source-badge {
     font-size: 10px; font-weight: 600;
+    margin-left: 4px;
     padding: 2px 10px; border-radius: var(--radius-pill);
     text-transform: none; letter-spacing: 0;
   }
   .draft-source-manual { background: var(--accent-light); color: var(--accent2); }
   .draft-source-ai { background: var(--green-light); color: var(--green); }
+
+  /* Approved / Awaiting status badges — colored primary-tier badges */
+  .status-badge {
+    font-size: 10px; font-weight: 500;
+    margin-left: 4px;
+    padding: 2px 8px; border-radius: var(--radius-pill);
+    text-transform: none; letter-spacing: 0;
+  }
+  .status-approved { color: var(--green); background: var(--green-light); }
+  .status-awaiting { color: #8C7635; background: var(--yellow-light); }
+
+  /* Provenance line — secondary metadata row below the primary card header.
+     All neutral gray pills joined by middle dots; no color competition.
+     Tells the user HOW the draft was made: which model, what inputs, what processing. */
+  .provenance-line {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 0;
+    padding: 6px 22px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10.5px; color: var(--tx3);
+    background: var(--bg);
+  }
+  .prov-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 1px 8px; border-radius: var(--radius-pill);
+    background: var(--bg2); color: var(--tx3);
+    font-weight: 500; letter-spacing: 0; text-transform: none;
+    line-height: 1.5;
+    cursor: default;
+  }
+  .prov-pill-preview { opacity: 0.85; }
+  .prov-icon { font-size: 10px; opacity: 0.95; }
+  .prov-sep {
+    color: var(--tx4); opacity: 0.5;
+    margin: 0 8px;
+    font-weight: 400;
+  }
 
   /* Move-to-type dropdown */
   .move-menu {
@@ -2043,8 +2081,11 @@ async function ensureReviewTab(typeCfg) {
     fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current'];
     lastCol = 'M';
   } else if (typeCfg.key === 'sichos') {
-    fullHeader = [...baseHeader, 'length_flag', 'length_flag_wc'];
-    lastCol = 'M';
+    // length_flag/length_flag_wc: trim FAILURE state (persisted for queue badges + attention).
+    // length_action/length_input_wc/length_output_wc: SUCCESS metadata for the provenance line
+    // (so "✂ Trimmed (104 → 88)" survives reloads and is visible to teammates).
+    fullHeader = [...baseHeader, 'length_flag', 'length_flag_wc', 'length_action', 'length_input_wc', 'length_output_wc'];
+    lastCol = 'P';
   } else {
     fullHeader = baseHeader;
     lastCol = 'K';
@@ -2078,8 +2119,11 @@ async function loadReviewData(typeCfg) {
   bucket.reviewData = {};
   const isShortFilm = typeCfg.key === 'short_film';
   const isSichos = typeCfg.key === 'sichos';
-  // Both short_film (subtitle cols) and sichos (length_flag cols) extend to col M
-  const range = (isShortFilm || isSichos) ? `'${typeCfg.reviewTab}'!A:M` : `'${typeCfg.reviewTab}'!A:K`;
+  // short_film extends to M (subtitle cols); sichos extends to P (length cols)
+  let range;
+  if (isSichos) range = `'${typeCfg.reviewTab}'!A:P`;
+  else if (isShortFilm) range = `'${typeCfg.reviewTab}'!A:M`;
+  else range = `'${typeCfg.reviewTab}'!A:K`;
   try {
     const data = await sheetsGet(range);
     const rows = data.values || [];
@@ -2098,9 +2142,13 @@ async function loadReviewData(typeCfg) {
         draftUsedTranscript: row[10] === 'TRUE',
         subtitleOriginalBackup: isShortFilm ? (row[11] || '') : '',
         subtitleCurrent: isShortFilm ? (row[12] || '') : '',
-        // Sichos: length flag from trim-to-length failures ('over_limit' | 'under_limit' | '')
+        // Sichos: failure flag ('over_limit' | 'under_limit' | '')
         lengthFlag: isSichos ? (row[11] || '') : '',
         lengthFlagWc: isSichos ? (parseInt(row[12]) || 0) : 0,
+        // Sichos: success metadata for the provenance line ('shorten' | 'lengthen' | '')
+        lengthAction: isSichos ? (row[13] || '') : '',
+        lengthInputWc: isSichos ? (parseInt(row[14]) || 0) : 0,
+        lengthOutputWc: isSichos ? (parseInt(row[15]) || 0) : 0,
       };
       const id = row[0];
       const clip = bucket.clips?.find(c => String(c._rowNum) === id);
@@ -2148,8 +2196,14 @@ async function saveReviewRow(clip) {
     values = [[...baseValues, rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '']];
     lastCol = 'M';
   } else if (isSichos) {
-    values = [[...baseValues, rd.lengthFlag || '', rd.lengthFlagWc ? String(rd.lengthFlagWc) : '']];
-    lastCol = 'M';
+    values = [[...baseValues,
+      rd.lengthFlag || '',
+      rd.lengthFlagWc ? String(rd.lengthFlagWc) : '',
+      rd.lengthAction || '',
+      rd.lengthInputWc ? String(rd.lengthInputWc) : '',
+      rd.lengthOutputWc ? String(rd.lengthOutputWc) : '',
+    ]];
+    lastCol = 'P';
   } else {
     values = [baseValues];
     lastCol = 'K';
@@ -2905,7 +2959,7 @@ function setReviewField(clip, field, val) {
   const bucket = S.byType[clip.typeKey];
   if (!bucket) return;
   const id = String(clip._rowNum);
-  if (!bucket.reviewData[id]) bucket.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '', draftText: '', chatHistory: '', descSourceCol: clip.descSourceCol || 'H', draftModel: '', draftUsedTranscript: false, subtitleOriginalBackup: '', subtitleCurrent: '', lengthFlag: '', lengthFlagWc: 0 };
+  if (!bucket.reviewData[id]) bucket.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '', draftText: '', chatHistory: '', descSourceCol: clip.descSourceCol || 'H', draftModel: '', draftUsedTranscript: false, subtitleOriginalBackup: '', subtitleCurrent: '', lengthFlag: '', lengthFlagWc: 0, lengthAction: '', lengthInputWc: 0, lengthOutputWc: 0 };
   bucket.reviewData[id][field] = val;
 }
 
@@ -3424,43 +3478,21 @@ function renderDetail() {
       <div class="card-header" style="flex-wrap:wrap;align-items:center;row-gap:6px">
         ${status === 'approved' ? 'Approved Summary' : status === 'draft' ? 'New Summary' : status === 'flagged' ? 'New Summary (Flagged)' : 'New Summary'}
         ${(() => {
-          // Source badge: was the current draft typed manually or generated by AI?
-          // Derived from draftModel — a populated model field means AI generated it.
-          // Stays visible until the user reverts. If they type over an AI draft, the
-          // onDraftInput handler flips this to "manual" live.
+          // PRIMARY badge 1: Source — was the current draft typed manually or generated by AI?
+          // Stays visible until reverted. Live-flips to "manual" if user types over an AI draft.
           const dm = getReviewField(clip, 'draftModel') || '';
           let initialSource = clip._draftSource;
           if (!initialSource && draftValue) {
             initialSource = dm ? 'ai' : 'manual';
           }
-          // Cache so onDraftInput can detect "was AI, now edited" later
           if (initialSource === 'ai' && !clip._lastAIValue) clip._lastAIValue = draftValue;
           clip._draftSource = initialSource;
           if (!initialSource) return `<span id="draftSrcBadge_${clip._rowNum}" class="draft-source-badge" style="display:none"></span>`;
           if (initialSource === 'ai') return `<span id="draftSrcBadge_${clip._rowNum}" class="draft-source-badge draft-source-ai">🤖 AI Generated</span>`;
           return `<span id="draftSrcBadge_${clip._rowNum}" class="draft-source-badge draft-source-manual">✎ Manual</span>`;
         })()}
-        ${status === 'approved' ? '<span style="font-size:10px;color:var(--green);font-weight:500;margin-left:4px;background:var(--green-light);padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">✓ Approved</span>' : ''}
-        ${status === 'draft' ? '<span style="font-size:10px;color:#8C7635;font-weight:500;margin-left:4px;background:var(--yellow-light);padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">Awaiting review</span>' : ''}
-        ${(() => {
-          // Show metadata about the existing draft (what model + did it use the transcript?)
-          const dm = getReviewField(clip, 'draftModel') || '';
-          const usedTrans = !!getReviewField(clip, 'draftUsedTranscript') || (bucket.reviewData[String(clip._rowNum)]?.draftUsedTranscript === true);
-          if (dm && (status === 'draft' || status === 'approved' || status === 'flagged')) {
-            const isOpus = dm.includes('opus');
-            const modelLabel = isOpus ? 'Opus' : 'Sonnet';
-            const modelBg = isOpus ? 'var(--accent-light)' : 'var(--green-light)';
-            const modelColor = isOpus ? 'var(--accent2)' : 'var(--green)';
-            const transLabel = usedTrans ? '📄 Transcript' : '✏️ Description-only';
-            return `<span style="font-size:10px;font-weight:500;margin-left:4px;background:${modelBg};color:${modelColor};padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">⚡ ${modelLabel}</span>
-                    <span style="font-size:10px;font-weight:500;margin-left:4px;background:var(--bg2);color:var(--tx3);padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">${transLabel}</span>`;
-          }
-          // Unprocessed — show currently selected model as preview
-          if (status === 'unprocessed') {
-            return `<span style="font-size:10px;font-weight:500;margin-left:4px;background:${S.aiModel.includes('opus') ? 'var(--accent-light)' : 'var(--green-light)'};color:${S.aiModel.includes('opus') ? 'var(--accent2)' : 'var(--green)'};padding:2px 8px;border-radius:var(--radius-pill);text-transform:none;letter-spacing:0">⚡ ${S.aiModel.includes('opus') ? 'Opus' : 'Sonnet'}</span>`;
-          }
-          return '';
-        })()}
+        ${status === 'approved' ? '<span class="status-badge status-approved">✓ Approved</span>' : ''}
+        ${status === 'draft' ? '<span class="status-badge status-awaiting">Awaiting review</span>' : ''}
         <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           ${(() => {
             const hasTranscript = !!S.transcriptLoaded[clip._rowNum];
@@ -3476,6 +3508,38 @@ function renderDetail() {
             : `<button class="btn btn-sm btn-primary" onclick="regenerateClip(${clip._rowNum})">${hasDraft ? '🔄 Regenerate' : '✨ Generate'}</button>`}
         </div>
       </div>
+      ${(() => {
+        // PROVENANCE LINE — quiet secondary row showing HOW this draft was made:
+        // model · inputs · length-adjustment. All neutral gray; separated by middle dots.
+        // Only renders if there's at least one piece of provenance to show.
+        const dm = getReviewField(clip, 'draftModel') || '';
+        const rd = bucket.reviewData[String(clip._rowNum)] || {};
+        const usedTrans = !!getReviewField(clip, 'draftUsedTranscript') || rd.draftUsedTranscript === true;
+        const isAiState = (status === 'draft' || status === 'approved' || status === 'flagged') && dm;
+        const isUnprocessed = status === 'unprocessed';
+
+        const parts = [];
+        if (isAiState) {
+          const isOpus = dm.includes('opus');
+          parts.push(`<span class="prov-pill"><span class="prov-icon">⚡</span>${isOpus ? 'Opus' : 'Sonnet'}</span>`);
+          parts.push(`<span class="prov-pill"><span class="prov-icon">${usedTrans ? '📄' : '✏️'}</span>${usedTrans ? 'Transcript' : 'Description-only'}</span>`);
+          // Trim/expand provenance (sichos only) — only when present
+          if (clip.typeKey === 'sichos' && rd.lengthAction) {
+            const verb = rd.lengthAction === 'lengthen' ? '↗ Expanded' : '✂ Trimmed';
+            const range = (rd.lengthInputWc && rd.lengthOutputWc) ? ` (${rd.lengthInputWc} → ${rd.lengthOutputWc})` : '';
+            const title = rd.lengthAction === 'lengthen'
+              ? `AI expanded this from ${rd.lengthInputWc} to ${rd.lengthOutputWc} words to reach the 80–95 target window`
+              : `AI trimmed this from ${rd.lengthInputWc} to ${rd.lengthOutputWc} words to fit the 80–95 target window`;
+            parts.push(`<span class="prov-pill" title="${esc(title)}">${verb}${range}</span>`);
+          }
+        } else if (isUnprocessed) {
+          // Preview the currently selected model so the user knows what's about to be used
+          const isOpus = S.aiModel.includes('opus');
+          parts.push(`<span class="prov-pill prov-pill-preview" title="Model that will be used on next Generate"><span class="prov-icon">⚡</span>${isOpus ? 'Opus' : 'Sonnet'}</span>`);
+        }
+        if (!parts.length) return '';
+        return `<div class="provenance-line">${parts.join('<span class="prov-sep">·</span>')}</div>`;
+      })()}
       <div class="card-body">
         <textarea class="draft-textarea" id="draftTA_${clip._rowNum}" placeholder="Click into the Original above to edit it manually, click ✨ Generate to have AI draft one, or just type a new summary here." oninput="onDraftInput(${clip._rowNum})">${esc(draftValue)}</textarea>
         <div class="word-count ${wcClass}" id="wc_${clip._rowNum}">${draftValue ? wc + ' words' + (wc > 110 ? ' — over limit!' : wc > 90 ? ' ✓' : '') : ''}</div>
@@ -3935,6 +3999,21 @@ const LENGTH_MAX = 95;
 const LENGTH_TARGET = 88;          // center of 80-95 window
 const TRIM_FAIL_MIN_OUTPUT = 30;   // safety: reject trim that nuked the draft
 
+// Surface the current trim/lengthen status WITHOUT taking over the screen.
+// Updates the batch progress label if a batch is running, otherwise updates the
+// Generate / Regenerate button on the active clip. No full-screen overlay — ever.
+function setTrimProgress(clip, message) {
+  // Batch mode: the persistent bottom progress bar handles status display
+  if (S.batchRunning) {
+    const lbl = document.getElementById('progressLabel');
+    if (lbl) lbl.textContent = message;
+    return;
+  }
+  // Interactive mode: regen button already says "⏳ Generating…" — swap to trim msg
+  const btn = document.querySelector(`[onclick="regenerateClip(${clip._rowNum})"]`);
+  if (btn) btn.textContent = '⏳ ' + message;
+}
+
 // Run a single trim-or-lengthen pass to bring a draft into the 80–95 word window.
 // Returns { draft, action, inputWc, outputWc, status, lengthFlag, lengthFlagWc }.
 // Never throws — failures resolve as { status: 'failed', lengthFlag: ... } with the
@@ -3952,7 +4031,11 @@ async function enforceLengthRange(clip, originalDraft, usedTranscript) {
 
   const action = inputWc < LENGTH_MIN ? 'lengthen' : 'shorten';
   const direction = action === 'lengthen' ? 'Expanding' : 'Trimming';
-  showLoading(`${direction} to length (${inputWc} → ${LENGTH_TARGET} words)…`);
+  // Surface trim progress in whatever indicator is already on screen — never a
+  // full-screen overlay. If we're in a batch, update the batch progress label.
+  // If we're in interactive regen, the regen button is already showing "⏳ Generating…"
+  // — update that to "⏳ Trimming…" so the user knows what step we're on.
+  setTrimProgress(clip, `${direction} to length (${inputWc} → ${LENGTH_TARGET} words)…`);
 
   let instruction;
   if (action === 'lengthen') {
@@ -4105,20 +4188,33 @@ function smartenQuotes(text) {
 // regenerateClip, and the batch runner.
 function applyLengthResult(clip, lengthResult, opts = {}) {
   if (!lengthResult || lengthResult.action === 'skip') {
-    // In range from the first draft — make sure any stale flag is cleared
+    // In range from the first draft — clear all length metadata (no failure flag, no success record)
     setReviewField(clip, 'lengthFlag', '');
     setReviewField(clip, 'lengthFlagWc', 0);
+    setReviewField(clip, 'lengthAction', '');
+    setReviewField(clip, 'lengthInputWc', 0);
+    setReviewField(clip, 'lengthOutputWc', 0);
     return;
   }
   const { action, inputWc, outputWc, status, lengthFlag, lengthFlagWc } = lengthResult;
   setReviewField(clip, 'lengthFlag', lengthFlag || '');
   setReviewField(clip, 'lengthFlagWc', lengthFlagWc || 0);
-  // Inline note on the detail view (and toast for batch/failure cases)
+  // Persist the SUCCESS metadata too so the provenance badge ("✂ Trimmed (104 → 88)")
+  // survives reloads and is visible to other team members.
   if (status === 'success') {
+    setReviewField(clip, 'lengthAction', action);
+    setReviewField(clip, 'lengthInputWc', inputWc);
+    setReviewField(clip, 'lengthOutputWc', outputWc);
     const verb = action === 'lengthen' ? '↗ Expanded' : '✂ Trimmed';
     showLengthInlineNote(clip._rowNum, `${verb} ${inputWc} → ${outputWc} words`, 'success');
-  } else if (!opts.silent) {
-    showToast(`Length adjustment failed (${inputWc} words) — flagged for review`, 'error');
+  } else {
+    // Failed trim — clear any previous success record (it's no longer accurate)
+    setReviewField(clip, 'lengthAction', '');
+    setReviewField(clip, 'lengthInputWc', 0);
+    setReviewField(clip, 'lengthOutputWc', 0);
+    if (!opts.silent) {
+      showToast(`Length adjustment failed (${inputWc} words) — flagged for review`, 'error');
+    }
   }
 }
 
