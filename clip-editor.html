@@ -3126,7 +3126,7 @@ function renderQueue() {
           ${statusBadgeHTML(status)}
           ${(() => {
             // Length-flag badge for sichos: shown when trim-to-length failed and a count
-            // outside the 80–95 window was saved. Persists across reloads (in the sheet).
+            // outside the 70–95 window was saved. Persists across reloads (in the sheet).
             if (clip.typeKey !== 'sichos') return '';
             const rd = activeBucket().reviewData[String(clip._rowNum)];
             if (!rd || !rd.lengthFlag) return '';
@@ -3528,8 +3528,8 @@ function renderDetail() {
             const verb = rd.lengthAction === 'lengthen' ? '↗ Expanded' : '✂ Trimmed';
             const range = (rd.lengthInputWc && rd.lengthOutputWc) ? ` (${rd.lengthInputWc} → ${rd.lengthOutputWc})` : '';
             const title = rd.lengthAction === 'lengthen'
-              ? `AI expanded this from ${rd.lengthInputWc} to ${rd.lengthOutputWc} words to reach the 80–95 target window`
-              : `AI trimmed this from ${rd.lengthInputWc} to ${rd.lengthOutputWc} words to fit the 80–95 target window`;
+              ? `AI expanded this from ${rd.lengthInputWc} to ${rd.lengthOutputWc} words to reach the ${LENGTH_MIN}–${LENGTH_MAX} target window`
+              : `AI trimmed this from ${rd.lengthInputWc} to ${rd.lengthOutputWc} words to fit the ${LENGTH_MIN}–${LENGTH_MAX} target window`;
             parts.push(`<span class="prov-pill" title="${esc(title)}">${verb}${range}</span>`);
           }
         } else if (isUnprocessed) {
@@ -3978,7 +3978,7 @@ Do not include any other text.`;
   const cleanedDraft = smartenQuotes(draft);
 
   // ── Length enforcement (Addresses / sichos only) ──────────────────────────
-  // Target window: 80–95 words. After the primary draft returns we run a single
+  // Target window: 70–95 words. After the primary draft returns we run a single
   // trim-or-lengthen follow-up call when the count is out of range. Single retry
   // only — no loops. Failure modes set a length_flag for review.
   if (clip.typeKey === 'sichos') {
@@ -3994,9 +3994,13 @@ Do not include any other text.`;
 }
 
 // Length-enforcement constants for Addresses (sichos)
-const LENGTH_MIN = 80;
+// Length-enforcement constants for Addresses (sichos)
+// Acceptance window: 70–95 words (in-range = no second call).
+// Target: 88 — the anchor used in the shorten prompt's "cut N − 88 words" hint;
+// lands comfortably mid-window for both directions.
+const LENGTH_MIN = 70;
 const LENGTH_MAX = 95;
-const LENGTH_TARGET = 88;          // center of 80-95 window
+const LENGTH_TARGET = 88;
 const TRIM_FAIL_MIN_OUTPUT = 30;   // safety: reject trim that nuked the draft
 
 // Surface the current trim/lengthen status WITHOUT taking over the screen.
@@ -4014,7 +4018,7 @@ function setTrimProgress(clip, message) {
   if (btn) btn.textContent = '⏳ ' + message;
 }
 
-// Run a single trim-or-lengthen pass to bring a draft into the 80–95 word window.
+// Run a single trim-or-lengthen pass to bring a draft into the 70–95 word window.
 // Returns { draft, action, inputWc, outputWc, status, lengthFlag, lengthFlagWc }.
 // Never throws — failures resolve as { status: 'failed', lengthFlag: ... } with the
 // ORIGINAL draft preserved so the caller still has something to save/display.
