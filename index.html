@@ -996,7 +996,8 @@ auditSelectMode:false, // Toggle: show audit checkboxes in index preview
 moveSelectMode:false, // Toggle: show move checkboxes at entry level
 moveSelected:new Set(), // Set of entry names selected for moving
 sectionOverrides:{}, // {entryName: newSection} — persisted in shared data
-tagRenames:{}, // {currentName: {originalName, changedBy, timestamp, history:[{from,to,by,at}]}}
+tagRenames:{}, // [LEGACY] kept for backward compat, no longer the source of truth
+activeRenames:{}, // {originalName: currentName} — built from _TagNameChanges tab on load. The translation map for renames.
 renamingEntry:null, // {name, inputValue} — inline rename state
 undoStack:[], // [{type, data, label, timestamp}] — last 50 actions
 activityLog:[], // [{timestamp, user, action}] — shared, last 200 entries
@@ -2911,6 +2912,8 @@ async function manualRefresh(){
     await loadSharedDataFromSheet();
     // Reload baseline (in case it was updated since last load)
     await loadBaselineFromSheet();
+    // Reload tag renames from _TagNameChanges (in case another user added some)
+    try{S.activeRenames=await loadTagRenamesFromTab();}catch(e){console.warn('Could not refresh renames:',e);}
     buildIndex();render(true);
     toast('All data refreshed','success');
   }catch(e){
@@ -2993,102 +2996,110 @@ window.restoreKnownTeam=restoreKnownTeam;
 //  - sectionOverrides
 //  - Logs history in S.tagRenames
 // Returns {ok:true, rowsUpdated} or {ok:false, reason}
-async function renameTag(oldName,newName){
+// New rename approach: writes ONLY to _TagNameChanges tab. Main sheet stays untouched.
+// On load, _TagNameChanges is read into S.activeRenames map, applied during buildIndex.
+// This means main sheet is the immutable "frozen" source; renames are a translation layer.
+async function renameTag(oldName,newName,opts){
+  opts=opts||{};
   const o=oldName.trim();
   const n=newName.trim();
   if(!o||!n)return{ok:false,reason:'Empty name'};
   if(o===n)return{ok:false,reason:'Same name'};
   if(!S.indexData)return{ok:false,reason:'Index not loaded'};
 
-  // Check for collision — does the target name already exist?
+  // Check for collision — does the target name already exist as a separate entry?
+  // The "exists" check looks at the CURRENT (post-rename) view, since that's what user sees.
   const existingEntry=findEntry(n);
-  if(existingEntry)return{ok:false,reason:`An entry named "${n}" already exists`};
-
-  const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
-  if(kwCol<0)return{ok:false,reason:'Cannot find keywords column'};
-  const relCols=[1,2,3,4].map(i=>S.headers.findIndex(h=>h.toLowerCase()==='search.keywords_relevancy_'+i));
+  if(existingEntry&&!opts.allowMerge){
+    return{ok:false,reason:`An entry named "${n}" already exists`,collision:true};
+  }
 
   toast(`Renaming "${o}" → "${n}"…`,'info');
 
-  // Find all rows that contain this tag
-  const rowsToUpdate=[];
-  S.rows.forEach((row,ri)=>{
-    const raw=(row[kwCol]||'').trim();
-    if(!raw||raw==='[]')return;
-    try{
-      const tags=JSON.parse(raw);
-      if(tags.some(t=>(t.name||'').trim()===o))rowsToUpdate.push(ri);
-    }catch{}
-  });
-
-  if(!rowsToUpdate.length)return{ok:false,reason:`No rows contain tag "${o}"`};
-
-  // Build batch update data
-  const updates=[];
-  let rowsChanged=0;
-  for(const ri of rowsToUpdate){
-    const row=S.rows[ri];
-    let rowChanged=false;
-    // Update master keywords column
-    try{
-      const tags=JSON.parse(row[kwCol]);
-      tags.forEach(t=>{if((t.name||'').trim()===o){t.name=n;rowChanged=true}});
-      if(rowChanged){
-        const newJson=JSON.stringify(tags);
-        row[kwCol]=newJson;
-        updates.push({range:`'${activeTabTitle()}'!${cl(kwCol)}${ri+2}`,values:[[newJson]]});
-      }
-    }catch{}
-    // Update each relevancy column
-    relCols.forEach(rc=>{
-      if(rc<0)return;
-      const raw=(row[rc]||'').trim();
+  // How many rows would be affected (just for the log)
+  const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
+  let rowsAffected=0;
+  if(kwCol>=0){
+    // For counting purposes: find rows where the CURRENT-resolved name of any tag === o
+    // (because the user is renaming what they see, which is the resolved name)
+    S.rows.forEach(row=>{
+      const raw=(row[kwCol]||'').trim();
       if(!raw||raw==='[]')return;
       try{
         const tags=JSON.parse(raw);
-        let relChanged=false;
-        tags.forEach(t=>{if((t.name||'').trim()===o){t.name=n;relChanged=true}});
-        if(relChanged){
-          const newJson=JSON.stringify(tags);
-          row[rc]=newJson;
-          updates.push({range:`'${activeTabTitle()}'!${cl(rc)}${ri+2}`,values:[[newJson]]});
-        }
+        if(tags.some(t=>{
+          const orig=(t.name||'').trim();
+          const resolved=resolveTagName(orig);
+          return resolved===o;
+        }))rowsAffected++;
       }catch{}
     });
-    if(rowChanged)rowsChanged++;
   }
 
-  // Batch write
-  if(updates.length){
+  // What ORIGINAL names map to the current `o`? We need to add a rename for each.
+  // E.g. if "Tefilin" → "Tefillin" (rename 1) and user now does "Tefillin" → "Phylacteries",
+  // we need to update the rename so that the ORIGINAL "Tefilin" now maps to "Phylacteries".
+  // We do this by finding all originalNames where resolveTagName(original) === o, and
+  // adding rename entries for each.
+  if(!S.activeRenames)S.activeRenames={};
+  const affectedOriginals=new Set();
+  // Find originals that currently resolve to `o`
+  Object.keys(S.activeRenames).forEach(orig=>{
+    if(S.activeRenames[orig]===o)affectedOriginals.add(orig);
+  });
+  // If `o` is itself an original name (i.e. no rename for it yet), add it
+  affectedOriginals.add(o);
+
+  // Update in-memory rename map
+  affectedOriginals.forEach(orig=>{
+    S.activeRenames[orig]=n;
+  });
+
+  // Write each rename to _TagNameChanges tab (one row per original-name mapping)
+  const ts=new Date().toISOString();
+  const user=S.user?.name||S.user?.email||'Unknown';
+  for(const orig of affectedOriginals){
     try{
-      await gapi.client.sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId:S.sheetId,
-        resource:{data:updates,valueInputOption:'RAW'}
-      });
+      await appendToNameChangesLog(orig,o,n,rowsAffected,ts,user);
     }catch(e){
-      return{ok:false,reason:'Sheet write failed: '+e.message};
+      console.warn('Could not append rename for',orig,e);
     }
   }
 
-  // Update reviewData keys (old name → new name)
+  logActivity(`Renamed tag "${o}" → "${n}" (${rowsAffected} rows affected, ${opts.allowMerge?'merged':'fresh'})`);
+
+  // Update bookmarks (per user). Bookmarks store under display name → use new name.
+  if(S.idxBookmarks){
+    if(S.idxBookmarks instanceof Set){
+      if(S.idxBookmarks.has(o)){S.idxBookmarks.delete(o);S.idxBookmarks.add(n)}
+    }else if(S.idxBookmarks[o]!==undefined){
+      S.idxBookmarks[n]=S.idxBookmarks[o];
+      delete S.idxBookmarks[o];
+    }
+  }
+
+  // Update sectionOverrides — these use display name
+  if(S.sectionOverrides&&S.sectionOverrides[o]){
+    S.sectionOverrides[n]=S.sectionOverrides[o];
+    delete S.sectionOverrides[o];
+  }
+
+  // Rewrite reviewData keys in memory (o|... → n|...)
   const newRV={};
   Object.entries(S.reviewData).forEach(([k,v])=>{
-    // key format: "EntryName|SegType|RowIdx"
     const parts=k.split('|');
     if(parts.length>=3&&parts.slice(0,-2).join('|')===o){
-      const newK=n+'|'+parts.slice(-2).join('|');
-      newRV[newK]=v;
+      newRV[n+'|'+parts.slice(-2).join('|')]=v;
     }else{
       newRV[k]=v;
     }
   });
   S.reviewData=newRV;
 
-  // Update descNotes keys (same format)
+  // Rewrite descNotes keys in memory
   const newDN={};
   Object.entries(S.descNotes||{}).forEach(([k,v])=>{
     const parts=k.split('|');
-    // Entry-level note: "entry|EntryName"
     if(parts[0]==='entry'&&parts.slice(1).join('|')===o){
       newDN['entry|'+n]=v;
     }else if(parts.length>=3&&parts.slice(0,-2).join('|')===o){
@@ -3099,45 +3110,15 @@ async function renameTag(oldName,newName){
   });
   S.descNotes=newDN;
 
-  // Update bookmarks
-  if(S.idxBookmarks){
-    if(S.idxBookmarks instanceof Set){
-      if(S.idxBookmarks.has(o)){S.idxBookmarks.delete(o);S.idxBookmarks.add(n)}
-    }else if(Array.isArray(S.idxBookmarks)){
-      const i=S.idxBookmarks.indexOf(o);
-      if(i>=0)S.idxBookmarks[i]=n;
-    }
-  }
-
-  // Update sectionOverrides
-  if(S.sectionOverrides&&S.sectionOverrides[o]){
-    S.sectionOverrides[n]=S.sectionOverrides[o];
-    delete S.sectionOverrides[o];
-  }
-
-  // Log in tagRenames history
-  if(!S.tagRenames)S.tagRenames={};
-  const existing=S.tagRenames[o];
-  const originalName=existing?.originalName||o;
-  const history=existing?.history||[];
-  history.push({from:o,to:n,by:S.user?.name||S.user?.email||'Unknown',at:Date.now()});
-  // Remove old key, add new with full history
-  delete S.tagRenames[o];
-  S.tagRenames[n]={originalName,changedBy:S.user?.name||S.user?.email||'Unknown',timestamp:Date.now(),history,rowsUpdated:rowsChanged};
-
-  // Persist
+  // Persist blob (for bookmarks, sectionOverrides)
   syncSharedDataToSheet();
-  logActivity(`Renamed tag "${o}" → "${n}" (${rowsChanged} rows updated)`);
-  // Also log to a dedicated _TagNameChanges tab for audit trail
-  appendToNameChangesLog(originalName,o,n,rowsChanged).catch(e=>console.warn('Name log write failed:',e));
 
-  // CRITICAL: rewrite affected rows in per-row tabs so OTHER DEVICES see the new keys.
-  // Without this, _Review and _Notes still have rows keyed under old tag name → other devices
-  // can't match them to the renamed entry → reviewed/pending status and notes appear lost.
+  // Rewrite affected rows in per-row tabs (_Review, _Notes) so keys match the new name.
+  // Without this, _Review and _Notes rows on the sheet still use the OLD key → other devices loading
+  // won't match them to the renamed entry.
   (async()=>{
     try{
-      // _Review tab: update all rows where entry name matches old tag
-      // We re-persist the rv with the NEW key, then delete the old row
+      // _Review tab: find all rows where entry name matches old, rewrite with new key
       const oldKeyPrefix=o+'|';
       const reviewRows=await readPerRowTab(REVIEW_TAB,REVIEW_HEADERS);
       const reviewToRewrite=reviewRows.filter(r=>r.entryName===o||(r.key||'').startsWith(oldKeyPrefix));
@@ -3150,7 +3131,6 @@ async function renameTag(oldName,newName){
           const newKey=n+'|'+seg+'|'+ri;
           const rv=S.reviewData[newKey];
           if(rv){
-            // Write new row with new key
             await upsertPerRowTab(REVIEW_TAB,REVIEW_HEADERS,'key',{
               key:newKey,
               entryName:n,
@@ -3162,19 +3142,17 @@ async function renameTag(oldName,newName){
               editedAt:rv.editedAt||'',
               data:JSON.stringify(rv),
             });
-            // Delete old row
             await deletePerRowTab(REVIEW_TAB,REVIEW_HEADERS,'key',oldRow.key);
           }
         }catch(e){console.warn('Review row rewrite failed for',oldRow.key,e)}
       }
       if(reviewToRewrite.length)console.log(`Rewrote ${reviewToRewrite.length} _Review rows for rename`);
 
-      // _Notes tab: update all rows where tagName matches old name
+      // _Notes tab: update tagName in matching rows
       const noteRows=await readPerRowTab(NOTES_TAB,NOTES_HEADERS);
       const notesToRewrite=noteRows.filter(r=>r.tagName===o);
       for(const oldRow of notesToRewrite){
         try{
-          // Re-upsert by id with tagName updated to new name
           await upsertPerRowTab(NOTES_TAB,NOTES_HEADERS,'id',{
             ...oldRow,
             tagName:n,
@@ -3185,15 +3163,84 @@ async function renameTag(oldName,newName){
       if(notesToRewrite.length)console.log(`Rewrote ${notesToRewrite.length} _Notes rows for rename`);
     }catch(e){
       console.error('Per-row rewrite after rename failed:',e);
-      toast(`Rename saved locally but cross-device sync may be incomplete: ${e?.message||e}`,'warn');
+      toast(`Rename saved but per-row sync incomplete: ${e?.message||e}`,'warn');
     }
   })();
 
-  return{ok:true,rowsUpdated:rowsChanged};
+  buildIndex();
+  return{ok:true,rowsAffected,originalsRemapped:affectedOriginals.size};
+}
+
+// Revert a rename: removes the entry from S.activeRenames and from _TagNameChanges tab.
+// After revert, the entry shows under its original name again.
+async function revertRename(originalName){
+  if(!S.activeRenames||!(originalName in S.activeRenames))return{ok:false,reason:'No rename for that name'};
+  const currentName=S.activeRenames[originalName];
+  delete S.activeRenames[originalName];
+  // Remove from _TagNameChanges by appending a "revert" row (auditable history)
+  try{
+    await appendToNameChangesLog(originalName,currentName,originalName,0,new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  }catch(e){console.warn('Could not log revert:',e)}
+  logActivity(`Reverted rename: "${currentName}" → "${originalName}" (back to original)`);
+  buildIndex();
+  return{ok:true};
+}
+
+// Resolve a tag's current display name. Handles chains. Idempotent.
+function resolveTagName(originalName){
+  if(!S.activeRenames)return originalName;
+  let cur=originalName;
+  const seen=new Set();
+  while(S.activeRenames[cur]&&!seen.has(cur)){
+    seen.add(cur);
+    cur=S.activeRenames[cur];
+  }
+  return cur;
+}
+
+// Build the active-renames map from the _TagNameChanges tab.
+// Reads all rows in chronological order; the latest entry per originalName wins.
+// A row where 'To' equals 'Original Name' means it's a revert — remove from map.
+async function loadTagRenamesFromTab(){
+  const TAB='_TagNameChanges';
+  if(!S.connected)return {};
+  // Ensure tab exists with headers
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return {};
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:F10000`
+    });
+    const rows=r.result.values||[];
+    // Each row: [Timestamp, Original Name, From, To, Changed By, Rows Updated]
+    // Sort by timestamp ascending so latest wins
+    const sorted=[...rows].sort((a,b)=>{
+      const at=Date.parse(a[0]||'')||0;
+      const bt=Date.parse(b[0]||'')||0;
+      return at-bt;
+    });
+    const map={};
+    sorted.forEach(row=>{
+      const origName=(row[1]||'').trim();
+      const toName=(row[3]||'').trim();
+      if(!origName)return;
+      if(toName===origName||!toName){
+        // Revert — original maps back to itself, i.e. no override
+        delete map[origName];
+      }else{
+        map[origName]=toName;
+      }
+    });
+    return map;
+  }catch(e){
+    console.warn('Failed to load tag renames:',e);
+    return {};
+  }
 }
 
 // Append a rename to the _TagNameChanges tab (creates tab if missing)
-async function appendToNameChangesLog(originalName,fromName,toName,rowsUpdated){
+async function appendToNameChangesLog(originalName,fromName,toName,rowsUpdated,timestamp,user){
   const TAB='_TagNameChanges';
   // Ensure tab exists
   const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
@@ -3203,10 +3250,15 @@ async function appendToNameChangesLog(originalName,fromName,toName,rowsUpdated){
         spreadsheetId:S.sheetId,
         resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
       });
+      // Refresh sheetMeta so subsequent calls find the tab
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
       // Write header row
       await gapi.client.sheets.spreadsheets.values.update({
         spreadsheetId:S.sheetId,
-        range:`${TAB}!A1:F1`,
+        range:`'${TAB}'!A1:F1`,
         valueInputOption:'RAW',
         resource:{values:[['Timestamp','Original Name','From','To','Changed By','Rows Updated']]}
       });
@@ -3216,9 +3268,9 @@ async function appendToNameChangesLog(originalName,fromName,toName,rowsUpdated){
   try{
     await gapi.client.sheets.spreadsheets.values.append({
       spreadsheetId:S.sheetId,
-      range:`${TAB}!A:F`,
+      range:`'${TAB}'!A:F`,
       valueInputOption:'RAW',
-      resource:{values:[[new Date().toISOString(),originalName,fromName,toName,S.user?.name||S.user?.email||'Unknown',rowsUpdated]]}
+      resource:{values:[[timestamp||new Date().toISOString(),originalName,fromName,toName,user||S.user?.name||S.user?.email||'Unknown',rowsUpdated]]}
     });
   }catch(e){console.warn('Could not append to name changes log:',e)}
 }
@@ -4087,15 +4139,22 @@ function buildIndex(){
     });
 
     tags.forEach(tag=>{
-      const name=(tag.name||'').trim();
+      const origName=(tag.name||'').trim();
+      if(!origName)return;
+      // Apply rename map: original-from-sheet → current-display-name
+      const name=resolveTagName(origName);
       const path=tag.path||'';
       const desc=(tag.description||'').trim();
       const rel=tag.relationship||'';
-      const relevancy=relMap[name]||0; // 0 means unranked (shouldn't happen per user)
-      if(!name)return;
+      const relevancy=relMap[origName]||relMap[name]||0;
 
       if(!entries[name]){
-        entries[name]={name,path,section:RULES.sectionFromPath(path),results:[],seealso:[],bestbet:null};
+        entries[name]={name,originalName:origName!==name?origName:null,path,section:RULES.sectionFromPath(path),results:[],seealso:[],bestbet:null};
+      }
+      // If multiple original names resolved to the same current name, track them all
+      if(origName!==name){
+        if(!entries[name].originalNames)entries[name].originalNames=new Set();
+        entries[name].originalNames.add(origName);
       }
       entries[name].results.push({
         desc,rel,relevancy,clipName,clipId,objId,segType,transcript:transcript||summary||'',
@@ -6250,10 +6309,14 @@ function rIndex(){
       // Status toggle — Pending/Reviewed
       eh+=`<button class="idx-entry-status ${entryDone?'reviewed':''}" data-entry-rv="${esc(e.name)}">${entryDone?'✓ Reviewed':'Pending'}</button>`;
       eh+=`</div>`;
-      // Show "was: X ↺" if this entry has been renamed
-      const renameRec=S.tagRenames&&S.tagRenames[e.name];
-      if(renameRec&&renameRec.originalName&&renameRec.originalName!==e.name){
-        eh+=`<div class="idx-entry-rename-note" style="font-size:10px;color:var(--amber);margin-top:-2px;margin-bottom:2px;padding-left:2px">was: <em>${esc(renameRec.originalName)}</em> <button data-rename-revert="${esc(e.name)}" title="Revert to original name" style="background:none;border:none;cursor:pointer;color:var(--amber);padding:0 4px;font-size:11px">↺</button></div>`;
+      // Show "was: X ↺" if this entry has been renamed (uses S.activeRenames via buildIndex)
+      // e.originalName is set in buildIndex when one original maps to this current name.
+      // e.originalNames (Set) is set when multiple originals collapsed into this current name (merge case).
+      if(e.originalNames&&e.originalNames.size){
+        const list=[...e.originalNames].map(o=>`<em>${esc(o)}</em>`).join(', ');
+        eh+=`<div class="idx-entry-rename-note" style="font-size:10px;color:var(--amber);margin-top:-2px;margin-bottom:2px;padding-left:2px">was: ${list} <button data-rename-revert="${esc(e.name)}" title="Revert to original name" style="background:none;border:none;cursor:pointer;color:var(--amber);padding:0 4px;font-size:11px">↺</button></div>`;
+      }else if(e.originalName&&e.originalName!==e.name){
+        eh+=`<div class="idx-entry-rename-note" style="font-size:10px;color:var(--amber);margin-top:-2px;margin-bottom:2px;padding-left:2px">was: <em>${esc(e.originalName)}</em> <button data-rename-revert="${esc(e.name)}" title="Revert to original name" style="background:none;border:none;cursor:pointer;color:var(--amber);padding:0 4px;font-size:11px">↺</button></div>`;
       }
       const entryNoteKey='entry|'+e.name;
       const entryNote=S.descNotes?.[entryNoteKey];
@@ -6814,7 +6877,10 @@ function rSetup(app){
   <div style="text-align:left;margin-top:14px"><label style="font-size:11px;color:var(--tx-3);font-weight:500">Code <span style="color:var(--tx-4);font-weight:400">(optional — leave blank to work without AI features)</span></label><input class="s-input" id="ik" type="password" placeholder="Enter team code (optional)" value="${esc(S.claudeKey)}" style="margin-top:4px"></div>
   <div class="setup-err" id="se"></div>
   <button class="btn btn-gold" id="btn-con" style="width:100%;height:42px;font-size:14px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center">Sign In</button></div></div>`;
-  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadBaselineFromSheet();await loadTab(0);
+  $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadBaselineFromSheet();
+// Load tag renames BEFORE loadTab so buildIndex applies them on first render
+try{S.activeRenames=await loadTagRenamesFromTab();console.log(`Loaded ${Object.keys(S.activeRenames).length} active tag renames`);}catch(e){console.warn('Could not load tag renames:',e);S.activeRenames={};}
+await loadTab(0);
 // CRITICAL: migration runs BEFORE any writes so tabs are populated before anything else touches them
 const migRes=await migrateBlobToPerRow();
 if(migRes&&migRes.status==='success'&&(migRes.report.notes||migRes.report.team||migRes.report.activity||migRes.report.review)){
@@ -7682,43 +7748,48 @@ If the user explains why a suggestion is wrong, acknowledge and try again.`;
     const newName=(S.renamingEntry?.inputValue||'').trim();
     if(!newName){toast('Enter a new name','error');return}
     if(newName===oldName){S.renamingEntry=null;render();return}
-    const ok=await customConfirm(`Rename "${oldName}" → "${newName}"?\n\nThis updates all matching tags across every clip in the sheet.`);
+    const ok=await customConfirm(`Rename "${oldName}" → "${newName}"?\n\nThe main sheet stays unchanged. The new name is stored in the _TagNameChanges tab and applied across the workstation.`);
     if(!ok){S.renamingEntry=null;render();return}
     toast('Renaming…','info');
-    const result=await renameTag(oldName,newName);
+    let result=await renameTag(oldName,newName);
+    if(!result.ok&&result.collision){
+      // Target name already exists — ask if user wants to merge
+      const mergeOk=await customConfirm(`An entry named "${newName}" already exists.\n\nMerge "${oldName}" INTO "${newName}"?\n\nBoth will appear as a single entry under "${newName}". The original sheet data is unchanged — this is just a display merge.`);
+      if(mergeOk){
+        result=await renameTag(oldName,newName,{allowMerge:true});
+      }
+    }
     if(result.ok){
-      toast(`Renamed across ${result.rowsUpdated} rows`,'success');
+      const msg=result.originalsRemapped>1?
+        `Renamed ${result.rowsAffected} rows (${result.originalsRemapped} original names remapped)`:
+        `Renamed across ${result.rowsAffected} rows`;
+      toast(msg,'success');
       S.renamingEntry=null;
       buildIndex();
       render();
-    }else{
+    }else if(!result.collision){
       toast('Rename failed: '+result.reason,'error');
     }
   });
   // Rename tag — revert to original
   $$('[data-rename-revert]').forEach(el=>el.onclick=async()=>{
     const currentName=el.dataset.renameRevert;
-    const rec=S.tagRenames?.[currentName];
-    if(!rec)return;
-    const original=rec.originalName;
-    if(!original||original===currentName)return;
-    const ok=await customConfirm(`Revert "${currentName}" back to "${original}"?\n\nThis will update all matching tags across every clip.`);
+    // Find the original(s) that map to currentName
+    if(!S.activeRenames){toast('No renames to revert','error');return}
+    const originals=Object.keys(S.activeRenames).filter(orig=>S.activeRenames[orig]===currentName);
+    if(!originals.length){toast('No rename history for this entry','error');return}
+    const origText=originals.length===1?`"${originals[0]}"`:`${originals.length} original names`;
+    const ok=await customConfirm(`Revert "${currentName}" back to ${origText}?\n\nThe entry will return to its original sheet name in the workstation.`);
     if(!ok)return;
     toast('Reverting…','info');
-    const result=await renameTag(currentName,original);
-    if(result.ok){
-      // Clear rename record since we're back to original
-      if(S.tagRenames&&S.tagRenames[original]){
-        // renameTag just created an entry at the original name — but we want to CLEAR since we're back to start
-        delete S.tagRenames[original];
-        syncSharedDataToSheet();
-      }
-      toast(`Reverted across ${result.rowsUpdated} rows`,'success');
-      buildIndex();
-      render();
-    }else{
-      toast('Revert failed: '+result.reason,'error');
+    for(const orig of originals){
+      await revertRename(orig);
     }
+    // Reload the rename map from sheet to be safe
+    try{S.activeRenames=await loadTagRenamesFromTab();}catch(_){}
+    toast(`Reverted "${currentName}"`,'success');
+    buildIndex();
+    render();
   });
 
   // Bulk accept
