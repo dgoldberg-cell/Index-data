@@ -9097,6 +9097,9 @@ window.addEventListener('resize',fixIdxScroll);
       S.loading=true;render();
       await doConnect(savedCid,savedSid,savedKey||'',true);
       await loadSharedDataFromSheet();
+      await loadBaselineFromSheet();
+      // Load tag renames BEFORE loadTab so buildIndex applies them on first render
+      try{S.activeRenames=await loadTagRenamesFromTab();console.log(`Loaded ${Object.keys(S.activeRenames).length} active tag renames`);}catch(e){console.warn('Could not load tag renames:',e);S.activeRenames={};}
       await loadTab(0);
       registerTeamMember();
       startAutoRefresh();
