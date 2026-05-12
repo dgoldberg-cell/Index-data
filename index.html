@@ -1932,14 +1932,21 @@ function doUndo(){
   const action=S.undoStack.pop();
   switch(action.type){
     case 'move': {
+      const ts=new Date().toISOString();
+      const user=S.user?.name||S.user?.email||'Unknown';
+      const writes=[];
       (action.data.entries||[]).forEach(e=>{
         if(action.data.originalSections[e]){
+          // Restore previous override
           S.sectionOverrides[e]=action.data.originalSections[e];
+          writes.push(appendToSectionMovesLog(e,action.data.target,action.data.originalSections[e],ts,user));
         }else{
+          // No previous override — log a revert (empty To Section)
           delete S.sectionOverrides[e];
+          writes.push(appendToSectionMovesLog(e,action.data.target,'',ts,user));
         }
       });
-      syncSharedDataToSheet();
+      Promise.all(writes).catch(err=>console.warn('Undo move log writes failed:',err));
       buildIndex();
       logActivity(`Undid move: ${action.label}`);
       toast(`Undid: ${action.label}`,'success');
@@ -2038,13 +2045,11 @@ async function doSyncToSheet(){
   _syncPending=true;
   try{
     await ensureSharedTab();
-    // Blob excludes reviewData, descNotes, teamMembers, activityLog, idxNotes — all live in per-row tabs or have been removed.
-    // The blob only holds bookmarks, notifications, sectionOverrides, tagRenames, rules.
+    // Blob excludes reviewData, descNotes, teamMembers, activityLog, idxNotes, sectionOverrides, tagRenames — all live in per-row or dedicated tabs.
+    // Blob only holds bookmarks, notifications, rules.
     const data={
       bookmarks_by_user:S._allBookmarks||{},
       notifications:S.notifications,
-      sectionOverrides:S.sectionOverrides,
-      tagRenames:S.tagRenames||{},
       rules:{tagDesc:RULES.tagDesc,consistency:RULES.consistency,segOrder:RULES.segOrder,typeMap:RULES.typeMap,sectionOrder:RULES.sectionOrder,relDefaults:RULES.relDefaults},
       lastUpdated:Date.now(),
       updatedBy:S.user?.name||'unknown'
@@ -2922,6 +2927,8 @@ async function manualRefresh(){
     await loadBaselineFromSheet();
     // Reload tag renames from _TagNameChanges (in case another user added some)
     try{S.activeRenames=await loadTagRenamesFromTab();}catch(e){console.warn('Could not refresh renames:',e);}
+    // Reload section moves from _SectionMoves
+    try{S.sectionOverrides=await loadSectionMovesFromTab();}catch(e){console.warn('Could not refresh moves:',e);}
     buildIndex();render(true);
     toast('All data refreshed','success');
   }catch(e){
@@ -3086,10 +3093,14 @@ async function renameTag(oldName,newName,opts){
     }
   }
 
-  // Update sectionOverrides — these use display name
+  // Update sectionOverrides — these use display name. Also log to _SectionMoves so cross-device picks up.
   if(S.sectionOverrides&&S.sectionOverrides[o]){
-    S.sectionOverrides[n]=S.sectionOverrides[o];
+    const target=S.sectionOverrides[o];
+    S.sectionOverrides[n]=target;
     delete S.sectionOverrides[o];
+    // Log: old name reverted (entry no longer matches that name), new name moved-to-target
+    appendToSectionMovesLog(o,target,'',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown').catch(()=>{});
+    appendToSectionMovesLog(n,'',target,new Date().toISOString(),S.user?.name||S.user?.email||'Unknown').catch(()=>{});
   }
 
   // Rewrite reviewData keys in memory (o|... → n|...)
@@ -3226,8 +3237,13 @@ async function revertRename(originalName){
       }
     }
     if(S.sectionOverrides&&S.sectionOverrides[currentName]){
-      S.sectionOverrides[originalName]=S.sectionOverrides[currentName];
+      const target=S.sectionOverrides[currentName];
+      S.sectionOverrides[originalName]=target;
       delete S.sectionOverrides[currentName];
+      const ts=new Date().toISOString();
+      const user=S.user?.name||S.user?.email||'Unknown';
+      appendToSectionMovesLog(currentName,target,'',ts,user).catch(()=>{});
+      appendToSectionMovesLog(originalName,'',target,ts,user).catch(()=>{});
     }
     syncSharedDataToSheet();
 
@@ -3378,6 +3394,79 @@ async function appendToNameChangesLog(originalName,fromName,toName,rowsUpdated,t
       resource:{values:[[timestamp||new Date().toISOString(),originalName,fromName,toName,user||S.user?.name||S.user?.email||'Unknown',rowsUpdated]]}
     });
   }catch(e){console.warn('Could not append to name changes log:',e)}
+}
+
+// === SECTION MOVES — same architecture as tag renames ===
+// _SectionMoves tab: Timestamp | Entry Name | From Section | To Section | Moved By
+// Each move appended as a new row. Latest row per Entry Name wins. A row with empty
+// "To Section" means "revert — remove the override for this entry."
+async function appendToSectionMovesLog(entryName,fromSection,toSection,timestamp,user){
+  const TAB='_SectionMoves';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      // Refresh sheetMeta so subsequent calls find the tab
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:E1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Entry Name','From Section','To Section','Moved By']]}
+      });
+    }catch(e){console.warn('Could not create _SectionMoves tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:E`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),entryName,fromSection||'',toSection||'',user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to section moves log:',e)}
+}
+
+// Build the active section moves from the _SectionMoves tab. Latest row per entryName wins.
+// Returns {entryName: targetSection, ...}. An empty To Section is treated as a revert.
+async function loadSectionMovesFromTab(){
+  const TAB='_SectionMoves';
+  if(!S.connected)return {};
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return {};
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:E10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>{
+      const at=Date.parse(a[0]||'')||0;
+      const bt=Date.parse(b[0]||'')||0;
+      return at-bt;
+    });
+    const map={};
+    sorted.forEach(row=>{
+      const entryName=(row[1]||'').trim();
+      const toSec=(row[3]||'').trim();
+      if(!entryName)return;
+      if(!toSec){
+        // Revert — remove the override
+        delete map[entryName];
+      }else{
+        map[entryName]=toSec;
+      }
+    });
+    return map;
+  }catch(e){
+    console.warn('Failed to load section moves:',e);
+    return {};
+  }
 }
 
 // Helper: tab title lookup
@@ -7010,6 +7099,8 @@ function rSetup(app){
   $('#btn-con').onclick=async()=>{const c=S.clientId,s=S.sheetId,k=$('#ik').value.trim();if(!c||!s){$('#se').textContent='Missing configuration';return}$('#btn-con').textContent='Connecting…';$('#btn-con').disabled=true;try{await doConnect(c,s,k);await loadSharedDataFromSheet();await loadBaselineFromSheet();
 // Load tag renames BEFORE loadTab so buildIndex applies them on first render
 try{S.activeRenames=await loadTagRenamesFromTab();console.log(`Loaded ${Object.keys(S.activeRenames).length} active tag renames`);}catch(e){console.warn('Could not load tag renames:',e);S.activeRenames={};}
+// Load section moves the same way — overrides applied during buildIndex
+try{S.sectionOverrides=await loadSectionMovesFromTab();console.log(`Loaded ${Object.keys(S.sectionOverrides).length} active section moves`);}catch(e){console.warn('Could not load section moves:',e);S.sectionOverrides={};}
 await loadTab(0);
 // CRITICAL: migration runs BEFORE any writes so tabs are populated before anything else touches them
 const migRes=await migrateBlobToPerRow();
@@ -7482,17 +7573,23 @@ function bindAll(){
     const target=$('#move-target')?.value;
     if(!target||!S.moveSelected.size)return;
     const names=[...S.moveSelected];
-    if(!await customConfirm(`Move ${names.length} entry/entries to "${target}"?`))return;
+    if(!await customConfirm(`Move ${names.length} entry/entries to "${target}"?\n\nThis stores the move in the _SectionMoves tab. The main sheet is not affected.`))return;
     // Capture original sections for undo and tab regeneration
     const originalSections={};
     names.forEach(name=>{
       originalSections[name]=S.sectionOverrides[name]||sectionForEntry(name)||null;
     });
     pushUndo('move',{entries:names,originalSections,target},`${names.length} entries → ${target}`);
-    // Apply overrides
+    // Apply overrides in memory
     names.forEach(name=>{S.sectionOverrides[name]=target});
     logActivity(`Moved ${names.length} entries to ${target}: ${names.slice(0,5).join(', ')}${names.length>5?'…':''}`);
-    syncSharedDataToSheet();
+    // Persist each move to _SectionMoves tab (parallel for speed)
+    const ts=new Date().toISOString();
+    const user=S.user?.name||S.user?.email||'Unknown';
+    const moveWrites=names.map(name=>appendToSectionMovesLog(name,originalSections[name]||'',target,ts,user).catch(e=>console.warn('Move log failed for',name,e)));
+    Promise.all(moveWrites).then(()=>{
+      console.log(`Logged ${names.length} section moves to _SectionMoves`);
+    });
     S.moveSelectMode=false;S.moveSelected=new Set();
     buildIndex();
     toast(`Moved ${names.length} entries to ${target}`,'success');
@@ -9230,6 +9327,8 @@ window.addEventListener('resize',fixIdxScroll);
       await loadBaselineFromSheet();
       // Load tag renames BEFORE loadTab so buildIndex applies them on first render
       try{S.activeRenames=await loadTagRenamesFromTab();console.log(`Loaded ${Object.keys(S.activeRenames).length} active tag renames`);}catch(e){console.warn('Could not load tag renames:',e);S.activeRenames={};}
+      // Load section moves the same way
+      try{S.sectionOverrides=await loadSectionMovesFromTab();console.log(`Loaded ${Object.keys(S.sectionOverrides).length} active section moves`);}catch(e){console.warn('Could not load section moves:',e);S.sectionOverrides={};}
       await loadTab(0);
       registerTeamMember();
       startAutoRefresh();
