@@ -2805,6 +2805,14 @@ function baselineLookup(rowIdx, tagName){
   for(const k of Object.keys(clipTags)){
     if(k.trim().toLowerCase()===lower)return clipTags[k];
   }
+  // Tag may have been renamed. Look up by original name(s) mapped to this current name.
+  if(S.activeRenames){
+    for(const orig of Object.keys(S.activeRenames)){
+      if(S.activeRenames[orig]===tagName||S.activeRenames[orig]===trimmed){
+        if(Object.prototype.hasOwnProperty.call(clipTags,orig))return clipTags[orig];
+      }
+    }
+  }
   return undefined;
 }
 
