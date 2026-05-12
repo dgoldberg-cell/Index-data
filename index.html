@@ -3051,7 +3051,7 @@ async function renameTag(oldName,newName){
         if(relChanged){
           const newJson=JSON.stringify(tags);
           row[rc]=newJson;
-          updates.push({range:`${S.activeTabTitle}!${colLetter(rc)}${ri+2}`,values:[[newJson]]});
+          updates.push({range:`'${activeTabTitle()}'!${colLetter(rc)}${ri+2}`,values:[[newJson]]});
         }
       }catch{}
     });
@@ -3130,6 +3130,64 @@ async function renameTag(oldName,newName){
   logActivity(`Renamed tag "${o}" → "${n}" (${rowsChanged} rows updated)`);
   // Also log to a dedicated _TagNameChanges tab for audit trail
   appendToNameChangesLog(originalName,o,n,rowsChanged).catch(e=>console.warn('Name log write failed:',e));
+
+  // CRITICAL: rewrite affected rows in per-row tabs so OTHER DEVICES see the new keys.
+  // Without this, _Review and _Notes still have rows keyed under old tag name → other devices
+  // can't match them to the renamed entry → reviewed/pending status and notes appear lost.
+  (async()=>{
+    try{
+      // _Review tab: update all rows where entry name matches old tag
+      // We re-persist the rv with the NEW key, then delete the old row
+      const oldKeyPrefix=o+'|';
+      const reviewRows=await readPerRowTab(REVIEW_TAB,REVIEW_HEADERS);
+      const reviewToRewrite=reviewRows.filter(r=>r.entryName===o||(r.key||'').startsWith(oldKeyPrefix));
+      for(const oldRow of reviewToRewrite){
+        try{
+          const parts=(oldRow.key||'').split('|');
+          if(parts.length<3)continue;
+          const seg=parts[parts.length-2];
+          const ri=parts[parts.length-1];
+          const newKey=n+'|'+seg+'|'+ri;
+          const rv=S.reviewData[newKey];
+          if(rv){
+            // Write new row with new key
+            await upsertPerRowTab(REVIEW_TAB,REVIEW_HEADERS,'key',{
+              key:newKey,
+              entryName:n,
+              segType:seg,
+              rowIdx:ri,
+              status:rv.status||'',
+              reviewed:rv.reviewed?'1':'',
+              editedBy:rv.editedBy||'',
+              editedAt:rv.editedAt||'',
+              data:JSON.stringify(rv),
+            });
+            // Delete old row
+            await deletePerRowTab(REVIEW_TAB,REVIEW_HEADERS,'key',oldRow.key);
+          }
+        }catch(e){console.warn('Review row rewrite failed for',oldRow.key,e)}
+      }
+      if(reviewToRewrite.length)console.log(`Rewrote ${reviewToRewrite.length} _Review rows for rename`);
+
+      // _Notes tab: update all rows where tagName matches old name
+      const noteRows=await readPerRowTab(NOTES_TAB,NOTES_HEADERS);
+      const notesToRewrite=noteRows.filter(r=>r.tagName===o);
+      for(const oldRow of notesToRewrite){
+        try{
+          // Re-upsert by id with tagName updated to new name
+          await upsertPerRowTab(NOTES_TAB,NOTES_HEADERS,'id',{
+            ...oldRow,
+            tagName:n,
+            editedAt:Date.now(),
+          });
+        }catch(e){console.warn('Note row rewrite failed for',oldRow.id,e)}
+      }
+      if(notesToRewrite.length)console.log(`Rewrote ${notesToRewrite.length} _Notes rows for rename`);
+    }catch(e){
+      console.error('Per-row rewrite after rename failed:',e);
+      toast(`Rename saved locally but cross-device sync may be incomplete: ${e?.message||e}`,'warn');
+    }
+  })();
 
   return{ok:true,rowsUpdated:rowsChanged};
 }
