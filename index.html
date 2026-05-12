@@ -3036,7 +3036,7 @@ async function renameTag(oldName,newName){
       if(rowChanged){
         const newJson=JSON.stringify(tags);
         row[kwCol]=newJson;
-        updates.push({range:`'${activeTabTitle()}'!${colLetter(kwCol)}${ri+2}`,values:[[newJson]]});
+        updates.push({range:`'${activeTabTitle()}'!${cl(kwCol)}${ri+2}`,values:[[newJson]]});
       }
     }catch{}
     // Update each relevancy column
@@ -3051,7 +3051,7 @@ async function renameTag(oldName,newName){
         if(relChanged){
           const newJson=JSON.stringify(tags);
           row[rc]=newJson;
-          updates.push({range:`'${activeTabTitle()}'!${colLetter(rc)}${ri+2}`,values:[[newJson]]});
+          updates.push({range:`'${activeTabTitle()}'!${cl(rc)}${ri+2}`,values:[[newJson]]});
         }
       }catch{}
     });
