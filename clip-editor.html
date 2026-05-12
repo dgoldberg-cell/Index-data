@@ -668,6 +668,12 @@
     transition: opacity 0.2s;
   }
   .rule-card-simple.inactive { opacity: 0.55; }
+  /* Short-cohort rule cards get a subtle left border so the cohort is visible at a glance
+     when viewing "All" rules together. */
+  .rule-card-simple.rule-cohort-short {
+    border-left: 3px solid var(--accent);
+    padding-left: calc(var(--space-4) - 3px);
+  }
   .rule-card-simple .rule-toggle { margin-top: 4px; }
   .rule-text-input {
     width: 100%; border: none; padding: 10px 14px; border-radius: var(--radius);
@@ -1635,6 +1641,19 @@ const DEFAULT_RULES = [
   { category: 'Length Enforcement (Pass 2)', title: 'Merge or trim', content: 'Merge two short related sentences into one with semicolons, em dashes, or colons (saves words, improves flow). Delete parenthetical asides not essential. Only after that, if still long, delete the least-central sentence.', active: true },
 ];
 
+// ══════════════════════════════════════════════
+// SHORT-COHORT RULES (Sichos, original description < 70 words)
+// ══════════════════════════════════════════════
+// These are APPENDED after the default rules when the clip's original description is
+// too thin to polish on its own. They reframe the AI's task: the original is a brief,
+// the transcript is source material — write tight prose, not speech notes.
+const DEFAULT_SHORT_COHORT_RULES = [
+  { category: 'Short-Clip Strategy', title: 'Original is the brief, not the draft', content: 'The original description is too short to serve as the final summary, but it accurately reflects the editorial angle this clip should take. Treat it as a brief — the framing, focus, and chosen angle are already correct. Your job is to expand that brief into a full 70–95 word summary using the transcript for supporting detail. Do NOT shift the angle, theme, or interpretive frame the brief establishes.', active: true, transcriptOnly: false },
+  { category: 'Short-Clip Strategy', title: 'Transcript is a source, not the subject', content: 'Use the transcript ONLY to fill in specifics — names, quotes, examples, concrete details — that support the angle the brief established. Do NOT summarize the transcript top-to-bottom. Do NOT walk through it section by section. Do NOT introduce themes or conclusions the brief did not already hint at.', active: true, transcriptOnly: true },
+  { category: 'Short-Clip Strategy', title: 'Write as an article, not speech notes', content: 'This is dense, polished prose for a published index — NOT a transcription of the speech. Avoid the rhythm of a spoken talk: "He says X. Then he discusses Y. He concludes Z." Instead write as if reporting what the sicha is about, in your editorial voice. No enumeration of points-as-they-happen. No "first he mentions… then he goes on to…". Every sentence should carry weight.', active: true, transcriptOnly: false },
+  { category: 'Short-Clip Strategy', title: 'Cut wordiness ruthlessly', content: 'Without a strong original to constrain length, the natural tendency is over-explanation and padding. Be relentless: every word must earn its place. Prefer concrete nouns and verbs over abstractions. Drop scaffolding phrases ("It is worth noting that…", "The Rebbe goes on to explain that…"). If a sentence can be cut and the meaning survives, cut it.', active: true, transcriptOnly: false },
+];
+
 
 // ══════════════════════════════════════════════
 // STATE
@@ -2113,10 +2132,12 @@ async function ensureReviewTab(typeCfg) {
     lastCol = 'M';
   } else if (typeCfg.key === 'sichos') {
     // length_flag/length_flag_wc: trim FAILURE state (persisted for queue badges + attention).
-    // length_action/length_input_wc/length_output_wc: SUCCESS metadata for the provenance line
-    // (so "✂ Trimmed (104 → 88)" survives reloads and is visible to teammates).
-    fullHeader = [...baseHeader, 'length_flag', 'length_flag_wc', 'length_action', 'length_input_wc', 'length_output_wc'];
-    lastCol = 'P';
+    // length_action/length_input_wc/length_output_wc: SUCCESS metadata for the provenance line.
+    // cohort_used: which rule cohort produced the draft ('default' or 'short') — drives the
+    // 🪶 Short-clip badge in the provenance line so reviewers can see at a glance which
+    // strategy this draft was generated under.
+    fullHeader = [...baseHeader, 'length_flag', 'length_flag_wc', 'length_action', 'length_input_wc', 'length_output_wc', 'cohort_used'];
+    lastCol = 'Q';
   } else {
     fullHeader = baseHeader;
     lastCol = 'K';
@@ -2150,9 +2171,9 @@ async function loadReviewData(typeCfg) {
   bucket.reviewData = {};
   const isShortFilm = typeCfg.key === 'short_film';
   const isSichos = typeCfg.key === 'sichos';
-  // short_film extends to M (subtitle cols); sichos extends to P (length cols)
+  // short_film extends to M (subtitle cols); sichos extends to Q (length + cohort cols)
   let range;
-  if (isSichos) range = `'${typeCfg.reviewTab}'!A:P`;
+  if (isSichos) range = `'${typeCfg.reviewTab}'!A:Q`;
   else if (isShortFilm) range = `'${typeCfg.reviewTab}'!A:M`;
   else range = `'${typeCfg.reviewTab}'!A:K`;
   try {
@@ -2180,6 +2201,8 @@ async function loadReviewData(typeCfg) {
         lengthAction: isSichos ? (row[13] || '') : '',
         lengthInputWc: isSichos ? (parseInt(row[14]) || 0) : 0,
         lengthOutputWc: isSichos ? (parseInt(row[15]) || 0) : 0,
+        // Sichos: which rule cohort produced this draft ('default' or 'short')
+        cohortUsed: isSichos ? (row[16] || '') : '',
       };
       const id = row[0];
       const clip = bucket.clips?.find(c => String(c._rowNum) === id);
@@ -2233,8 +2256,9 @@ async function saveReviewRow(clip) {
       rd.lengthAction || '',
       rd.lengthInputWc ? String(rd.lengthInputWc) : '',
       rd.lengthOutputWc ? String(rd.lengthOutputWc) : '',
+      rd.cohortUsed || '',
     ]];
-    lastCol = 'P';
+    lastCol = 'Q';
   } else {
     values = [baseValues];
     lastCol = 'K';
@@ -2593,10 +2617,19 @@ async function loadRulesForType(typeCfg) {
     });
     invalidateSheetMeta();
     const newSheetId = addRes.replies?.[0]?.addSheet?.properties?.sheetId;
-    const header = [['id','category','title','content','active','transcript_only']];
+    // Cohort column (G): 'default' (long-original rules — the main set) or 'short' (rules
+    // that apply ONLY when the clip's original description is under 70 words). The "short"
+    // rules are appended after the default ones to carry extra weight in the final prompt.
+    const header = [['id','category','title','content','active','transcript_only','cohort']];
     let rows = [];
     if (typeCfg.key === 'sichos') {
-      rows = DEFAULT_RULES.map((r, i) => [String(i+1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', r.transcriptOnly ? 'TRUE' : 'FALSE']);
+      // Seed with the existing 38 default rules + the short-cohort starter set
+      DEFAULT_RULES.forEach((r, i) => {
+        rows.push([String(i+1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', r.transcriptOnly ? 'TRUE' : 'FALSE', 'default']);
+      });
+      DEFAULT_SHORT_COHORT_RULES.forEach((r, i) => {
+        rows.push([String(DEFAULT_RULES.length + i + 1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', r.transcriptOnly ? 'TRUE' : 'FALSE', 'short']);
+      });
     }
     await sheetsSet(`'${tabName}'!A1`, header.concat(rows));
     if (newSheetId !== undefined) {
@@ -2609,6 +2642,7 @@ async function loadRulesForType(typeCfg) {
         { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 600 }, fields: 'pixelSize' } },
         { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
         { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
       ];
       await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
       method: 'POST',
@@ -2616,19 +2650,29 @@ async function loadRulesForType(typeCfg) {
         body: JSON.stringify({ requests: fmt })
       });
     }
-    bucket.rulesArr = typeCfg.key === 'sichos' ? DEFAULT_RULES.map((r, i) => ({ id: String(i+1), ...r })) : [];
+    if (typeCfg.key === 'sichos') {
+      bucket.rulesArr = [
+        ...DEFAULT_RULES.map((r, i) => ({ id: String(i+1), cohort: 'default', ...r })),
+        ...DEFAULT_SHORT_COHORT_RULES.map((r, i) => ({ id: String(DEFAULT_RULES.length+i+1), cohort: 'short', ...r })),
+      ];
+    } else {
+      bucket.rulesArr = [];
+    }
     return;
   }
-  // Migration: ensure header has 6 columns (older sheets only have 5)
+  // Migration: extend header to 7 columns (older sheets had 5 or 6)
   try {
-    const hdr = await sheetsGet(`'${tabName}'!A1:F1`);
+    const hdr = await sheetsGet(`'${tabName}'!A1:G1`);
     const row = hdr.values?.[0] || [];
-    if (row.length < 6) {
-      await sheetsSet(`'${tabName}'!A1:F1`, [['id','category','title','content','active','transcript_only']]);
+    if (row.length < 7) {
+      await sheetsSet(`'${tabName}'!A1:G1`, [['id','category','title','content','active','transcript_only','cohort']]);
     }
   } catch {}
+  // Migration: ensure Sichos has at least the short-cohort seed rules
+  // (older Sichos tabs predate the cohort system — backfill if no short-cohort rules exist).
+  // We do this AFTER reading existing rules so we know whether any are short already.
   try {
-    const data = await sheetsGet(`'${tabName}'!A:F`);
+    const data = await sheetsGet(`'${tabName}'!A:G`);
     const rows = data.values || [];
     if (rows.length < 2) { bucket.rulesArr = []; return; }
     bucket.rulesArr = rows.slice(1).filter(r => r[0]).map(r => ({
@@ -2638,7 +2682,28 @@ async function loadRulesForType(typeCfg) {
       content: r[3] || '',
       active: !r[4] || String(r[4]).toUpperCase() === 'TRUE',
       transcriptOnly: String(r[5] || '').toUpperCase() === 'TRUE',
+      // Default to 'default' for backward compat. Anything not equal to 'short' is treated as default.
+      cohort: (r[6] || '').toLowerCase() === 'short' ? 'short' : 'default',
     }));
+    // Sichos backfill: if no rules have cohort=short yet, append the starter short rules
+    if (typeCfg.key === 'sichos' && !bucket.rulesArr.some(r => r.cohort === 'short')) {
+      const maxId = bucket.rulesArr.reduce((m, r) => Math.max(m, parseInt(r.id) || 0), 0);
+      const newRules = DEFAULT_SHORT_COHORT_RULES.map((r, i) => ({
+        id: String(maxId + i + 1),
+        cohort: 'short',
+        ...r,
+      }));
+      // Append to in-memory + persist to sheet
+      bucket.rulesArr.push(...newRules);
+      for (const nr of newRules) {
+        const nextSheetRow = rows.length + 1; // approximate; saveRule will compute exactly
+        rows.push([nr.id, nr.category, nr.title, nr.content, nr.active ? 'TRUE' : 'FALSE', nr.transcriptOnly ? 'TRUE' : 'FALSE', 'short']);
+      }
+      // Write the new short rules in one append
+      const startRow = rows.length - newRules.length + 1;
+      const values = newRules.map(nr => [nr.id, nr.category, nr.title, nr.content, nr.active ? 'TRUE' : 'FALSE', nr.transcriptOnly ? 'TRUE' : 'FALSE', 'short']);
+      await sheetsSet(`'${tabName}'!A${startRow}:G${startRow + newRules.length - 1}`, values);
+    }
   } catch(e) {
     console.warn('Rules load failed for ' + typeCfg.displayName + ':', e);
     bucket.rulesArr = [];
@@ -2649,22 +2714,40 @@ async function loadRulesForType(typeCfg) {
 async function loadRulesFromSheet() { return loadRulesForType(activeTypeCfg()); }
 
 // Build the AI prompt text from active rules, grouped by category.
-// If transcriptInUse is false, transcript-only rules are filtered out.
-function buildRulesPrompt(typeKey, transcriptInUse = false) {
+// - If transcriptInUse is false, transcript-only rules are filtered out.
+// - If isShortCohort is true, short-cohort rules are INCLUDED (appended after defaults);
+//   if false, only default-cohort rules are used. Short-cohort rules only exist for Sichos.
+function buildRulesPrompt(typeKey, transcriptInUse = false, isShortCohort = false) {
   const bucket = S.byType[typeKey || S.activeType];
   if (!bucket?.rulesArr || !bucket.rulesArr.length) return '';
   let active = bucket.rulesArr.filter(r => r.active);
   if (!transcriptInUse) active = active.filter(r => !r.transcriptOnly);
+  // Cohort filter: default-cohort rules ALWAYS apply; short-cohort rules only when
+  // explicitly opted into (i.e. clip's original is <70 words). Keeps long-clip behavior
+  // identical to before — they only see the default rules.
+  if (isShortCohort) {
+    // include all (default + short); short rules already exist in the array
+  } else {
+    active = active.filter(r => r.cohort !== 'short');
+  }
   if (!active.length) return '';
+  // Group by category. Sort so default-cohort categories come first, then short-cohort
+  // (short rules carry MORE weight by appearing last/most-recent in the prompt).
   const byCat = {};
   active.forEach(r => {
-    if (!byCat[r.category]) byCat[r.category] = [];
-    byCat[r.category].push(r);
+    if (!byCat[r.category]) byCat[r.category] = { rules: [], hasShort: false };
+    byCat[r.category].rules.push(r);
+    if (r.cohort === 'short') byCat[r.category].hasShort = true;
+  });
+  const categories = Object.keys(byCat).sort((a, b) => {
+    const aShort = byCat[a].hasShort ? 1 : 0;
+    const bShort = byCat[b].hasShort ? 1 : 0;
+    return aShort - bShort;
   });
   let out = 'You are an editor rewriting Jewish educational video summaries for the back of the JEM Video Index book. Rewrite the summary provided according to the rules below. Output only the rewritten summary — no preamble, no explanation, no notes about what was changed.\n\n';
-  Object.keys(byCat).forEach(cat => {
+  categories.forEach(cat => {
     out += `## ${cat}\n`;
-    byCat[cat].forEach(r => {
+    byCat[cat].rules.forEach(r => {
       out += `- **${r.title}** — ${r.content}\n`;
     });
     out += '\n';
@@ -2681,13 +2764,17 @@ async function saveOneRule(rule) {
   const rows = data.values || [];
   let sheetRow = -1;
   rows.forEach((r, i) => { if (r[0] === rule.id) sheetRow = i + 1; });
-  const values = [[rule.id, rule.category, rule.title, rule.content, rule.active ? 'TRUE' : 'FALSE', rule.transcriptOnly ? 'TRUE' : 'FALSE']];
+  // Column G: cohort ('default' or 'short'). Default to 'default' for any rule that
+  // doesn't have one set (covers backward compat with rules created before cohorts existed).
+  const cohort = rule.cohort === 'short' ? 'short' : 'default';
+  const values = [[rule.id, rule.category, rule.title, rule.content, rule.active ? 'TRUE' : 'FALSE', rule.transcriptOnly ? 'TRUE' : 'FALSE', cohort]];
   if (sheetRow > 0) {
-    await sheetsSet(`'${tabName}'!A${sheetRow}:F${sheetRow}`, values);
+    await sheetsSet(`'${tabName}'!A${sheetRow}:G${sheetRow}`, values);
   } else {
     const nextRow = rows.length + 1;
-    await sheetsSet(`'${tabName}'!A${nextRow}:F${nextRow}`, values);
+    await sheetsSet(`'${tabName}'!A${nextRow}:G${nextRow}`, values);
   }
+  rule.cohort = cohort;
   const idx = bucket.rulesArr.findIndex(r => r.id === rule.id);
   if (idx >= 0) bucket.rulesArr[idx] = rule;
   else bucket.rulesArr.push(rule);
@@ -2990,7 +3077,7 @@ function setReviewField(clip, field, val) {
   const bucket = S.byType[clip.typeKey];
   if (!bucket) return;
   const id = String(clip._rowNum);
-  if (!bucket.reviewData[id]) bucket.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '', draftText: '', chatHistory: '', descSourceCol: clip.descSourceCol || 'H', draftModel: '', draftUsedTranscript: false, subtitleOriginalBackup: '', subtitleCurrent: '', lengthFlag: '', lengthFlagWc: 0, lengthAction: '', lengthInputWc: 0, lengthOutputWc: 0 };
+  if (!bucket.reviewData[id]) bucket.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '', draftText: '', chatHistory: '', descSourceCol: clip.descSourceCol || 'H', draftModel: '', draftUsedTranscript: false, subtitleOriginalBackup: '', subtitleCurrent: '', lengthFlag: '', lengthFlagWc: 0, lengthAction: '', lengthInputWc: 0, lengthOutputWc: 0, cohortUsed: '' };
   bucket.reviewData[id][field] = val;
 }
 
@@ -3577,6 +3664,11 @@ function renderDetail() {
           const isOpus = dm.includes('opus');
           parts.push(`<span class="prov-pill"><span class="prov-icon">⚡</span>${isOpus ? 'Opus' : 'Sonnet'}</span>`);
           parts.push(`<span class="prov-pill"><span class="prov-icon">${usedTrans ? '📄' : '✏️'}</span>${usedTrans ? 'Transcript' : 'Description-only'}</span>`);
+          // Short-cohort badge (sichos only): shown when this draft was generated under the
+          // short-clip rule set. Long-cohort drafts don't get a badge — it's the default.
+          if (clip.typeKey === 'sichos' && rd.cohortUsed === 'short') {
+            parts.push(`<span class="prov-pill" title="Generated using the short-clip rule set: original was under ${SHORT_COHORT_WORD_THRESHOLD} words, transcript was used for supporting context"><span class="prov-icon">🪶</span>Short-clip ruleset</span>`);
+          }
           // Trim/expand provenance (sichos only) — only when present
           if (clip.typeKey === 'sichos' && rd.lengthAction) {
             const verb = rd.lengthAction === 'lengthen' ? '↗ Expanded' : '✂ Trimmed';
@@ -3590,6 +3682,10 @@ function renderDetail() {
           // Preview the currently selected model so the user knows what's about to be used
           const isOpus = S.aiModel.includes('opus');
           parts.push(`<span class="prov-pill prov-pill-preview" title="Model that will be used on next Generate"><span class="prov-icon">⚡</span>${isOpus ? 'Opus' : 'Sonnet'}</span>`);
+          // Also preview Short-clip mode if this clip qualifies
+          if (isShortCohortClip(clip)) {
+            parts.push(`<span class="prov-pill prov-pill-preview" title="Original is under ${SHORT_COHORT_WORD_THRESHOLD} words — will be generated with the short-clip rule set and transcript"><span class="prov-icon">🪶</span>Short-clip ruleset</span>`);
+          }
         }
         if (!parts.length) return '';
         return `<div class="provenance-line">${parts.join('<span class="prov-sep">·</span>')}</div>`;
@@ -3991,11 +4087,32 @@ async function loadTranscript(rowNum) {
 // ══════════════════════════════════════════════
 // AI PROCESSING
 // ══════════════════════════════════════════════
+
+// Threshold: clips with original descriptions under this word count use the SHORT cohort —
+// extra rules, forced transcript, different prompt template.
+const SHORT_COHORT_WORD_THRESHOLD = 70;
+
+function isShortCohortClip(clip) {
+  if (!clip || clip.typeKey !== 'sichos') return false;
+  return wordCount(clip.description || '') < SHORT_COHORT_WORD_THRESHOLD;
+}
+
 function buildAIPrompt(clip, extraContext, useTranscript) {
+  const isShort = isShortCohortClip(clip);
   const transcript = useTranscript ? S.transcriptLoaded[clip._rowNum] : null;
-  const rulesText = buildRulesPrompt(clip.typeKey, !!transcript);
-  let prompt = (rulesText || 'You are an editor rewriting Jewish educational video summaries. Rewrite the summary provided concisely.') + '\n\n---\n\nNow rewrite this summary:\n\n' + clip.description;
-  if (transcript) prompt += '\n\n---\n\nAdditional context from transcript:\n' + transcript.substring(0, 3000);
+  const rulesText = buildRulesPrompt(clip.typeKey, !!transcript, isShort);
+
+  let prompt = rulesText || 'You are an editor rewriting Jewish educational video summaries. Rewrite the summary provided concisely.';
+
+  if (isShort) {
+    // Short-cohort lead-in: explicitly frame the task before the rules are listed —
+    // the original is too thin to polish; treat it as a brief and expand using the transcript.
+    prompt += '\n\n---\n\n## TASK (SHORT-CLIP MODE)\n\nThe original description below is under 70 words — too thin to polish on its own. It captures the correct editorial ANGLE for this clip, but lacks the substance for a full summary. Your task:\n\n1. Treat the original as a BRIEF — keep its angle, focus, and tone.\n2. Use the transcript as a SOURCE of supporting detail (names, examples, specifics).\n3. Do NOT summarize the transcript top-to-bottom. Do NOT shift the angle.\n4. Output dense article-style prose — NOT a transcription of the speech.\n5. Target 70–95 words.\n\nORIGINAL BRIEF:\n' + clip.description;
+  } else {
+    prompt += '\n\n---\n\nNow rewrite this summary:\n\n' + clip.description;
+  }
+
+  if (transcript) prompt += '\n\n---\n\n' + (isShort ? 'TRANSCRIPT (source material — fill in supporting detail; do NOT summarize wholesale):\n' : 'Additional context from transcript:\n') + transcript.substring(0, 4000);
   if (extraContext) prompt += '\n\n---\n\nAdditional guidance: ' + extraContext;
   return prompt;
 }
@@ -4025,8 +4142,25 @@ async function callAI(messages, opts = {}) {
 }
 
 async function evaluateAndDraft(clip, regenCount = 0, useTranscript = false) {
-  // First pass: evaluate if description is sufficient — eval is deterministic-ish, lower temp
-  const evalPrompt = `You are evaluating a video description to decide if it has enough content to rewrite as a 90-word summary.
+  // Short-cohort clips ALWAYS use the transcript — the original is too thin without it.
+  // Auto-load the transcript if it isn't already in memory.
+  const isShort = isShortCohortClip(clip);
+  if (isShort && !S.transcriptLoaded[clip._rowNum]) {
+    try {
+      await loadTranscript(clip._rowNum);
+    } catch(e) {
+      // No transcript available → fall back to flagging; we can't do short-cohort work without it
+      return { flagged: true, reason: 'Short clip (<70w original) requires a transcript but none is available', usedTranscript: false };
+    }
+  }
+  if (isShort) useTranscript = true;
+
+  // First pass: evaluate if description is sufficient — eval is deterministic-ish, lower temp.
+  // Short-cohort clips skip this gate entirely — by definition they have a thin original, and
+  // we want to draft regardless (the transcript fills in the substance).
+  let evalResult = { ok: true };
+  if (!isShort) {
+    const evalPrompt = `You are evaluating a video description to decide if it has enough content to rewrite as a 90-word summary.
 
 Description: "${clip.description}"
 
@@ -4036,12 +4170,12 @@ Respond with ONLY a JSON object like:
 
 Do not include any other text.`;
 
-  let evalResult;
-  try {
-    const evalText = await callAI([{ role: 'user', content: evalPrompt }], { temperature: 0.3 });
-    const clean = evalText.replace(/```json|```/g, '').trim();
-    evalResult = JSON.parse(clean);
-  } catch { evalResult = { ok: true }; } // default to trying
+    try {
+      const evalText = await callAI([{ role: 'user', content: evalPrompt }], { temperature: 0.3 });
+      const clean = evalText.replace(/```json|```/g, '').trim();
+      evalResult = JSON.parse(clean);
+    } catch { evalResult = { ok: true }; } // default to trying
+  }
 
   // If description is too thin AND we have transcript loaded, try anyway with the transcript
   const haveTranscript = !!S.transcriptLoaded[clip._rowNum];
@@ -4056,6 +4190,7 @@ Do not include any other text.`;
   if (regenCount > 0) {
     prompt += `\n\n---\n\nThis is regeneration attempt #${regenCount + 1}. Produce a meaningfully DIFFERENT version than what you would produce on the first attempt — different sentence structure, different opening, different emphasis. Do not repeat the same wording from previous attempts.`;
   }
+  console.log('[draft] cohort:', isShort ? 'short' : 'default', '| clip:', clip.clipId || clip._rowNum, '| origWc:', wordCount(clip.description || ''), '| transcript:', transcriptActuallyUsed);
   const draft = await callAI([{ role: 'user', content: prompt }], { temperature: 1.0 });
   const cleanedDraft = smartenQuotes(draft);
 
@@ -4070,9 +4205,10 @@ Do not include any other text.`;
       draft: result.draft,
       usedTranscript: transcriptActuallyUsed,
       lengthResult: result,
+      cohort: isShort ? 'short' : 'default',
     };
   }
-  return { flagged: false, draft: cleanedDraft, usedTranscript: transcriptActuallyUsed };
+  return { flagged: false, draft: cleanedDraft, usedTranscript: transcriptActuallyUsed, cohort: isShort ? 'short' : 'default' };
 }
 
 // Length-enforcement constants for Addresses (sichos)
@@ -4332,6 +4468,7 @@ async function processClip(clip) {
   // Record metadata regardless of flagged status (so we know what produced this draft)
   setReviewField(clip, 'draftModel', result.draft ? S.aiModel : '');
   setReviewField(clip, 'draftUsedTranscript', !!result.usedTranscript);
+  if (result.cohort) setReviewField(clip, 'cohortUsed', result.cohort);
   if (result.flagged) {
     setReviewField(clip, 'status', 'flagged');
     setReviewField(clip, 'flagReason', result.reason);
@@ -4372,6 +4509,7 @@ async function regenerateClip(rowNum) {
     const result = await evaluateAndDraft(clip, S.regenCounts[rowNum] || 0, useTranscript);
     setReviewField(clip, 'draftModel', result.draft ? S.aiModel : '');
     setReviewField(clip, 'draftUsedTranscript', !!result.usedTranscript);
+    if (result.cohort) setReviewField(clip, 'cohortUsed', result.cohort);
     if (result.flagged) {
       setReviewField(clip, 'status', 'flagged');
       setReviewField(clip, 'flagReason', result.reason);
@@ -5968,22 +6106,52 @@ const _collapsedCats = new Set();
 function renderRulesView() {
   const total = activeBucket().rulesArr?.length || 0;
   const active = activeBucket().rulesArr?.filter(r => r.active).length || 0;
+  // Cohort filter state (sichos only). 'all' / 'default' / 'short'.
+  if (!S.rulesCohortFilter) S.rulesCohortFilter = 'all';
+  const isSichos = activeTypeCfg().key === 'sichos';
+  const rules = activeBucket().rulesArr || [];
+  const defaultCount = rules.filter(r => r.cohort !== 'short').length;
+  const shortCount = rules.filter(r => r.cohort === 'short').length;
   document.getElementById('rulesMeta').innerHTML =
     `<strong>${active}</strong> of <strong>${total}</strong> rules for <strong>${esc(activeTypeCfg().displayName)}</strong> active · stored in "${esc(activeTypeCfg().rulesTab)}" tab · each rule is a row in the sheet`;
 
+  // Cohort filter row (sichos only) — Default rules apply to all clips; Short-clip rules
+  // are appended only when the clip's original is < 70 words.
+  const cohortFilterHTML = isSichos ? `
+    <div class="filter-row" id="rulesCohortFilterRow" style="margin-bottom:18px;padding:10px 0;border-bottom:1px dashed var(--border)">
+      <span style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-right:4px;align-self:center">Cohort:</span>
+      <button class="filter-chip ${S.rulesCohortFilter === 'all' ? 'active' : ''}" onclick="setRulesCohortFilter('all')">All <span class="filter-chip-count">(${total})</span></button>
+      <button class="filter-chip ${S.rulesCohortFilter === 'default' ? 'active' : ''}" onclick="setRulesCohortFilter('default')" title="Rules used for every Sichos generation (≥70 word originals)">Default <span class="filter-chip-count">(${defaultCount})</span></button>
+      <button class="filter-chip ${S.rulesCohortFilter === 'short' ? 'active' : ''}" onclick="setRulesCohortFilter('short')" title="Extra rules appended when the original description is under 70 words">🪶 Short-clip <span class="filter-chip-count">(${shortCount})</span></button>
+    </div>` : '';
+
   const container = document.getElementById('rulesContainer');
   if (!total) {
-    container.innerHTML = '<div class="empty-state">No rules yet. Click "+ Add Rule" to create one.</div>';
+    container.innerHTML = cohortFilterHTML + '<div class="empty-state">No rules yet. Click "+ Add Rule" to create one.</div>';
     return;
   }
+  // Filter by cohort if Sichos
+  const visibleRules = isSichos && S.rulesCohortFilter !== 'all'
+    ? rules.filter(r => (S.rulesCohortFilter === 'short' ? r.cohort === 'short' : r.cohort !== 'short'))
+    : rules;
   // Simplified — flat list of rule cards, no categories, just text + toggle
-  let html = '';
-  activeBucket().rulesArr.forEach(rule => {
-    html += `<div class="rule-card-simple ${rule.active ? '' : 'inactive'}" id="ruleCard_${esc(rule.id)}">
+  let html = cohortFilterHTML;
+  if (!visibleRules.length) {
+    html += '<div class="empty-state">No rules in this cohort yet.</div>';
+    container.innerHTML = html;
+    return;
+  }
+  visibleRules.forEach(rule => {
+    const isShort = rule.cohort === 'short';
+    html += `<div class="rule-card-simple ${rule.active ? '' : 'inactive'} ${isShort ? 'rule-cohort-short' : ''}" id="ruleCard_${esc(rule.id)}">
       <div class="rule-toggle ${rule.active ? 'on' : ''}" onclick="toggleRule('${esc(rule.id)}')" title="${rule.active ? 'Active — click to disable' : 'Disabled — click to enable'}"></div>
       <textarea class="rule-text-input" data-rule-id="${esc(rule.id)}" oninput="onRuleEdit('${esc(rule.id)}')" placeholder="Type the rule for the AI…" rows="3">${esc(rule.content)}</textarea>
       <div class="rule-card-actions">
         <span class="rule-id-badge">#${esc(rule.id)}</span>
+        ${isSichos ? `<label class="rule-cohort-toggle ${isShort ? 'short' : ''}" title="${isShort ? 'Short-clip cohort: only applies when the original is under 70 words. Click to make this a Default rule.' : 'Default cohort: applies to every Sichos generation. Click to make this Short-clip only.'}" style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:10.5px;font-weight:500;color:${isShort ? 'var(--accent2)' : 'var(--tx4)'};background:${isShort ? 'var(--accent-light)' : 'var(--bg2)'};padding:3px 9px;border-radius:var(--radius-pill);user-select:none;transition:all 0.15s">
+          <input type="checkbox" ${isShort ? 'checked' : ''} onchange="toggleRuleCohort('${esc(rule.id)}')" style="margin:0;cursor:pointer;accent-color:var(--accent)">
+          🪶 Short-clip
+        </label>` : ''}
         <label class="rule-trans-toggle ${rule.transcriptOnly ? 'on' : ''}" title="When ON, this rule only applies to AI runs that include the transcript. Useful for rules like 'prefer specific quotes from the transcript'." style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:10.5px;font-weight:500;color:${rule.transcriptOnly ? 'var(--accent2)' : 'var(--tx4)'};background:${rule.transcriptOnly ? 'var(--accent-light)' : 'var(--bg2)'};padding:3px 9px;border-radius:var(--radius-pill);user-select:none;transition:all 0.15s">
           <input type="checkbox" ${rule.transcriptOnly ? 'checked' : ''} onchange="toggleRuleTranscriptOnly('${esc(rule.id)}')" style="margin:0;cursor:pointer;accent-color:var(--accent)">
           📄 Transcript only
@@ -5995,6 +6163,22 @@ function renderRulesView() {
     </div>`;
   });
   container.innerHTML = html;
+}
+
+function setRulesCohortFilter(filter) {
+  S.rulesCohortFilter = filter;
+  renderRulesView();
+}
+
+async function toggleRuleCohort(id) {
+  const rule = activeBucket().rulesArr.find(r => r.id === id);
+  if (!rule) return;
+  rule.cohort = rule.cohort === 'short' ? 'default' : 'short';
+  // Persist immediately
+  try {
+    await saveRule(id, { skipDraftRead: true });
+  } catch {}
+  renderRulesView();
 }
 
 function toggleRuleExpand(id) {
@@ -6084,11 +6268,14 @@ async function addNewRule() {
   const text = await jemPrompt('Type the new rule for the AI:', '', { multiline: true, title: 'Add Rule', okLabel: 'Add Rule' });
   if (!text || !text.trim()) return;
   const autoTitle = text.split(/\s+/).slice(0, 6).join(' ').replace(/[.!?,;:]+$/, '') || 'Rule';
-  const newRule = { id: nextRuleId(), category: 'General', title: autoTitle, content: text.trim(), active: true };
+  // Default cohort: if user is currently viewing the Short-clip filter, new rule goes there;
+  // otherwise default cohort. Only Sichos has cohorts; other types always get default.
+  const cohort = (activeTypeCfg().key === 'sichos' && S.rulesCohortFilter === 'short') ? 'short' : 'default';
+  const newRule = { id: nextRuleId(), category: 'General', title: autoTitle, content: text.trim(), active: true, transcriptOnly: false, cohort };
   try {
     await saveOneRule(newRule);
     renderRulesView();
-    showToast('Rule added', 'success');
+    showToast('Rule added' + (cohort === 'short' ? ' (Short-clip cohort)' : ''), 'success');
   } catch(e) {
     showToast('Add failed: ' + e.message, 'error');
   }
