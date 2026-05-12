@@ -4618,9 +4618,9 @@ async function generateIndexTab(sectionName){
     });
     
     const entries=S.indexData.sections[sectionName]||[];
-    // Column layout: A=Entry, B=Segment, C=Original Desc, D=Description, E=Relationship, F=Reference, G=Chapter, H=Relevancy, I=Review, J=AI Suggestion, K=spacer, L=Clip Link, M=Clip Title, N=Transcript, O=spacer, P=Notes, Q=Bookmarked
-    var EC=18; // total columns (added Original Description)
-    var headers=['Entry Name','Segment Type','Original Description','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked'];
+    // Column layout: A=Entry, B=Segment, C=Original Desc, D=Description, E=Relationship, F=Reference, G=Chapter, H=Relevancy, I=Review, J=AI Suggestion, K=spacer, L=Clip Link, M=Clip Title, N=Transcript, O=spacer, P=Notes, Q=Bookmarked, R=Original Tag Name (only populated when entry was renamed)
+    var EC=19; // total columns
+    var headers=['Entry Name','Segment Type','Original Description','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked','Original Tag Name'];
     
     // Step 2: Build rows in indented format
     const dataRows=[headers];
@@ -4631,6 +4631,12 @@ async function generateIndexTab(sectionName){
     entries.forEach(function(entry){
       var entryRow=[];for(var z=0;z<EC;z++)entryRow.push('');
       entryRow[0]=entry.name||'';
+      // R (col 17): Original Tag Name — populated if entry was renamed
+      if(entry.originalNames&&entry.originalNames.size){
+        entryRow[17]=Array.from(entry.originalNames).join('; ');
+      }else if(entry.originalName&&entry.originalName!==entry.name){
+        entryRow[17]=entry.originalName;
+      }
       dataRows.push(entryRow);
       
       var bySeg={};
@@ -4742,7 +4748,7 @@ async function generateIndexTab(sectionName){
     S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(function(s){return{title:s.properties.title,sid:s.properties.sheetId}})};
     invalidateTabMapCache(tabName);
     
-    // Auto-hide Original Description (col C, index 2) and Review columns (I-J, index 8-9)
+    // Auto-hide Original Description (col C, index 2), Review columns (I-J, index 8-9), and Original Tag Name (col R, index 17)
     try{
       var newSheet=meta.result.sheets.find(function(s){return s.properties.title===tabName});
       if(newSheet){
@@ -4751,7 +4757,8 @@ async function generateIndexTab(sectionName){
           spreadsheetId:S.sheetId,
           resource:{requests:[
             {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:2,endIndex:3},properties:{hiddenByUser:true},fields:'hiddenByUser'}},
-            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:8,endIndex:10},properties:{hiddenByUser:true},fields:'hiddenByUser'}}
+            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:8,endIndex:10},properties:{hiddenByUser:true},fields:'hiddenByUser'}},
+            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:17,endIndex:18},properties:{hiddenByUser:true},fields:'hiddenByUser'}}
           ]}
         });
       }
@@ -5065,7 +5072,15 @@ async function runAudit(){
     let sectionsToShow=S.idxActiveSection==='all'?RULES.sectionOrder:[S.idxActiveSection];
     sectionsToShow.forEach(sec=>{
       let entries=S.indexData.sections[sec]||[];
-      if(q)entries=entries.filter(e=>e.name.toLowerCase().includes(q)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+      if(q){
+        const matchN=e=>{
+          if(e.name.toLowerCase().includes(q))return true;
+          if(e.originalName&&e.originalName.toLowerCase().includes(q))return true;
+          if(e.originalNames){for(const o of e.originalNames){if(o.toLowerCase().includes(q))return true}}
+          return false;
+        };
+        entries=entries.filter(e=>matchN(e)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+      }
       if(S.idxNavMode==='tree'&&S.idxActiveEntry)entries=entries.filter(e=>e.name===S.idxActiveEntry);
       entries.forEach(e=>{
         e.results.forEach(r=>{
@@ -6371,9 +6386,18 @@ function rIndex(){
     let entries=(ix.sections[sec]||[]);
     if(q){
       const mode=S.idxSearchMode||'both';
-      if(mode==='name')entries=entries.filter(e=>e.name.toLowerCase().includes(q));
+      // matchEntryName: matches current name OR any original name that resolves to this entry
+      const matchEntryName=e=>{
+        if(e.name.toLowerCase().includes(q))return true;
+        if(e.originalName&&e.originalName.toLowerCase().includes(q))return true;
+        if(e.originalNames){
+          for(const o of e.originalNames){if(o.toLowerCase().includes(q))return true;}
+        }
+        return false;
+      };
+      if(mode==='name')entries=entries.filter(matchEntryName);
       else if(mode==='desc')entries=entries.filter(e=>e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
-      else entries=entries.filter(e=>e.name.toLowerCase().includes(q)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+      else entries=entries.filter(e=>matchEntryName(e)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
     }
     if(!entries.length)return;
     // Apply review filter
