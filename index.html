@@ -3185,6 +3185,103 @@ async function revertRename(originalName){
   if(!S.activeRenames||!(originalName in S.activeRenames))return{ok:false,reason:'No rename for that name'};
   const currentName=S.activeRenames[originalName];
   delete S.activeRenames[originalName];
+
+  // Rekey reviewData in memory: currentName|seg|ri → originalName|seg|ri
+  // Only rekey entries where the resolved current name === currentName AND there's no other
+  // active rename pointing to currentName (otherwise those still own that key).
+  const stillMapsToCurrent=Object.keys(S.activeRenames||{}).some(k=>S.activeRenames[k]===currentName);
+  if(!stillMapsToCurrent){
+    const newRV={};
+    Object.entries(S.reviewData).forEach(([k,v])=>{
+      const parts=k.split('|');
+      if(parts.length>=3&&parts.slice(0,-2).join('|')===currentName){
+        newRV[originalName+'|'+parts.slice(-2).join('|')]=v;
+      }else{
+        newRV[k]=v;
+      }
+    });
+    S.reviewData=newRV;
+
+    // Rekey descNotes similarly
+    const newDN={};
+    Object.entries(S.descNotes||{}).forEach(([k,v])=>{
+      const parts=k.split('|');
+      if(parts[0]==='entry'&&parts.slice(1).join('|')===currentName){
+        newDN['entry|'+originalName]=v;
+      }else if(parts.length>=3&&parts.slice(0,-2).join('|')===currentName){
+        newDN[originalName+'|'+parts.slice(-2).join('|')]=v;
+      }else{
+        newDN[k]=v;
+      }
+    });
+    S.descNotes=newDN;
+
+    // Update bookmarks and sectionOverrides too
+    if(S.idxBookmarks){
+      if(S.idxBookmarks instanceof Set){
+        if(S.idxBookmarks.has(currentName)){S.idxBookmarks.delete(currentName);S.idxBookmarks.add(originalName)}
+      }else if(S.idxBookmarks[currentName]!==undefined){
+        S.idxBookmarks[originalName]=S.idxBookmarks[currentName];
+        delete S.idxBookmarks[currentName];
+      }
+    }
+    if(S.sectionOverrides&&S.sectionOverrides[currentName]){
+      S.sectionOverrides[originalName]=S.sectionOverrides[currentName];
+      delete S.sectionOverrides[currentName];
+    }
+    syncSharedDataToSheet();
+
+    // Rewrite per-row tabs (_Review, _Notes) to use the original name as the key
+    (async()=>{
+      try{
+        const oldKeyPrefix=currentName+'|';
+        const reviewRows=await readPerRowTab(REVIEW_TAB,REVIEW_HEADERS);
+        const reviewToRewrite=reviewRows.filter(r=>r.entryName===currentName||(r.key||'').startsWith(oldKeyPrefix));
+        for(const oldRow of reviewToRewrite){
+          try{
+            const parts=(oldRow.key||'').split('|');
+            if(parts.length<3)continue;
+            const seg=parts[parts.length-2];
+            const ri=parts[parts.length-1];
+            const newKey=originalName+'|'+seg+'|'+ri;
+            const rv=S.reviewData[newKey];
+            if(rv){
+              await upsertPerRowTab(REVIEW_TAB,REVIEW_HEADERS,'key',{
+                key:newKey,
+                entryName:originalName,
+                segType:seg,
+                rowIdx:ri,
+                status:rv.status||'',
+                reviewed:rv.reviewed?'1':'',
+                editedBy:rv.editedBy||'',
+                editedAt:rv.editedAt||'',
+                data:JSON.stringify(rv),
+              });
+              await deletePerRowTab(REVIEW_TAB,REVIEW_HEADERS,'key',oldRow.key);
+            }
+          }catch(e){console.warn('Review row revert-rewrite failed for',oldRow.key,e)}
+        }
+        if(reviewToRewrite.length)console.log(`Rewrote ${reviewToRewrite.length} _Review rows back to "${originalName}"`);
+
+        const noteRows=await readPerRowTab(NOTES_TAB,NOTES_HEADERS);
+        const notesToRewrite=noteRows.filter(r=>r.tagName===currentName);
+        for(const oldRow of notesToRewrite){
+          try{
+            await upsertPerRowTab(NOTES_TAB,NOTES_HEADERS,'id',{
+              ...oldRow,
+              tagName:originalName,
+              editedAt:Date.now(),
+            });
+          }catch(e){console.warn('Note row revert-rewrite failed for',oldRow.id,e)}
+        }
+        if(notesToRewrite.length)console.log(`Rewrote ${notesToRewrite.length} _Notes rows back to "${originalName}"`);
+      }catch(e){
+        console.error('Per-row revert-rewrite failed:',e);
+        toast(`Tag-name revert saved but per-row sync incomplete: ${e?.message||e}`,'warn');
+      }
+    })();
+  }
+
   // Remove from _TagNameChanges by appending a "revert" row (auditable history)
   try{
     await appendToNameChangesLog(originalName,currentName,originalName,0,new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
@@ -3449,11 +3546,12 @@ async function revertToOriginal(entryName,segType,rowIdx){
   rv._reverting=true;
   setRV(k,rv);
   await updateTagDesc(rowIdx,entryName,baselineDesc);
-  // Clear edit-tracking state. The baseline is the source of truth; rv doesn't need to track "original".
+  // Clear edit-tracking state. Reverting puts the description back to baseline; no edit history needed.
   const rv2=getRV(k)||{};
   rv2.status='';rv2.suggestion='';rv2.reason='';rv2.ruleViolations=[];rv2.reviewed=false;rv2._reverting=false;
-  rv2.originalDesc=undefined; // Legacy field, keep clear
+  rv2.originalDesc=undefined;
   rv2.editedBy=undefined;rv2.editedAt=undefined;
+  delete rv2.lastAction;
   delete rv2.suggestions;delete rv2.suggestionPrimary;
   setRV(k,rv2);
   const entry=findEntry(entryName);
