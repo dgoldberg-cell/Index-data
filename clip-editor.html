@@ -854,6 +854,17 @@
     border-left: 3px solid var(--accent);
     padding-left: calc(var(--space-4) - 3px);
   }
+  /* Scoped rules (Films / Short Films) get a softer left border in a different shade */
+  .rule-card-simple.rule-has-scope:not(.rule-cohort-short) {
+    border-left: 3px solid var(--accent-soft, var(--accent-light));
+    padding-left: calc(var(--space-4) - 3px);
+  }
+  .rule-scope-badge {
+    font-size: 10.5px; font-weight: 600;
+    color: var(--accent2);
+    background: var(--accent-light);
+    padding: 2px 8px; border-radius: var(--radius-pill);
+  }
   .rule-card-simple .rule-toggle { margin-top: 4px; }
   .rule-text-input {
     width: 100%; border: none; padding: 10px 14px; border-radius: var(--radius);
@@ -1855,6 +1866,43 @@ const DEFAULT_SHORT_COHORT_RULES = [
   { category: 'Short-Clip Strategy', title: 'Cut wordiness ruthlessly', content: 'Without a strong original to constrain length, the natural tendency is over-explanation and padding. Be relentless: every word must earn its place. Prefer concrete nouns and verbs over abstractions. Drop scaffolding phrases ("It is worth noting that…", "The Rebbe goes on to explain that…"). If a sentence can be cut and the meaning survives, cut it.', active: true, transcriptOnly: false },
 ];
 
+// ══════════════════════════════════════════════
+// FILMS — starter rule set (4 scopes)
+// ══════════════════════════════════════════════
+// Films has four scoped rule families, each routed to a different generation task:
+//   scope: 'overview'  → the film overview (column H of the film-entry row)
+//   scope: 'subtitle'  → the film subtitle (column I)
+//   scope: 'chapter'   → each chapter's short line description
+//   scope: 'intro'     → the chapter marked as the film's intro (longer than a chapter line)
+// Rules without a scope apply to all generations for the Films type.
+const DEFAULT_FILMS_RULES = [
+  // Overview scope — long, narrative film summary (~60–100 words)
+  { category: 'Overview Voice', title: 'Frame the whole film', content: 'The overview is the only place a reader learns what the entire film is ABOUT before deciding whether to watch. Open with a single sentence that names the central subject — the question, story, or theme the film explores. Avoid generic openings like "This film follows…" or "A look at…". State the matter directly.', scope: 'overview', active: true },
+  { category: 'Overview Voice', title: '60–100 words, dense prose', content: 'Target 60–100 words. Write as polished article prose, not a synopsis. Every sentence should carry weight; cut scaffolding. Do NOT list the chapters — that\'s their job. Do NOT preview the conclusion — leave reasons to watch.', scope: 'overview', active: true },
+  { category: 'Overview Voice', title: 'Invite, do not summarize', content: 'The overview\'s job is to make a viewer want to watch — through subject and tone, not promotion. Avoid marketing language ("powerful", "captivating", "must-see"). Trust the material: a clear, accurate framing of what\'s inside is more inviting than adjectives.', scope: 'overview', active: true },
+
+  // Subtitle scope — 3–7 word evocative tagline
+  { category: 'Subtitle Voice', title: '3–7 words, evocative not literal', content: 'Output ONE phrase, 3 to 7 words. Capture the essence — the emotional center or central idea — not a literal restatement of the title. No punctuation at the end. No quotes. No "A story of…" or "The journey of…" openings.', scope: 'subtitle', active: true },
+  { category: 'Subtitle Voice', title: 'Stand alone, complete the title', content: 'The subtitle reads directly under the title. It should complement, not repeat. If the title names the subject, the subtitle suggests the angle or the stakes. If the title is abstract, the subtitle grounds it.', scope: 'subtitle', active: true },
+
+  // Chapter scope — short one-liner per chapter
+  { category: 'Chapter Voice', title: 'One sentence, 15–25 words', content: 'A chapter line is a single sentence, 15–25 words. It captures the main point of THAT chapter — not the whole film. Imagine the reader scanning a table of contents and choosing which chapter to watch.', scope: 'chapter', active: true },
+  { category: 'Chapter Voice', title: 'Intrigue without spoiling', content: 'A good chapter line raises a question or hints at a turn — making the viewer want to watch — without giving the resolution away. State the situation or question, not the answer.', scope: 'chapter', active: true },
+  { category: 'Chapter Voice', title: 'No "In this chapter…" openings', content: 'Skip meta-references to the format ("In this chapter we see…", "This segment shows…"). Just describe what happens, in present tense, as if reporting from inside the film.', scope: 'chapter', active: true },
+
+  // Intro scope — longer than a chapter line, sets the film up
+  { category: 'Intro Voice', title: '30–50 words, opens the film', content: 'The intro chapter is the film\'s opening — often a standalone mini-piece. Its line is longer than other chapter lines (30–50 words) and sets up the world or stakes of the film. Treat it like a brief overture: introduce a subject and a tension, but don\'t resolve.', scope: 'intro', active: true },
+  { category: 'Intro Voice', title: 'Establish setting and stakes', content: 'Where are we, when, and what\'s at stake? The intro line should answer these in a way that pulls the viewer into the rest of the chapters. It should feel weightier than a normal chapter line.', scope: 'intro', active: true },
+];
+
+// ══════════════════════════════════════════════
+// SHORT FILMS — starter rule set (subtitle scope only; description rules added by user)
+// ══════════════════════════════════════════════
+const DEFAULT_SHORT_FILMS_RULES = [
+  { category: 'Subtitle Voice', title: '3–6 words, captures the heart', content: 'A short film subtitle is 3 to 6 words. Capture the emotional or thematic heart of the piece. No punctuation, no quotes. Avoid marketing language ("inspiring", "moving"). The subtitle is read directly under the title — they should complement, not repeat.', scope: 'subtitle', active: true },
+  { category: 'Subtitle Voice', title: 'Stand-alone piece, not part of a series', content: 'A Short Film is a complete, self-contained work — not one chapter of something larger. The subtitle should feel like a standalone title in itself, evocative on its own. Do NOT echo the title.', scope: 'subtitle', active: true },
+];
+
 
 // ══════════════════════════════════════════════
 // STATE
@@ -2837,15 +2885,25 @@ async function loadRulesForType(typeCfg) {
     // Cohort column (G): 'default' (long-original rules — the main set) or 'short' (rules
     // that apply ONLY when the clip's original description is under 70 words). The "short"
     // rules are appended after the default ones to carry extra weight in the final prompt.
-    const header = [['id','category','title','content','active','transcript_only','cohort']];
+    const header = [['id','category','title','content','active','transcript_only','cohort','scope']];
     let rows = [];
     if (typeCfg.key === 'sichos') {
       // Seed with the existing 38 default rules + the short-cohort starter set
       DEFAULT_RULES.forEach((r, i) => {
-        rows.push([String(i+1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', r.transcriptOnly ? 'TRUE' : 'FALSE', 'default']);
+        rows.push([String(i+1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', r.transcriptOnly ? 'TRUE' : 'FALSE', 'default', '']);
       });
       DEFAULT_SHORT_COHORT_RULES.forEach((r, i) => {
-        rows.push([String(DEFAULT_RULES.length + i + 1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', r.transcriptOnly ? 'TRUE' : 'FALSE', 'short']);
+        rows.push([String(DEFAULT_RULES.length + i + 1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', r.transcriptOnly ? 'TRUE' : 'FALSE', 'short', '']);
+      });
+    } else if (typeCfg.key === 'films') {
+      // Films: 10 scoped starter rules covering overview / subtitle / chapter / intro
+      DEFAULT_FILMS_RULES.forEach((r, i) => {
+        rows.push([String(i+1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', 'FALSE', 'default', r.scope || '']);
+      });
+    } else if (typeCfg.key === 'short_film') {
+      // Short Films: 2 starter subtitle rules (description rules added by user as needed)
+      DEFAULT_SHORT_FILMS_RULES.forEach((r, i) => {
+        rows.push([String(i+1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', 'FALSE', 'default', r.scope || '']);
       });
     }
     await sheetsSet(`'${tabName}'!A1`, header.concat(rows));
@@ -2860,6 +2918,7 @@ async function loadRulesForType(typeCfg) {
         { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 80 }, fields: 'pixelSize' } },
         { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 120 }, fields: 'pixelSize' } },
         { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 100 }, fields: 'pixelSize' } },
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 7, endIndex: 8 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
       ];
       await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
       method: 'POST',
@@ -2879,17 +2938,17 @@ async function loadRulesForType(typeCfg) {
   }
   // Migration: extend header to 7 columns (older sheets had 5 or 6)
   try {
-    const hdr = await sheetsGet(`'${tabName}'!A1:G1`);
+    const hdr = await sheetsGet(`'${tabName}'!A1:H1`);
     const row = hdr.values?.[0] || [];
-    if (row.length < 7) {
-      await sheetsSet(`'${tabName}'!A1:G1`, [['id','category','title','content','active','transcript_only','cohort']]);
+    if (row.length < 8) {
+      await sheetsSet(`'${tabName}'!A1:H1`, [['id','category','title','content','active','transcript_only','cohort','scope']]);
     }
   } catch {}
   // Migration: ensure Sichos has at least the short-cohort seed rules
   // (older Sichos tabs predate the cohort system — backfill if no short-cohort rules exist).
   // We do this AFTER reading existing rules so we know whether any are short already.
   try {
-    const data = await sheetsGet(`'${tabName}'!A:G`);
+    const data = await sheetsGet(`'${tabName}'!A:H`);
     const rows = data.values || [];
     if (rows.length < 2) { bucket.rulesArr = []; return; }
     bucket.rulesArr = rows.slice(1).filter(r => r[0]).map(r => ({
@@ -2901,6 +2960,9 @@ async function loadRulesForType(typeCfg) {
       transcriptOnly: String(r[5] || '').toUpperCase() === 'TRUE',
       // Default to 'default' for backward compat. Anything not equal to 'short' is treated as default.
       cohort: (r[6] || '').toLowerCase() === 'short' ? 'short' : 'default',
+      // Scope: empty string = applies to default task (description rewrite). For Films:
+      // 'overview' | 'chapter' | 'intro' | 'subtitle'. For Short Films: 'subtitle' or empty.
+      scope: (r[7] || '').toLowerCase().trim(),
     }));
     // Sichos backfill: if no rules have cohort=short yet, append the starter short rules
     if (typeCfg.key === 'sichos' && !bucket.rulesArr.some(r => r.cohort === 'short')) {
@@ -2908,18 +2970,45 @@ async function loadRulesForType(typeCfg) {
       const newRules = DEFAULT_SHORT_COHORT_RULES.map((r, i) => ({
         id: String(maxId + i + 1),
         cohort: 'short',
+        scope: '',
         ...r,
       }));
       // Append to in-memory + persist to sheet
       bucket.rulesArr.push(...newRules);
-      for (const nr of newRules) {
-        const nextSheetRow = rows.length + 1; // approximate; saveRule will compute exactly
-        rows.push([nr.id, nr.category, nr.title, nr.content, nr.active ? 'TRUE' : 'FALSE', nr.transcriptOnly ? 'TRUE' : 'FALSE', 'short']);
-      }
-      // Write the new short rules in one append
-      const startRow = rows.length - newRules.length + 1;
-      const values = newRules.map(nr => [nr.id, nr.category, nr.title, nr.content, nr.active ? 'TRUE' : 'FALSE', nr.transcriptOnly ? 'TRUE' : 'FALSE', 'short']);
-      await sheetsSet(`'${tabName}'!A${startRow}:G${startRow + newRules.length - 1}`, values);
+      const values = newRules.map(nr => [nr.id, nr.category, nr.title, nr.content, nr.active ? 'TRUE' : 'FALSE', nr.transcriptOnly ? 'TRUE' : 'FALSE', 'short', '']);
+      const startRow = rows.length + 1;
+      rows.push(...values);
+      await sheetsSet(`'${tabName}'!A${startRow}:H${startRow + newRules.length - 1}`, values);
+    }
+    // Films backfill: if the tab is empty of scope-tagged rules, seed the 10-rule starter set
+    if (typeCfg.key === 'films' && !bucket.rulesArr.some(r => r.scope)) {
+      const maxId = bucket.rulesArr.reduce((m, r) => Math.max(m, parseInt(r.id) || 0), 0);
+      const newRules = DEFAULT_FILMS_RULES.map((r, i) => ({
+        id: String(maxId + i + 1),
+        cohort: 'default',
+        transcriptOnly: false,
+        ...r,
+      }));
+      bucket.rulesArr.push(...newRules);
+      const values = newRules.map(nr => [nr.id, nr.category, nr.title, nr.content, nr.active ? 'TRUE' : 'FALSE', 'FALSE', 'default', nr.scope || '']);
+      const startRow = rows.length + 1;
+      rows.push(...values);
+      await sheetsSet(`'${tabName}'!A${startRow}:H${startRow + newRules.length - 1}`, values);
+    }
+    // Short Films backfill: seed the subtitle starter rules if not present
+    if (typeCfg.key === 'short_film' && !bucket.rulesArr.some(r => r.scope === 'subtitle')) {
+      const maxId = bucket.rulesArr.reduce((m, r) => Math.max(m, parseInt(r.id) || 0), 0);
+      const newRules = DEFAULT_SHORT_FILMS_RULES.map((r, i) => ({
+        id: String(maxId + i + 1),
+        cohort: 'default',
+        transcriptOnly: false,
+        ...r,
+      }));
+      bucket.rulesArr.push(...newRules);
+      const values = newRules.map(nr => [nr.id, nr.category, nr.title, nr.content, nr.active ? 'TRUE' : 'FALSE', 'FALSE', 'default', nr.scope || '']);
+      const startRow = rows.length + 1;
+      rows.push(...values);
+      await sheetsSet(`'${tabName}'!A${startRow}:H${startRow + newRules.length - 1}`, values);
     }
   } catch(e) {
     console.warn('Rules load failed for ' + typeCfg.displayName + ':', e);
@@ -2934,7 +3023,7 @@ async function loadRulesFromSheet() { return loadRulesForType(activeTypeCfg()); 
 // - If transcriptInUse is false, transcript-only rules are filtered out.
 // - If isShortCohort is true, short-cohort rules are INCLUDED (appended after defaults);
 //   if false, only default-cohort rules are used. Short-cohort rules only exist for Sichos.
-function buildRulesPrompt(typeKey, transcriptInUse = false, isShortCohort = false) {
+function buildRulesPrompt(typeKey, transcriptInUse = false, isShortCohort = false, scope = '') {
   const bucket = S.byType[typeKey || S.activeType];
   if (!bucket?.rulesArr || !bucket.rulesArr.length) return '';
   let active = bucket.rulesArr.filter(r => r.active);
@@ -2946,6 +3035,16 @@ function buildRulesPrompt(typeKey, transcriptInUse = false, isShortCohort = fals
     // include all (default + short); short rules already exist in the array
   } else {
     active = active.filter(r => r.cohort !== 'short');
+  }
+  // Scope filter: when a specific scope is requested (e.g. 'overview', 'chapter', 'intro',
+  // 'subtitle'), include rules with that scope PLUS rules with empty scope (apply-to-all).
+  // When no scope is passed, include only rules with empty scope — preserves prior behavior
+  // for clip types that don't use scopes.
+  const wantScope = (scope || '').toLowerCase().trim();
+  if (wantScope) {
+    active = active.filter(r => !r.scope || r.scope === wantScope);
+  } else {
+    active = active.filter(r => !r.scope);
   }
   if (!active.length) return '';
   // Group by category. Sort so default-cohort categories come first, then short-cohort
@@ -2984,12 +3083,13 @@ async function saveOneRule(rule) {
   // Column G: cohort ('default' or 'short'). Default to 'default' for any rule that
   // doesn't have one set (covers backward compat with rules created before cohorts existed).
   const cohort = rule.cohort === 'short' ? 'short' : 'default';
-  const values = [[rule.id, rule.category, rule.title, rule.content, rule.active ? 'TRUE' : 'FALSE', rule.transcriptOnly ? 'TRUE' : 'FALSE', cohort]];
+  const scope = (rule.scope || '').toLowerCase().trim();
+  const values = [[rule.id, rule.category, rule.title, rule.content, rule.active ? 'TRUE' : 'FALSE', rule.transcriptOnly ? 'TRUE' : 'FALSE', cohort, scope]];
   if (sheetRow > 0) {
-    await sheetsSet(`'${tabName}'!A${sheetRow}:G${sheetRow}`, values);
+    await sheetsSet(`'${tabName}'!A${sheetRow}:H${sheetRow}`, values);
   } else {
     const nextRow = rows.length + 1;
-    await sheetsSet(`'${tabName}'!A${nextRow}:G${nextRow}`, values);
+    await sheetsSet(`'${tabName}'!A${nextRow}:H${nextRow}`, values);
   }
   rule.cohort = cohort;
   const idx = bucket.rulesArr.findIndex(r => r.id === rule.id);
@@ -3772,6 +3872,7 @@ function renderDetail() {
                     <span style="font-size:10px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:1.5px;flex-shrink:0">Subtitle</span>
                     <input type="text" id="subtitleInput_${clip._rowNum}" class="subtitle-input" value="${esc(clip.subtitle)}" oninput="onSubtitleInput(${clip._rowNum})" placeholder="Subtitle">
                     <button id="subtitleSaveBtn_${clip._rowNum}" class="btn btn-sm btn-primary" onclick="saveSubtitle(${clip._rowNum})" style="display:none">💾 Save</button>
+                    <button class="btn btn-sm" onclick="generateShortFilmSubtitle(${clip._rowNum})" title="Ask AI to suggest a subtitle for this short film">✨ AI suggest</button>
                     ${hasBackup ? `<button class="btn btn-sm" onclick="revertSubtitle(${clip._rowNum})" title="Restore original subtitle from when the clip was first loaded">↩ Revert</button>` : ''}
                   </div>`
                 : `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -3779,6 +3880,7 @@ function renderDetail() {
                     <span style="font-size:10px;font-weight:600;color:#A86A2C;text-transform:uppercase;letter-spacing:1.5px">Subtitle missing</span>
                     <input type="text" id="subtitleInput_${clip._rowNum}" class="subtitle-input" value="" oninput="onSubtitleInput(${clip._rowNum})" placeholder="Add a subtitle for this short film…">
                     <button id="subtitleSaveBtn_${clip._rowNum}" class="btn btn-sm btn-primary" onclick="saveSubtitle(${clip._rowNum})" style="display:none">💾 Save</button>
+                    <button class="btn btn-sm" onclick="generateShortFilmSubtitle(${clip._rowNum})" title="Ask AI to suggest a subtitle for this short film">✨ AI suggest</button>
                   </div>`
               }
             </div>`;
@@ -4333,7 +4435,19 @@ function isShortCohortClip(clip) {
 function buildAIPrompt(clip, extraContext, useTranscript) {
   const isShort = isShortCohortClip(clip);
   const transcript = useTranscript ? S.transcriptLoaded[clip._rowNum] : null;
-  const rulesText = buildRulesPrompt(clip.typeKey, !!transcript, isShort);
+  // Determine scope for rule filtering — Films / Film Chapters route to scoped rule subsets.
+  // For chapter + intro generations we PULL rules from the Films AI Rules tab (not Film
+  // Chapters), since the chapter/intro rules logically belong with the rest of the film-related
+  // rules in one consolidated place.
+  let scope = '';
+  let rulesTypeKey = clip.typeKey;
+  if (clip.typeKey === 'films') scope = 'overview';
+  else if (clip.typeKey === 'film_chapter') {
+    const introId = _filmIntroCache?.[clip.filmName];
+    scope = (introId && String(introId) === String(clip.clipId)) ? 'intro' : 'chapter';
+    rulesTypeKey = 'films'; // pull chapter/intro rules from the Films tab
+  }
+  const rulesText = buildRulesPrompt(rulesTypeKey, !!transcript, isShort, scope);
 
   let prompt = rulesText || 'You are an editor rewriting Jewish educational video summaries. Rewrite the summary provided concisely.';
 
@@ -4863,11 +4977,70 @@ async function approveClip(rowNum) {
     // Write review row
     await saveReviewRow(clip);
     hideLoading();
-    renderDetail();
-    renderQueue();
+    // If we're in the Film Workstation, refresh that view AND auto-advance to the next
+    // unapproved chapter — collapsing this one, expanding the next — to keep momentum
+    // flowing through the film. Otherwise refresh the standard queue view.
+    if (S.currentView === 'film_workstation' && _filmWorkstationRow) {
+      advanceWorkstationAfterApproval(clip);
+      renderFilmWorkstation();
+    } else {
+      renderDetail();
+      renderQueue();
+    }
     updateAttentionCount();
     showToast('Saved ✅', 'success');
   } catch(e) { hideLoading(); showToast('Save failed: ' + e.message, 'error'); }
+}
+
+// Workstation flow: after a chapter (or overview) is approved, collapse it and expand the
+// next unapproved chapter so the user can keep moving. The overview itself doesn't have a
+// next; if it was the overview that was just approved, expand the first unapproved chapter.
+function advanceWorkstationAfterApproval(justApproved) {
+  const film = (S.byType['films']?.clips || []).find(c => c._rowNum === _filmWorkstationRow);
+  if (!film) return;
+  if (!_fwExpandedChapters[film._rowNum]) _fwExpandedChapters[film._rowNum] = new Set();
+  const expandedSet = _fwExpandedChapters[film._rowNum];
+  // Collapse the chapter we just approved (if it was a chapter)
+  if (justApproved.typeKey === 'film_chapter') {
+    expandedSet.delete(justApproved._rowNum);
+  }
+  // Find the next unapproved chapter in display order (intro pinned first, then chapter order)
+  const chapters = getOrderedChapters(film.filmName);
+  const introId = _filmIntroCache?.[film.filmName] || '';
+  const introChapter = introId ? chapters.find(c => String(c.clipId) === String(introId)) : null;
+  const otherChapters = introChapter ? chapters.filter(c => String(c.clipId) !== String(introId)) : chapters;
+  const ordered = introChapter ? [introChapter, ...otherChapters] : chapters;
+  // Pick the first unapproved chapter AFTER the one we just approved.
+  // If we just approved the overview, pick the first unapproved chapter from the top.
+  let foundJustApproved = (justApproved.typeKey !== 'film_chapter'); // overview → skip "after" logic
+  for (const ch of ordered) {
+    if (!foundJustApproved) {
+      if (ch._rowNum === justApproved._rowNum) foundJustApproved = true;
+      continue;
+    }
+    if (getStatus(ch) !== 'approved') {
+      expandedSet.add(ch._rowNum);
+      // Scroll the newly-expanded row into view after the render cycle
+      setTimeout(() => {
+        const el = document.getElementById('fwChap_' + ch._rowNum);
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+      return;
+    }
+  }
+  // No unapproved chapter after — fall back to first unapproved from top (in case overview-first flow)
+  if (justApproved.typeKey !== 'film_chapter') {
+    for (const ch of ordered) {
+      if (getStatus(ch) !== 'approved') {
+        expandedSet.add(ch._rowNum);
+        setTimeout(() => {
+          const el = document.getElementById('fwChap_' + ch._rowNum);
+          if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 50);
+        return;
+      }
+    }
+  }
 }
 
 async function revertClip(rowNum) {
@@ -5960,13 +6133,43 @@ async function generateFilmSubtitle(rowNum) {
   if (!film) return;
   showLoading('Asking AI for subtitle…');
   try {
-    const prompt = `You are writing a subtitle for a Jewish educational film. The film is titled "${film.title}". ${film.description ? 'Its overview is: "' + film.description + '"' : ''}\n\nGenerate ONE evocative subtitle, 3 to 7 words, that captures the essence of the film. Output ONLY the subtitle text, no quotes, no preamble.`;
+    // Pull subtitle-scoped rules from the Films AI Rules tab. If none defined, fall back
+    // to a sensible default prompt so the button always works out of the box.
+    const rulesText = buildRulesPrompt('films', false, false, 'subtitle');
+    const intro = rulesText
+      ? rulesText + '\n\n---\n\n'
+      : 'You are writing a subtitle for a Jewish educational film. Output ONE evocative phrase, 3 to 7 words, capturing the essence. No quotes, no preamble.\n\n---\n\n';
+    const prompt = `${intro}FILM TITLE: ${film.title}\n${film.description ? 'FILM OVERVIEW: ' + film.description : '(no overview yet)'}\n\nOutput only the subtitle — nothing else.`;
     const result = await callAI([{ role: 'user', content: prompt }], { temperature: 0.8, maxTokens: 80 });
     const subtitle = smartenQuotes(result.trim().replace(/^["']|["']$/g, ''));
     const input = document.getElementById('fwSubtitleInput_' + rowNum);
     if (input) {
       input.value = subtitle;
       onFilmSubtitleInput(rowNum);
+    }
+    hideLoading();
+    showToast('AI suggestion ready — review and Save to confirm', 'success');
+  } catch(e) { hideLoading(); showToast('AI failed: ' + e.message, 'error'); }
+}
+
+// Generate a subtitle for a Short Film using the short_film type's subtitle-scoped rules.
+// Mirrors the film subtitle flow but uses the Short Films AI Rules tab.
+async function generateShortFilmSubtitle(rowNum) {
+  const clip = findClipByRow(rowNum);
+  if (!clip || clip.typeKey !== 'short_film') return;
+  showLoading('Asking AI for subtitle…');
+  try {
+    const rulesText = buildRulesPrompt('short_film', false, false, 'subtitle');
+    const intro = rulesText
+      ? rulesText + '\n\n---\n\n'
+      : 'You are writing a subtitle for a Jewish educational short film. Output ONE evocative phrase, 3 to 6 words, capturing the heart. No quotes, no preamble.\n\n---\n\n';
+    const prompt = `${intro}SHORT FILM TITLE: ${clip.title}\n${clip.description ? 'DESCRIPTION: ' + clip.description : ''}\n\nOutput only the subtitle — nothing else.`;
+    const result = await callAI([{ role: 'user', content: prompt }], { temperature: 0.8, maxTokens: 80 });
+    const subtitle = smartenQuotes(result.trim().replace(/^["']|["']$/g, ''));
+    const input = document.getElementById('subtitleInput_' + rowNum);
+    if (input) {
+      input.value = subtitle;
+      onSubtitleInput(rowNum);
     }
     hideLoading();
     showToast('AI suggestion ready — review and Save to confirm', 'success');
@@ -6721,7 +6924,19 @@ function renderRulesView() {
   const active = activeBucket().rulesArr?.filter(r => r.active).length || 0;
   // Cohort filter state (sichos only). 'all' / 'default' / 'short'.
   if (!S.rulesCohortFilter) S.rulesCohortFilter = 'all';
-  const isSichos = activeTypeCfg().key === 'sichos';
+  // Scope filter state (films + short_film only). 'all' or a specific scope value.
+  if (!S.rulesScopeFilter) S.rulesScopeFilter = 'all';
+  const typeKey = activeTypeCfg().key;
+  const isSichos = typeKey === 'sichos';
+  const isFilms = typeKey === 'films';
+  const isShortFilm = typeKey === 'short_film';
+  const usesScopes = isFilms || isShortFilm;
+  // Scope options per type
+  const scopeOptions = isFilms
+    ? [['', '(no scope — applies to all)'], ['overview', '📖 Overview'], ['subtitle', '🏷️ Subtitle'], ['chapter', '🎞️ Chapter'], ['intro', '🎬 Intro']]
+    : isShortFilm
+      ? [['', '(no scope — applies to description)'], ['subtitle', '🏷️ Subtitle']]
+      : [];
   const rules = activeBucket().rulesArr || [];
   const defaultCount = rules.filter(r => r.cohort !== 'short').length;
   const shortCount = rules.filter(r => r.cohort === 'short').length;
@@ -6738,29 +6953,57 @@ function renderRulesView() {
       <button class="filter-chip ${S.rulesCohortFilter === 'short' ? 'active' : ''}" onclick="setRulesCohortFilter('short')" title="Extra rules appended when the original description is under 70 words">🪶 Short-clip <span class="filter-chip-count">(${shortCount})</span></button>
     </div>` : '';
 
+  // Scope filter row (films + short_film) — pick which subset of rules to view
+  let scopeFilterHTML = '';
+  if (usesScopes) {
+    const noScopeCount = rules.filter(r => !r.scope).length;
+    const chips = [['all', `All <span class="filter-chip-count">(${total})</span>`], ['', `(no scope) <span class="filter-chip-count">(${noScopeCount})</span>`]];
+    scopeOptions.filter(opt => opt[0]).forEach(([val, label]) => {
+      const cnt = rules.filter(r => r.scope === val).length;
+      chips.push([val, `${label} <span class="filter-chip-count">(${cnt})</span>`]);
+    });
+    scopeFilterHTML = `
+      <div class="filter-row" id="rulesScopeFilterRow" style="margin-bottom:18px;padding:10px 0;border-bottom:1px dashed var(--border)">
+        <span style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-right:4px;align-self:center">Scope:</span>
+        ${chips.map(([val, label]) => `<button class="filter-chip ${S.rulesScopeFilter === val ? 'active' : ''}" onclick="setRulesScopeFilter('${val}')">${label}</button>`).join('')}
+      </div>`;
+  }
+
   const container = document.getElementById('rulesContainer');
   if (!total) {
-    container.innerHTML = cohortFilterHTML + '<div class="empty-state">No rules yet. Click "+ Add Rule" to create one.</div>';
+    container.innerHTML = cohortFilterHTML + scopeFilterHTML + '<div class="empty-state">No rules yet. Click "+ Add Rule" to create one.</div>';
     return;
   }
   // Filter by cohort if Sichos
-  const visibleRules = isSichos && S.rulesCohortFilter !== 'all'
+  let visibleRules = isSichos && S.rulesCohortFilter !== 'all'
     ? rules.filter(r => (S.rulesCohortFilter === 'short' ? r.cohort === 'short' : r.cohort !== 'short'))
     : rules;
+  // Filter by scope if Films / Short Film
+  if (usesScopes && S.rulesScopeFilter !== 'all') {
+    visibleRules = visibleRules.filter(r => (r.scope || '') === S.rulesScopeFilter);
+  }
   // Simplified — flat list of rule cards, no categories, just text + toggle
-  let html = cohortFilterHTML;
+  let html = cohortFilterHTML + scopeFilterHTML;
   if (!visibleRules.length) {
-    html += '<div class="empty-state">No rules in this cohort yet.</div>';
+    html += '<div class="empty-state">No rules in this view.</div>';
     container.innerHTML = html;
     return;
   }
   visibleRules.forEach(rule => {
     const isShort = rule.cohort === 'short';
-    html += `<div class="rule-card-simple ${rule.active ? '' : 'inactive'} ${isShort ? 'rule-cohort-short' : ''}" id="ruleCard_${esc(rule.id)}">
+    const scopeBadge = usesScopes && rule.scope
+      ? `<span class="rule-scope-badge" title="This rule only applies to ${rule.scope}-scope generations">${({ overview: '📖 Overview', subtitle: '🏷️ Subtitle', chapter: '🎞️ Chapter', intro: '🎬 Intro' })[rule.scope] || esc(rule.scope)}</span>` : '';
+    const scopeDropdown = usesScopes
+      ? `<select class="rule-scope-select" onchange="updateRuleScope('${esc(rule.id)}', this.value)" title="Scope: which generation task this rule applies to" style="font-size:11px;padding:2px 8px;border:none;border-radius:var(--radius-pill);background:var(--bg2);color:var(--tx2);box-shadow:var(--shadow-inner);cursor:pointer;outline:none">
+          ${scopeOptions.map(([val, label]) => `<option value="${esc(val)}" ${(rule.scope || '') === val ? 'selected' : ''}>${esc(label)}</option>`).join('')}
+        </select>` : '';
+    html += `<div class="rule-card-simple ${rule.active ? '' : 'inactive'} ${isShort ? 'rule-cohort-short' : ''} ${rule.scope ? 'rule-has-scope' : ''}" id="ruleCard_${esc(rule.id)}">
       <div class="rule-toggle ${rule.active ? 'on' : ''}" onclick="toggleRule('${esc(rule.id)}')" title="${rule.active ? 'Active — click to disable' : 'Disabled — click to enable'}"></div>
       <textarea class="rule-text-input" data-rule-id="${esc(rule.id)}" oninput="onRuleEdit('${esc(rule.id)}')" placeholder="Type the rule for the AI…" rows="3">${esc(rule.content)}</textarea>
       <div class="rule-card-actions">
         <span class="rule-id-badge">#${esc(rule.id)}</span>
+        ${scopeBadge}
+        ${scopeDropdown}
         ${isSichos ? `<label class="rule-cohort-toggle ${isShort ? 'short' : ''}" title="${isShort ? 'Short-clip cohort: only applies when the original is under 70 words. Click to make this a Default rule.' : 'Default cohort: applies to every Sichos generation. Click to make this Short-clip only.'}" style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:10.5px;font-weight:500;color:${isShort ? 'var(--accent2)' : 'var(--tx4)'};background:${isShort ? 'var(--accent-light)' : 'var(--bg2)'};padding:3px 9px;border-radius:var(--radius-pill);user-select:none;transition:all 0.15s">
           <input type="checkbox" ${isShort ? 'checked' : ''} onchange="toggleRuleCohort('${esc(rule.id)}')" style="margin:0;cursor:pointer;accent-color:var(--accent)">
           🪶 Short-clip
@@ -6776,6 +7019,24 @@ function renderRulesView() {
     </div>`;
   });
   container.innerHTML = html;
+}
+
+function setRulesScopeFilter(scope) {
+  S.rulesScopeFilter = scope;
+  renderRulesView();
+}
+
+async function updateRuleScope(id, newScope) {
+  const rule = activeBucket().rulesArr.find(r => r.id === id);
+  if (!rule) return;
+  rule.scope = newScope;
+  try {
+    await saveOneRule(rule);
+    showToast(newScope ? `Scope set to "${newScope}"` : 'Scope cleared', 'success');
+    renderRulesView();
+  } catch(e) {
+    showToast('Save failed: ' + e.message, 'error');
+  }
 }
 
 function setRulesCohortFilter(filter) {
@@ -6884,11 +7145,16 @@ async function addNewRule() {
   // Default cohort: if user is currently viewing the Short-clip filter, new rule goes there;
   // otherwise default cohort. Only Sichos has cohorts; other types always get default.
   const cohort = (activeTypeCfg().key === 'sichos' && S.rulesCohortFilter === 'short') ? 'short' : 'default';
-  const newRule = { id: nextRuleId(), category: 'General', title: autoTitle, content: text.trim(), active: true, transcriptOnly: false, cohort };
+  // Default scope: if user is viewing a specific scope filter on Films or Short Films, the
+  // new rule defaults to that scope. Otherwise no scope (applies to all generations).
+  const typeKey = activeTypeCfg().key;
+  const usesScopes = typeKey === 'films' || typeKey === 'short_film';
+  const scope = (usesScopes && S.rulesScopeFilter && S.rulesScopeFilter !== 'all') ? S.rulesScopeFilter : '';
+  const newRule = { id: nextRuleId(), category: 'General', title: autoTitle, content: text.trim(), active: true, transcriptOnly: false, cohort, scope };
   try {
     await saveOneRule(newRule);
     renderRulesView();
-    showToast('Rule added' + (cohort === 'short' ? ' (Short-clip cohort)' : ''), 'success');
+    showToast('Rule added' + (cohort === 'short' ? ' (Short-clip cohort)' : '') + (scope ? ` (${scope} scope)` : ''), 'success');
   } catch(e) {
     showToast('Add failed: ' + e.message, 'error');
   }
