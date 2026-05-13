@@ -934,6 +934,23 @@
   }
   .subtitle-input:focus { box-shadow: var(--shadow-inner), 0 0 0 3px var(--accent-soft); }
 
+  /* Title input — reads as prose by default. Hover/focus reveal it's editable
+     without making it look like a noisy form input at rest. */
+  .title-edit-input {
+    border: none; outline: none;
+    background: transparent;
+    transition: background 0.18s, box-shadow 0.18s;
+    border-radius: var(--radius);
+    color: var(--tx);
+  }
+  .title-edit-input:hover {
+    background: rgba(184, 153, 104, 0.08);
+  }
+  .title-edit-input:focus {
+    background: #FAF6EC;
+    box-shadow: var(--shadow-inner), 0 0 0 2px var(--accent-soft);
+  }
+
   /* Transcript toggle (in clip detail AI box) */
   .transcript-toggle { transition: all 0.2s; }
   .transcript-toggle:hover { background: var(--bg3); color: var(--tx); }
@@ -2397,24 +2414,26 @@ async function ensureReviewTab(typeCfg) {
   const baseHeader = ['clip_id','status','original_backup','flag_reason','approved_by','approved_at','draft_text','chat_history','desc_source_col','draft_model','draft_used_transcript'];
   let fullHeader, lastCol;
   if (typeCfg.key === 'short_film') {
-    fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current'];
-    lastCol = 'M';
+    fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current', 'title_original_backup'];
+    lastCol = 'N';
   } else if (typeCfg.key === 'films') {
     // Films: same as Short Film (subtitle backup + current) since both have a subtitle field
     // pulled from column I of the main sheet. Films don't have length-trim rules so no extra cols.
-    fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current'];
-    lastCol = 'M';
+    fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current', 'title_original_backup'];
+    lastCol = 'N';
   } else if (typeCfg.key === 'sichos') {
     // length_flag/length_flag_wc: trim FAILURE state (persisted for queue badges + attention).
     // length_action/length_input_wc/length_output_wc: SUCCESS metadata for the provenance line.
     // cohort_used: which rule cohort produced the draft ('default' or 'short') — drives the
     // 🪶 Short-clip badge in the provenance line so reviewers can see at a glance which
     // strategy this draft was generated under.
-    fullHeader = [...baseHeader, 'length_flag', 'length_flag_wc', 'length_action', 'length_input_wc', 'length_output_wc', 'cohort_used'];
-    lastCol = 'Q';
+    // title_original_backup: original title from main sheet col J, backed up once when the
+    // user first edits the title via the workstation UI.
+    fullHeader = [...baseHeader, 'length_flag', 'length_flag_wc', 'length_action', 'length_input_wc', 'length_output_wc', 'cohort_used', 'title_original_backup'];
+    lastCol = 'R';
   } else {
-    fullHeader = baseHeader;
-    lastCol = 'K';
+    fullHeader = [...baseHeader, 'title_original_backup'];
+    lastCol = 'L';
   }
   const meta = await getSheetMeta();
   const exists = meta.sheets?.some(s => s.properties.title === tabName);
@@ -2449,9 +2468,9 @@ async function loadReviewData(typeCfg) {
   const hasSubtitleCols = isShortFilm || isFilms; // both have subtitle backup + current in cols L,M
   // short_film + films extend to M (subtitle cols); sichos extends to Q (length + cohort cols)
   let range;
-  if (isSichos) range = `'${typeCfg.reviewTab}'!A:Q`;
-  else if (hasSubtitleCols) range = `'${typeCfg.reviewTab}'!A:M`;
-  else range = `'${typeCfg.reviewTab}'!A:K`;
+  if (isSichos) range = `'${typeCfg.reviewTab}'!A:R`;
+  else if (hasSubtitleCols) range = `'${typeCfg.reviewTab}'!A:N`;
+  else range = `'${typeCfg.reviewTab}'!A:L`;
   try {
     const data = await sheetsGet(range);
     const rows = data.values || [];
@@ -2479,6 +2498,11 @@ async function loadReviewData(typeCfg) {
         lengthOutputWc: isSichos ? (parseInt(row[15]) || 0) : 0,
         // Sichos: which rule cohort produced this draft ('default' or 'short')
         cohortUsed: isSichos ? (row[16] || '') : '',
+        // Title backup: written once when the title is first edited. Column index varies:
+        //   Sichos col R (idx 17), short_film/films col N (idx 13), others col L (idx 11).
+        titleOriginalBackup: isSichos ? (row[17] || '')
+                            : hasSubtitleCols ? (row[13] || '')
+                            : (row[11] || ''),
       };
       const id = row[0];
       const clip = bucket.clips?.find(c => String(c._rowNum) === id);
@@ -2525,8 +2549,8 @@ async function saveReviewRow(clip) {
   ];
   let values, lastCol;
   if (hasSubtitleCols) {
-    values = [[...baseValues, rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '']];
-    lastCol = 'M';
+    values = [[...baseValues, rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '', rd.titleOriginalBackup || '']];
+    lastCol = 'N';
   } else if (isSichos) {
     values = [[...baseValues,
       rd.lengthFlag || '',
@@ -2535,11 +2559,12 @@ async function saveReviewRow(clip) {
       rd.lengthInputWc ? String(rd.lengthInputWc) : '',
       rd.lengthOutputWc ? String(rd.lengthOutputWc) : '',
       rd.cohortUsed || '',
+      rd.titleOriginalBackup || '',
     ]];
-    lastCol = 'Q';
+    lastCol = 'R';
   } else {
-    values = [baseValues];
-    lastCol = 'K';
+    values = [[...baseValues, rd.titleOriginalBackup || '']];
+    lastCol = 'L';
   }
   if (sheetRow > 0) {
     await sheetsSet(`'${typeCfg.reviewTab}'!A${sheetRow}:${lastCol}${sheetRow}`, values);
@@ -3900,7 +3925,7 @@ function renderDetail() {
         </div>
         <div class="detail-meta" style="flex:1">
           ${clip.filmName ? `<div style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px;font-weight:600">${esc(clip.filmName)}</div>` : ''}
-          <div class="detail-title" style="font-size:20px;line-height:1.25;margin-bottom:8px">${esc(clip.title)}</div>
+          <div class="detail-title-wrap" style="margin-bottom:8px">${renderEditableTitle(clip, { fontSize: '20px' })}</div>
           ${clip.typeKey === 'short_film' ? (() => {
             const hasSub = !!(clip.subtitle && clip.subtitle.trim());
             const hasBackup = !!getReviewField(clip, 'subtitleOriginalBackup');
@@ -5260,6 +5285,130 @@ function onSubtitleInput(rowNum) {
 }
 
 // ══════════════════════════════════════════════
+// TITLE EDITING (all clip types)
+// ══════════════════════════════════════════════
+// Titles are editable across every clip type. On first edit the original is backed up to
+// the review tab's `title_original_backup` column; the new value is written to main sheet
+// column J. A Revert button restores the backup. An ✨ AI suggest button uses the type's
+// 'title' scoped rules (if any) to propose a new title.
+
+// Detect title input changes — show Save button when there's a real change
+function onTitleInput(rowNum) {
+  const input = document.getElementById('titleInput_' + rowNum);
+  const saveBtn = document.getElementById('titleSaveBtn_' + rowNum);
+  const clip = findClipByRow(rowNum);
+  if (!input || !saveBtn || !clip) return;
+  const current = clip.title || '';
+  const v = (input.value || '').trim();
+  saveBtn.style.display = (v && v !== current) ? 'inline-block' : 'none';
+}
+
+async function saveTitle(rowNum) {
+  const clip = findClipByRow(rowNum);
+  if (!clip) return;
+  const input = document.getElementById('titleInput_' + rowNum);
+  const newVal = (input?.value || '').trim();
+  if (!newVal) {
+    showToast('Title cannot be empty — use Revert to restore original', 'error');
+    return;
+  }
+  if (newVal === (clip.title || '')) return;
+  showLoading('Saving title…');
+  try {
+    // Back up the original title once
+    if (!getReviewField(clip, 'titleOriginalBackup')) {
+      setReviewField(clip, 'titleOriginalBackup', clip.title || '');
+    }
+    // Write to main sheet column J
+    await sheetsSet(`'${CONFIG.MAIN_TAB}'!J${rowNum}:J${rowNum}`, [[newVal]]);
+    await saveReviewRow(clip);
+    clip.title = newVal;
+    hideLoading();
+    // Re-render whichever view we're in
+    if (S.currentView === 'film_workstation') renderFilmWorkstation();
+    else { renderDetail(); renderQueue(); }
+    showToast('Title saved ✓', 'success');
+  } catch(e) { hideLoading(); showToast('Save failed: ' + e.message, 'error'); }
+}
+
+async function revertTitle(rowNum) {
+  const clip = findClipByRow(rowNum);
+  if (!clip) return;
+  const backup = getReviewField(clip, 'titleOriginalBackup');
+  if (!backup) { showToast('No original title backup to revert to', 'error'); return; }
+  if (!await jemConfirm('Revert title to original?<br><br><span style="color:var(--tx3);font-size:12px">This will restore the original title to the main sheet and clear the title edit history for this clip.</span>', { danger: true, okLabel: 'Revert' })) return;
+  showLoading('Reverting title…');
+  try {
+    await sheetsSet(`'${CONFIG.MAIN_TAB}'!J${rowNum}:J${rowNum}`, [[backup]]);
+    setReviewField(clip, 'titleOriginalBackup', '');
+    clip.title = backup;
+    await saveReviewRow(clip);
+    hideLoading();
+    if (S.currentView === 'film_workstation') renderFilmWorkstation();
+    else { renderDetail(); renderQueue(); }
+    showToast('Title reverted', 'success');
+  } catch(e) { hideLoading(); showToast('Revert failed: ' + e.message, 'error'); }
+}
+
+// AI suggest a title — uses the clip's type's 'title' scoped rules if any, otherwise
+// a sensible default prompt. Inline progress on the button (no overlay).
+async function generateTitleSuggestion(rowNum) {
+  const clip = findClipByRow(rowNum);
+  if (!clip) return;
+  const btn = document.querySelector(`button[onclick="generateTitleSuggestion(${rowNum})"]`);
+  const origBtnHTML = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Thinking…'; }
+  try {
+    // Type-aware rule lookup. For chapters use the Films rules tab with 'title' scope
+    // (rules are consolidated under Films); for films use Films tab; for everything else
+    // use the clip's own type's rules tab.
+    const rulesTypeKey = (clip.typeKey === 'film_chapter') ? 'films' : clip.typeKey;
+    const rulesText = buildRulesPrompt(rulesTypeKey, false, false, 'title');
+    const typeLabel = ({
+      sichos: 'Sicha (Address)',
+      timeless: 'Timeless Moment',
+      conversations: 'Conversation',
+      my_encounter: 'My Encounter clip',
+      short_film: 'Short Film',
+      films: 'Film',
+      film_chapter: 'Film Chapter',
+    })[clip.typeKey] || 'clip';
+    const intro = rulesText
+      ? rulesText + '\n\n---\n\n'
+      : `You are writing a title for a Jewish educational ${typeLabel}. Output ONE concise title, 3 to 8 words, capturing the central subject. No subtitles, no quotes, no preamble.\n\n---\n\n`;
+    const prompt = `${intro}CURRENT TITLE: ${clip.title || '(none)'}\n${clip.description ? 'DESCRIPTION: ' + clip.description : ''}\n\nOutput only the suggested title — nothing else.`;
+    const result = await callAI([{ role: 'user', content: prompt }], { temperature: 0.7, maxTokens: 80 });
+    const newTitle = smartenQuotes(result.trim().replace(/^["']|["']$/g, ''));
+    const input = document.getElementById('titleInput_' + rowNum);
+    if (input) {
+      input.value = newTitle;
+      onTitleInput(rowNum);
+    }
+    if (btn) { btn.disabled = false; btn.innerHTML = origBtnHTML; }
+    showToast('AI suggestion ready — review and Save to confirm', 'success');
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = origBtnHTML; }
+    showToast('AI failed: ' + e.message, 'error');
+  }
+}
+
+// Render the editable title UI — used by both the detail panel and the workstation.
+// Returns inline HTML that replaces a plain title rendering.
+function renderEditableTitle(clip, opts) {
+  const o = opts || {};
+  const hasBackup = !!getReviewField(clip, 'titleOriginalBackup');
+  const className = o.className || 'title-edit-input';
+  const fontSize = o.fontSize || '20px';
+  const containerStyle = o.containerStyle || '';
+  return `<div class="title-edit-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;${containerStyle}">
+    <input type="text" id="titleInput_${clip._rowNum}" class="${className}" value="${esc(clip.title || '')}" oninput="onTitleInput(${clip._rowNum})" placeholder="Title…" style="flex:1;min-width:200px;font-size:${fontSize};font-weight:600;font-family:var(--font-serif);padding:6px 12px;border:none;border-radius:var(--radius);background:transparent;color:var(--tx);outline:none;transition:background 0.15s">
+    <button id="titleSaveBtn_${clip._rowNum}" class="btn btn-sm btn-primary" onclick="saveTitle(${clip._rowNum})" style="display:none">💾 Save</button>
+    <button class="btn btn-sm" onclick="generateTitleSuggestion(${clip._rowNum})" title="Ask AI to suggest a new title">✨ AI suggest</button>
+    ${hasBackup ? `<button class="btn btn-sm" onclick="revertTitle(${clip._rowNum})" title="Restore the original title">↩ Revert</button>` : ''}
+  </div>`;
+}
+
+// ══════════════════════════════════════════════
 // CHAT
 // ══════════════════════════════════════════════
 function renderChatMessages(rowNum) {
@@ -6112,7 +6261,7 @@ function renderFilmWorkstation() {
     <div class="fw-film-header">
       ${thumbHTML}
       <div style="flex:1;min-width:0">
-        <div class="fw-film-title">${esc(film.title)}</div>
+        ${renderEditableTitle(film, { fontSize: '28px' })}
         <div class="fw-film-meta">${fd ? esc(fd) + ' · ' : ''}${dur ? '⏱ ' + esc(dur) + ' · ' : ''}${rollup.totalChapters} chapters</div>
         ${film.filmId ? `<a class="btn btn-sm btn-primary" href="https://videos.jem.tv/video-player?produced=${esc(film.filmId)}" target="_blank" rel="noopener" style="text-decoration:none">▶ Watch on JEM.tv</a>` : ''}
       </div>
@@ -6176,6 +6325,11 @@ function renderChapterRow(film, chapter, isExpanded, isIntro) {
       <span class="fw-chapter-status ${statusClass}">${statusLabel}</span>
     </div>
     ${isExpanded ? `<div class="fw-chapter-body">
+      <!-- Editable title row at the top of the expanded chapter body -->
+      <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--border)">
+        <div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:4px;font-weight:600">Chapter title</div>
+        ${renderEditableTitle(chapter, { fontSize: '16px' })}
+      </div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:500;color:var(--tx2);background:var(--panel);padding:5px 12px;border-radius:var(--radius-pill);box-shadow:var(--shadow-inner);user-select:none" title="Mark this chapter as the film's intro. Only one chapter per film can be the intro.">
           <input type="checkbox" ${isIntro ? 'checked' : ''} onchange="toggleChapterIntro(${film._rowNum}, ${chapter._rowNum})" style="margin:0;cursor:pointer;accent-color:var(--accent)">
@@ -7162,13 +7316,14 @@ function renderRulesView() {
   const isSichos = typeKey === 'sichos';
   const isFilms = typeKey === 'films';
   const isShortFilm = typeKey === 'short_film';
-  const usesScopes = isFilms || isShortFilm;
-  // Scope options per type
+  // Every clip type can have title-scoped rules — titles are universally editable.
+  const usesScopes = true;
+  // Scope options per type. All types include 'title' since all clip types have editable titles.
   const scopeOptions = isFilms
-    ? [['', '(no scope — applies to all)'], ['overview', '📖 Overview'], ['subtitle', '🏷️ Subtitle'], ['chapter', '🎞️ Chapter'], ['intro', '🎬 Intro']]
+    ? [['', '(no scope — applies to all)'], ['title', '✏️ Title'], ['overview', '📖 Overview'], ['subtitle', '🏷️ Subtitle'], ['chapter', '🎞️ Chapter'], ['intro', '🎬 Intro']]
     : isShortFilm
-      ? [['', '(no scope — applies to description)'], ['subtitle', '🏷️ Subtitle']]
-      : [];
+      ? [['', '(no scope — applies to description)'], ['title', '✏️ Title'], ['subtitle', '🏷️ Subtitle']]
+      : [['', '(no scope — applies to description)'], ['title', '✏️ Title']];
   const rules = activeBucket().rulesArr || [];
   const defaultCount = rules.filter(r => r.cohort !== 'short').length;
   const shortCount = rules.filter(r => r.cohort === 'short').length;
@@ -7224,7 +7379,7 @@ function renderRulesView() {
   visibleRules.forEach(rule => {
     const isShort = rule.cohort === 'short';
     const scopeBadge = usesScopes && rule.scope
-      ? `<span class="rule-scope-badge" title="This rule only applies to ${rule.scope}-scope generations">${({ overview: '📖 Overview', subtitle: '🏷️ Subtitle', chapter: '🎞️ Chapter', intro: '🎬 Intro' })[rule.scope] || esc(rule.scope)}</span>` : '';
+      ? `<span class="rule-scope-badge" title="This rule only applies to ${rule.scope}-scope generations">${({ title: '✏️ Title', overview: '📖 Overview', subtitle: '🏷️ Subtitle', chapter: '🎞️ Chapter', intro: '🎬 Intro' })[rule.scope] || esc(rule.scope)}</span>` : '';
     const scopeDropdown = usesScopes
       ? `<select class="rule-scope-select" onchange="updateRuleScope('${esc(rule.id)}', this.value)" title="Scope: which generation task this rule applies to" style="font-size:11px;padding:2px 8px;border:none;border-radius:var(--radius-pill);background:var(--bg2);color:var(--tx2);box-shadow:var(--shadow-inner);cursor:pointer;outline:none">
           ${scopeOptions.map(([val, label]) => `<option value="${esc(val)}" ${(rule.scope || '') === val ? 'selected' : ''}>${esc(label)}</option>`).join('')}
@@ -7377,11 +7532,10 @@ async function addNewRule() {
   // Default cohort: if user is currently viewing the Short-clip filter, new rule goes there;
   // otherwise default cohort. Only Sichos has cohorts; other types always get default.
   const cohort = (activeTypeCfg().key === 'sichos' && S.rulesCohortFilter === 'short') ? 'short' : 'default';
-  // Default scope: if user is viewing a specific scope filter on Films or Short Films, the
-  // new rule defaults to that scope. Otherwise no scope (applies to all generations).
-  const typeKey = activeTypeCfg().key;
-  const usesScopes = typeKey === 'films' || typeKey === 'short_film';
-  const scope = (usesScopes && S.rulesScopeFilter && S.rulesScopeFilter !== 'all') ? S.rulesScopeFilter : '';
+  // Default scope: if user is viewing a specific scope filter, the new rule defaults to
+  // that scope. Otherwise no scope (applies to all generations). All clip types support
+  // scopes now since titles are universally editable with their own scope.
+  const scope = (S.rulesScopeFilter && S.rulesScopeFilter !== 'all') ? S.rulesScopeFilter : '';
   const newRule = { id: nextRuleId(), category: 'General', title: autoTitle, content: text.trim(), active: true, transcriptOnly: false, cohort, scope };
   try {
     await saveOneRule(newRule);
