@@ -2931,6 +2931,16 @@ async function loadRulesForType(typeCfg) {
         ...DEFAULT_RULES.map((r, i) => ({ id: String(i+1), cohort: 'default', ...r })),
         ...DEFAULT_SHORT_COHORT_RULES.map((r, i) => ({ id: String(DEFAULT_RULES.length+i+1), cohort: 'short', ...r })),
       ];
+    } else if (typeCfg.key === 'films') {
+      // Mirror the rows we just wrote to the sheet into the in-memory cache so the
+      // UI shows the seed rules immediately on first visit (no reload required).
+      bucket.rulesArr = DEFAULT_FILMS_RULES.map((r, i) => ({
+        id: String(i+1), cohort: 'default', transcriptOnly: false, ...r,
+      }));
+    } else if (typeCfg.key === 'short_film') {
+      bucket.rulesArr = DEFAULT_SHORT_FILMS_RULES.map((r, i) => ({
+        id: String(i+1), cohort: 'default', transcriptOnly: false, ...r,
+      }));
     } else {
       bucket.rulesArr = [];
     }
@@ -2950,20 +2960,26 @@ async function loadRulesForType(typeCfg) {
   try {
     const data = await sheetsGet(`'${tabName}'!A:H`);
     const rows = data.values || [];
-    if (rows.length < 2) { bucket.rulesArr = []; return; }
-    bucket.rulesArr = rows.slice(1).filter(r => r[0]).map(r => ({
-      id: String(r[0]),
-      category: r[1] || 'Uncategorized',
-      title: r[2] || '',
-      content: r[3] || '',
-      active: !r[4] || String(r[4]).toUpperCase() === 'TRUE',
-      transcriptOnly: String(r[5] || '').toUpperCase() === 'TRUE',
-      // Default to 'default' for backward compat. Anything not equal to 'short' is treated as default.
-      cohort: (r[6] || '').toLowerCase() === 'short' ? 'short' : 'default',
-      // Scope: empty string = applies to default task (description rewrite). For Films:
-      // 'overview' | 'chapter' | 'intro' | 'subtitle'. For Short Films: 'subtitle' or empty.
-      scope: (r[7] || '').toLowerCase().trim(),
-    }));
+    // If the tab is empty (only header row or nothing), start with an empty in-memory cache
+    // but DO NOT return early — let the backfill blocks below run to seed starter rules
+    // for types that have a default set (films, short_film, sichos short-cohort).
+    if (rows.length < 2) {
+      bucket.rulesArr = [];
+    } else {
+      bucket.rulesArr = rows.slice(1).filter(r => r[0]).map(r => ({
+        id: String(r[0]),
+        category: r[1] || 'Uncategorized',
+        title: r[2] || '',
+        content: r[3] || '',
+        active: !r[4] || String(r[4]).toUpperCase() === 'TRUE',
+        transcriptOnly: String(r[5] || '').toUpperCase() === 'TRUE',
+        // Default to 'default' for backward compat. Anything not equal to 'short' is treated as default.
+        cohort: (r[6] || '').toLowerCase() === 'short' ? 'short' : 'default',
+        // Scope: empty string = applies to default task (description rewrite). For Films:
+        // 'overview' | 'chapter' | 'intro' | 'subtitle'. For Short Films: 'subtitle' or empty.
+        scope: (r[7] || '').toLowerCase().trim(),
+      }));
+    }
     // Sichos backfill: if no rules have cohort=short yet, append the starter short rules
     if (typeCfg.key === 'sichos' && !bucket.rulesArr.some(r => r.cohort === 'short')) {
       const maxId = bucket.rulesArr.reduce((m, r) => Math.max(m, parseInt(r.id) || 0), 0);
@@ -5635,7 +5651,9 @@ function renderSidebar() {
               <div class="sb-sub-item ${fcActive && S.currentView === 'queue' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('film_chapter','queue')">Queue</div>
               <div class="sb-sub-item ${fcActive && S.currentView === 'attention' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('film_chapter','attention')">Attention</div>
               <div class="sb-sub-item ${fcActive && S.currentView === 'typenotes' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('film_chapter','typenotes')">Notes</div>
-              <div class="sb-sub-item ${fcActive && S.currentView === 'rules' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('film_chapter','rules')">AI Rules</div>
+              <!-- AI Rules deliberately omitted here — all film-related rules (overview / subtitle /
+                   chapter / intro) live in the single "Films AI Rules" tab, accessed via the
+                   AI Rules sub-item under the Films parent. -->
             </div>
           </div>`;
         })() : ''}
