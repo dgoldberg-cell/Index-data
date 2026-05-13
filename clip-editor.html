@@ -213,6 +213,180 @@
   .sb-type-children { display: none; padding-top: 2px; padding-bottom: 4px; }
   .sb-type-expanded .sb-type-children { display: block; }
 
+  /* ── Films section ───────────────────────────────────────────── */
+  /* Films List — grid of film cards */
+  .films-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px; padding: 8px 0;
+  }
+  .film-card {
+    background: var(--panel); border-radius: var(--radius3);
+    box-shadow: var(--shadow-clay);
+    overflow: hidden; cursor: pointer; transition: all 0.22s ease;
+    display: flex; flex-direction: column;
+  }
+  .film-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-clay-lg); }
+  .film-card-thumb {
+    width: 100%; aspect-ratio: 16 / 9; object-fit: cover;
+    background: var(--bg3); display: block;
+  }
+  .film-card-body { padding: 14px 16px 16px; }
+  .film-card-title {
+    font-family: var(--font-serif); font-size: 17px; font-weight: 600;
+    color: var(--tx); line-height: 1.25; margin-bottom: 4px;
+  }
+  .film-card-subtitle {
+    font-size: 12px; color: var(--tx3); margin-bottom: 10px;
+    font-style: italic; line-height: 1.35;
+  }
+  .film-card-meta {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; color: var(--tx4);
+    padding-top: 10px; border-top: 1px dashed var(--border);
+    margin-top: 8px;
+  }
+  .film-card-progress {
+    flex: 1; height: 6px; background: var(--bg2); border-radius: 3px;
+    overflow: hidden; box-shadow: var(--shadow-inner);
+  }
+  .film-card-progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--accent), var(--green));
+    transition: width 0.3s;
+  }
+  .film-card-progress-text { font-weight: 600; color: var(--tx2); white-space: nowrap; }
+  .film-card-status-row {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    font-size: 10.5px; margin-bottom: 6px;
+  }
+  .film-card-status-chip {
+    padding: 2px 8px; border-radius: var(--radius-pill); font-weight: 600;
+  }
+  .film-card-status-unprocessed { background: var(--bg2); color: var(--tx3); }
+  .film-card-status-draft { background: var(--accent-light); color: var(--accent2); }
+  .film-card-status-approved { background: var(--green-light); color: var(--green); }
+  .film-card-status-flagged { background: var(--red-light); color: var(--red); }
+
+  /* Film Workstation — the per-film working page */
+  .film-workstation {
+    max-width: 1100px; margin: 0 auto; padding: 24px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .fw-back-nav {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 4px;
+  }
+  .fw-back-nav .nav-spacer { flex: 1; }
+  .fw-film-header {
+    background: var(--panel); border-radius: var(--radius2);
+    box-shadow: var(--shadow-clay); padding: 20px 24px;
+    display: flex; gap: 18px; align-items: center;
+  }
+  .fw-film-header-thumb {
+    width: 200px; aspect-ratio: 16 / 9;
+    object-fit: cover; border-radius: var(--radius); flex-shrink: 0;
+    box-shadow: var(--shadow-clay);
+  }
+  .fw-film-title {
+    font-family: var(--font-serif); font-size: 28px; font-weight: 600;
+    color: var(--tx); line-height: 1.2; margin-bottom: 6px;
+  }
+  .fw-film-meta { font-size: 12.5px; color: var(--tx3); margin-bottom: 10px; }
+
+  .fw-section {
+    background: var(--panel); border-radius: var(--radius2);
+    box-shadow: var(--shadow-clay); padding: 18px 22px;
+  }
+  .fw-section-header {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--tx3);
+    margin-bottom: 14px;
+  }
+  .fw-section-icon { font-size: 14px; }
+
+  /* Subtitle row */
+  .fw-subtitle-row {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  }
+  .fw-subtitle-row .subtitle-input { flex: 1; min-width: 200px; }
+
+  /* Chapter rows */
+  .fw-chapter-row {
+    background: var(--panel); border-radius: var(--radius2);
+    box-shadow: var(--shadow-clay);
+    margin-bottom: 12px; overflow: hidden;
+    transition: box-shadow 0.2s;
+  }
+  .fw-chapter-row.expanded { box-shadow: var(--shadow-clay-lg); }
+  .fw-chapter-row.is-intro {
+    border-left: 4px solid var(--accent);
+    background: linear-gradient(to right, var(--accent-light) 0%, var(--panel) 60%);
+  }
+  .fw-chapter-header {
+    display: flex; gap: 12px; align-items: center;
+    padding: 12px 16px; cursor: pointer;
+    user-select: none;
+  }
+  .fw-chapter-thumb {
+    width: 80px; aspect-ratio: 16/9; object-fit: cover;
+    border-radius: var(--radius); flex-shrink: 0; background: var(--bg3);
+  }
+  .fw-chapter-info { flex: 1; min-width: 0; }
+  .fw-chapter-title {
+    font-weight: 600; color: var(--tx); font-size: 14.5px;
+    margin-bottom: 3px; line-height: 1.3;
+  }
+  .fw-chapter-preview {
+    font-size: 12px; color: var(--tx3); line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .fw-chapter-status {
+    flex-shrink: 0; padding: 3px 10px;
+    border-radius: var(--radius-pill); font-size: 11px; font-weight: 600;
+  }
+  .fw-chapter-body {
+    padding: 14px 16px 18px;
+    border-top: 1px dashed var(--border);
+    background: var(--bg2);
+  }
+  .fw-intro-badge {
+    background: var(--accent); color: white;
+    padding: 3px 10px; border-radius: var(--radius-pill);
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; flex-shrink: 0;
+  }
+  .fw-chapters-controls {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .fw-rollup-text {
+    font-size: 11px; color: var(--tx3); margin-left: auto;
+    font-weight: 500;
+  }
+  .sb-nested-group {
+    margin: 6px 14px 6px 22px;
+    padding: 4px 0;
+    border-left: 2px solid var(--border);
+    padding-left: 10px;
+  }
+  .sb-nested-header {
+    padding: 6px 10px; font-size: 11.5px; font-weight: 600;
+    color: var(--tx2); cursor: pointer;
+    border-radius: var(--radius-pill); display: flex; align-items: center; gap: 6px;
+    transition: all 0.15s; user-select: none;
+  }
+  .sb-nested-header:hover { background: var(--panel); color: var(--tx); }
+  .sb-nested-header.active { background: var(--accent-light); color: var(--accent2); }
+  .sb-nested-icon { font-size: 11px; opacity: 0.75; }
+  .sb-nested-count {
+    margin-left: auto; font-size: 10px; font-weight: 500;
+    padding: 1px 7px; border-radius: var(--radius-pill);
+    background: var(--bg2); color: var(--tx3);
+  }
+  .sb-nested-children { padding: 2px 0 4px 6px; }
+  .sb-nested-children .sb-sub-item { padding-left: 24px; font-size: 11.5px; }
+
   /* Overall types grid */
   .overall-types-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px;
@@ -1289,6 +1463,27 @@
     </div>
   </div>
 
+  <!-- FILMS LIST VIEW (the grid of all 57 films — entry point to the Film Workstation) -->
+  <div id="filmsListView" style="display:none;">
+    <div class="dash-wrap">
+      <div class="dash-header">
+        <div style="flex:1">
+          <h1 class="dash-title">🎬 Films</h1>
+          <p class="dash-sub" id="filmsListSub">Pick a film to work on. Each card opens its full workstation — overview, subtitle, and chapters.</p>
+        </div>
+        <div class="dash-actions">
+          <input type="text" id="filmsListSearch" placeholder="Search films…" oninput="renderFilmsListView()" style="padding:8px 14px;border:none;border-radius:var(--radius-pill);background:var(--panel);box-shadow:var(--shadow-clay);font-family:var(--font-sans);font-size:13px;color:var(--tx);min-width:220px">
+        </div>
+      </div>
+      <div id="filmsListGrid" class="films-grid"></div>
+    </div>
+  </div>
+
+  <!-- FILM WORKSTATION VIEW (the per-film page — overview + subtitle + chapters list) -->
+  <div id="filmWorkstationView" style="display:none;">
+    <div id="filmWorkstationContainer" class="film-workstation"></div>
+  </div>
+
   <!-- DASHBOARD VIEW -->
   <div id="dashboardView" style="display:none;">
     <div class="dash-wrap">
@@ -1568,7 +1763,12 @@ const CLIP_TYPES = [
   { key: 'conversations',  displayName: 'Conversations',    adValue: 'LT Eye to Eye',       reviewTab: 'Conversations Review Data',     rulesTab: 'Conversations AI Rules' },
   { key: 'my_encounter',   displayName: 'My Encounter',     adValue: 'LT My Encounter',     reviewTab: 'My Encounter Review Data',      rulesTab: 'My Encounter AI Rules' },
   { key: 'short_film',     displayName: 'Short Film',       adValue: 'Short Film',          reviewTab: 'Short Films Review Data',       rulesTab: 'Short Films AI Rules' },
-  { key: 'film_chapter',   displayName: 'Film Chapters',    adValue: 'Film Chapter',        reviewTab: 'Film Chapters Review Data',     rulesTab: 'Film Chapters AI Rules', hasFilmName: true, filterByFilms: true },
+  // Films: one row per full film (AD === 'Film' in the main sheet). Each "clip" in this bucket
+  // represents an entire film — its description is the film overview (column H of the film-entry
+  // row), its subtitle is column I, its title is column J. Children chapters live in the
+  // film_chapter bucket and are linked via filmName. Filtered to ALLOWED_FILMS (57 films).
+  { key: 'films',          displayName: 'Films',            adValue: 'Film',                reviewTab: 'Films Review Data',             rulesTab: 'Films AI Rules', filterByFilms: true, isFilmEntry: true, scopedRulesets: ['overview', 'subtitle', 'chapter', 'intro'] },
+  { key: 'film_chapter',   displayName: 'Film Chapters',    adValue: 'Film Chapter',        reviewTab: 'Film Chapters Review Data',     rulesTab: 'Film Chapters AI Rules', hasFilmName: true, filterByFilms: true, parentType: 'films' },
 ];
 function getTypeByKey(key) { return CLIP_TYPES.find(t => t.key === key); }
 function getTypeByAd(ad) { return CLIP_TYPES.find(t => t.adValue === ad); }
@@ -1694,6 +1894,15 @@ function activeBucket() {
 }
 function getClipsForType(typeKey) {
   return S.byType[typeKey]?.clips || [];
+}
+// Find a clip by row number across ALL buckets. Needed for film workstation, where
+// the active bucket is 'films' but chapters belong to 'film_chapter' and overview to 'films'.
+function findClipByRow(rowNum) {
+  for (const t of CLIP_TYPES) {
+    const c = S.byType[t.key]?.clips?.find(cl => cl._rowNum === rowNum);
+    if (c) return c;
+  }
+  return null;
 }
 
 // ══════════════════════════════════════════════
@@ -2124,6 +2333,11 @@ async function ensureReviewTab(typeCfg) {
   if (typeCfg.key === 'short_film') {
     fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current'];
     lastCol = 'M';
+  } else if (typeCfg.key === 'films') {
+    // Films: same as Short Film (subtitle backup + current) since both have a subtitle field
+    // pulled from column I of the main sheet. Films don't have length-trim rules so no extra cols.
+    fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current'];
+    lastCol = 'M';
   } else if (typeCfg.key === 'sichos') {
     // length_flag/length_flag_wc: trim FAILURE state (persisted for queue badges + attention).
     // length_action/length_input_wc/length_output_wc: SUCCESS metadata for the provenance line.
@@ -2165,10 +2379,12 @@ async function loadReviewData(typeCfg) {
   bucket.reviewData = {};
   const isShortFilm = typeCfg.key === 'short_film';
   const isSichos = typeCfg.key === 'sichos';
-  // short_film extends to M (subtitle cols); sichos extends to Q (length + cohort cols)
+  const isFilms = typeCfg.key === 'films';
+  const hasSubtitleCols = isShortFilm || isFilms; // both have subtitle backup + current in cols L,M
+  // short_film + films extend to M (subtitle cols); sichos extends to Q (length + cohort cols)
   let range;
   if (isSichos) range = `'${typeCfg.reviewTab}'!A:Q`;
-  else if (isShortFilm) range = `'${typeCfg.reviewTab}'!A:M`;
+  else if (hasSubtitleCols) range = `'${typeCfg.reviewTab}'!A:M`;
   else range = `'${typeCfg.reviewTab}'!A:K`;
   try {
     const data = await sheetsGet(range);
@@ -2186,8 +2402,8 @@ async function loadReviewData(typeCfg) {
         descSourceCol: row[8] || '',
         draftModel: row[9] || '',
         draftUsedTranscript: row[10] === 'TRUE',
-        subtitleOriginalBackup: isShortFilm ? (row[11] || '') : '',
-        subtitleCurrent: isShortFilm ? (row[12] || '') : '',
+        subtitleOriginalBackup: hasSubtitleCols ? (row[11] || '') : '',
+        subtitleCurrent: hasSubtitleCols ? (row[12] || '') : '',
         // Sichos: failure flag ('over_limit' | 'under_limit' | '')
         lengthFlag: isSichos ? (row[11] || '') : '',
         lengthFlagWc: isSichos ? (parseInt(row[12]) || 0) : 0,
@@ -2202,8 +2418,8 @@ async function loadReviewData(typeCfg) {
       const clip = bucket.clips?.find(c => String(c._rowNum) === id);
       if (clip && row[6]) clip._draft = row[6];
       if (clip && row[8]) clip.descSourceCol = row[8];
-      // For short films: if there's a stored subtitleCurrent (most recent saved), use it as the live subtitle
-      if (clip && isShortFilm && row[12]) clip.subtitle = row[12];
+      // For short films + films: if there's a stored subtitleCurrent, use it as the live subtitle
+      if (clip && hasSubtitleCols && row[12]) clip.subtitle = row[12];
       if (row[7]) {
         try { S.chatHistory[parseInt(id)] = JSON.parse(row[7]); } catch {}
       }
@@ -2219,6 +2435,8 @@ async function saveReviewRow(clip) {
   const id = String(clip._rowNum);
   const rd = bucket.reviewData[id] || {};
   const isShortFilm = typeCfg.key === 'short_film';
+  const isFilms = typeCfg.key === 'films';
+  const hasSubtitleCols = isShortFilm || isFilms;
   const data = await sheetsGet(`'${typeCfg.reviewTab}'!A:A`);
   const rows = data.values || [];
   let sheetRow = -1;
@@ -2240,7 +2458,7 @@ async function saveReviewRow(clip) {
     rd.draftUsedTranscript ? 'TRUE' : 'FALSE',
   ];
   let values, lastCol;
-  if (isShortFilm) {
+  if (hasSubtitleCols) {
     values = [[...baseValues, rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '']];
     lastCol = 'M';
   } else if (isSichos) {
@@ -2875,10 +3093,15 @@ async function loadAllData() {
         const overriddenCfg = getTypeByKey(override.targetType);
         if (overriddenCfg) tCfg = overriddenCfg;
       }
-      // Film Chapter filter: only include if the parent film name is in our allowed list
+      // Film Chapter filter: only include if the parent film name is in our allowed list.
+      // Films type filter: only include if the film's own title is in the allowed list.
       const filmName = (row[CONFIG.COL.FILM_NAME] || '').trim();
+      const filmRowTitle = (row[CONFIG.COL.TITLE] || '').trim();
       // Don't apply the films-allowlist filter to clips that have been moved away from film_chapter
-      if (tCfg.filterByFilms && !ALLOWED_FILMS.has(filmName)) return;
+      if (tCfg.filterByFilms) {
+        const nameToCheck = tCfg.key === 'films' ? (filmRowTitle || filmName) : filmName;
+        if (!ALLOWED_FILMS.has(nameToCheck)) return;
+      }
       // Short Film filter: skip clips that are actually intros to a Sicha (column J Title contains "Sicha intro")
       const titleStr = (row[CONFIG.COL.TITLE] || '').toString();
       if (tCfg.key === 'short_film' && /sicha\s*intro/i.test(titleStr)) return;
@@ -2901,9 +3124,15 @@ async function loadAllData() {
         originalTypeKey: override ? override.sourceType : tCfg.key,
       };
       if (tCfg.hasFilmName || (override && override.sourceType === 'film_chapter')) clip.filmName = filmName;
-      // Short Film: capture the subtitle (column I)
-      if (tCfg.key === 'short_film') {
+      // Short Film and Films both capture the subtitle (column I)
+      if (tCfg.key === 'short_film' || tCfg.key === 'films') {
         clip.subtitle = (row[CONFIG.COL.SUBTITLE] || '').toString().trim();
+      }
+      // Films: also capture the film_id explicitly so chapter rows can be linked to it
+      if (tCfg.key === 'films') {
+        clip.filmId = (row[CONFIG.COL.FILM_ID] || '').toString().trim();
+        // For films, the "filmName" IS the title itself — used for matching with chapters
+        clip.filmName = filmRowTitle || filmName;
       }
       S.byType[tCfg.key].clips.push(clip);
     });
@@ -3035,6 +3264,13 @@ function getDescription(row, typeKey) {
   const h = sanitizeDescription(row[CONFIG.COL.DESCRIPTION_H] || '');
   const a = sanitizeDescription(row[CONFIG.COL.DESCRIPTION_A] || '');
   const y = sanitizeDescription(row[CONFIG.COL.DESCRIPTION_Y] || '');
+  // Films: the OVERVIEW lives in column H on the film-entry row (different from chapter rows
+  // where H is just the alternate description). Films have nothing in column A typically.
+  if (typeKey === 'films') {
+    if (h.trim()) return { text: h, sourceCol: 'H' };
+    if (a.trim()) return { text: a, sourceCol: 'A' };
+    return { text: '', sourceCol: 'H' };
+  }
   // Column A is the source of truth for Short Film + Conversations / Timeless Moments /
   // My Encounter (per JEM editorial workflow — column A holds the newer descriptions).
   if (['short_film', 'conversations', 'timeless', 'my_encounter'].includes(typeKey)) {
@@ -3981,10 +4217,7 @@ function autoGrowTextarea(ta) {
 //      (so they can immediately start editing where their attention already is)
 //   4. Mark the draft as manual (sets the badge to "Manual")
 function jumpToDraftFromOriginal(rowNum, ev) {
-  const origTA = document.getElementById('origTA_' + rowNum);
-  const draftTA = document.getElementById('draftTA_' + rowNum);
-  if (!origTA || !draftTA) return;
-  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  const clip = findClipByRow(rowNum);
   if (!clip) return;
   // Where did the user click? selectionStart on the readonly textarea = caret offset
   // (browsers honor this even when readonly; it's the "intent to edit there" signal we want)
@@ -4043,7 +4276,7 @@ function resetOriginalEdit(rowNum) {
 }
 
 function onDraftInput(rowNum) {
-  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  const clip = findClipByRow(rowNum);
   if (!clip) return;
   const ta = document.getElementById('draftTA_' + rowNum);
   const val = ta?.value || '';
@@ -4458,7 +4691,13 @@ async function processClip(clip) {
 }
 
 async function regenerateClip(rowNum) {
-  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  // Find the clip across ALL buckets — in the Films workstation, the active bucket is
+  // 'films' but the user may click Generate on a chapter (typeKey 'film_chapter').
+  let clip = null;
+  for (const t of CLIP_TYPES) {
+    const found = S.byType[t.key]?.clips?.find(c => c._rowNum === rowNum);
+    if (found) { clip = found; break; }
+  }
   if (!clip) return;
   const btn = document.querySelector(`[onclick="regenerateClip(${rowNum})"]`);
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Generating…'; }
@@ -4566,7 +4805,7 @@ async function runBatch() {
 // APPROVE / REVERT
 // ══════════════════════════════════════════════
 async function acceptOriginal(rowNum) {
-  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  const clip = findClipByRow(rowNum);
   if (!clip) return;
   if (!clip.description?.trim()) { showToast('No original description to accept', 'error'); return; }
   if (!await jemConfirm('Mark the current description as approved without changes?')) return;
@@ -4592,7 +4831,7 @@ async function acceptOriginal(rowNum) {
 
 
 async function approveClip(rowNum) {
-  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  const clip = findClipByRow(rowNum);
   if (!clip) return;
   const draft = document.getElementById('draftTA_' + rowNum)?.value || clip._draft || '';
   if (!draft.trim()) { showToast('Nothing to save — draft is empty', 'error'); return; }
@@ -4627,7 +4866,7 @@ async function approveClip(rowNum) {
 }
 
 async function revertClip(rowNum) {
-  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  const clip = findClipByRow(rowNum);
   if (!clip) return;
   const backup = getReviewField(clip, 'originalBackup');
   const restoreTo = backup || clip.description;
@@ -5173,6 +5412,8 @@ function renderSidebar() {
   const list = document.getElementById('sbTypesList');
   if (!list) return;
   list.innerHTML = CLIP_TYPES.map(t => {
+    // Film Chapters render as a nested sub-section inside the Films parent — skip here
+    if (t.key === 'film_chapter') return '';
     const bucket = S.byType[t.key] || { clips: [], reviewData: {} };
     const total = bucket.clips.length;
     if (total === 0) {
@@ -5183,16 +5424,43 @@ function renderSidebar() {
       </button>`;
     }
     const isActiveType = S.activeType === t.key;
-    const isExpanded = _expandedTypes.has(t.key) || isActiveType;
+    const isFilms = t.key === 'films';
+    // Films also considers itself "active" when film_chapter is the active type (since Film
+    // Chapters live nested under it) — so the parent stays expanded while drilling chapters
+    const filmChapterActive = isFilms && S.activeType === 'film_chapter';
+    const isExpanded = _expandedTypes.has(t.key) || isActiveType || filmChapterActive;
+    // Films section gets a 🎬 prefix to make the parent visually distinct
+    const labelPrefix = isFilms ? '🎬 ' : '';
     return `<div class="sb-type-wrapper ${isExpanded ? 'sb-type-expanded' : ''}" data-type="${t.key}">
-      <button class="sb-item ${isActiveType && S.currentView !== 'overall' && S.currentView !== 'rules' && S.currentView !== 'team' ? 'active' : ''}" onclick="selectType('${t.key}')">
+      <button class="sb-item ${(isActiveType || filmChapterActive) && S.currentView !== 'overall' && S.currentView !== 'rules' && S.currentView !== 'team' ? 'active' : ''}" onclick="selectType('${t.key}')">
         <span class="sb-caret">▶</span>
-        <span class="sb-label">${esc(t.displayName)}</span>
+        <span class="sb-label">${labelPrefix}${esc(t.displayName)}</span>
         <span class="sb-badge">${total}</span>
       </button>
       <div class="sb-type-children">
         <div class="sb-sub-item ${isActiveType && S.currentView === 'dashboard' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','dashboard')">Dashboard</div>
-        <div class="sb-sub-item ${isActiveType && S.currentView === 'queue' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','queue')">Queue</div>
+        ${isFilms
+          ? `<div class="sb-sub-item ${isActiveType && S.currentView === 'films_list' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','films_list')">Films List</div>`
+          : `<div class="sb-sub-item ${isActiveType && S.currentView === 'queue' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','queue')">Queue</div>`
+        }
+        ${isFilms ? (() => {
+          // Nested Film Chapters group — same sub-items as a normal type, but routed via film_chapter
+          const fcBucket = S.byType['film_chapter'] || { clips: [] };
+          const fcTotal = fcBucket.clips.length;
+          if (!fcTotal) return '';
+          const fcActive = S.activeType === 'film_chapter';
+          return `<div class="sb-nested-group">
+            <div class="sb-nested-header ${fcActive ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('film_chapter','queue')">
+              <span class="sb-nested-icon">📋</span> Film Chapters <span class="sb-nested-count">${fcTotal}</span>
+            </div>
+            <div class="sb-nested-children">
+              <div class="sb-sub-item ${fcActive && S.currentView === 'queue' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('film_chapter','queue')">Queue</div>
+              <div class="sb-sub-item ${fcActive && S.currentView === 'attention' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('film_chapter','attention')">Attention</div>
+              <div class="sb-sub-item ${fcActive && S.currentView === 'typenotes' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('film_chapter','typenotes')">Notes</div>
+              <div class="sb-sub-item ${fcActive && S.currentView === 'rules' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('film_chapter','rules')">AI Rules</div>
+            </div>
+          </div>`;
+        })() : ''}
         ${t.hasFilmName ? `<div class="sb-sub-item ${isActiveType && S.currentView === 'films' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','films')">Films</div>` : ''}
         <div class="sb-sub-item ${isActiveType && S.currentView === 'attention' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','attention')">Attention</div>
         <div class="sb-sub-item ${isActiveType && S.currentView === 'export' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','export')">Export</div>
@@ -5263,36 +5531,47 @@ async function ensureFilmOrderTab() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title: FILM_ORDER_TAB } } }] })
     });
-    await sheetsSet(`'${FILM_ORDER_TAB}'!A1:C1`, [['film_name','clip_id','order_index']]);
+    await sheetsSet(`'${FILM_ORDER_TAB}'!A1:D1`, [['film_name','clip_id','order_index','is_intro']]);
+  } else {
+    // Migration: older tabs only have 3 cols; extend header to 4
+    try {
+      const hdr = await sheetsGet(`'${FILM_ORDER_TAB}'!A1:D1`);
+      const row = hdr.values?.[0] || [];
+      if (row.length < 4) {
+        await sheetsSet(`'${FILM_ORDER_TAB}'!A1:D1`, [['film_name','clip_id','order_index','is_intro']]);
+      }
+    } catch {}
   }
 }
 
 async function loadFilmOrder() {
   try {
-    const data = await sheetsGet(`'${FILM_ORDER_TAB}'!A:C`);
+    const data = await sheetsGet(`'${FILM_ORDER_TAB}'!A:D`);
     const rows = data.values || [];
     _filmOrderCache = {}; // film_name -> { clip_id: order }
+    _filmIntroCache = {}; // film_name -> intro clip_id (one per film)
     rows.slice(1).forEach(r => {
-      const film = r[0]; const id = r[1]; const ord = parseInt(r[2]);
+      const film = r[0]; const id = r[1]; const ord = parseInt(r[2]); const isIntro = (r[3] || '').toUpperCase() === 'TRUE';
       if (!film || !id) return;
       if (!_filmOrderCache[film]) _filmOrderCache[film] = {};
       _filmOrderCache[film][id] = isNaN(ord) ? 0 : ord;
+      if (isIntro) _filmIntroCache[film] = id;
     });
-  } catch(e) { console.warn('Film order load failed:', e); _filmOrderCache = {}; }
+  } catch(e) { console.warn('Film order load failed:', e); _filmOrderCache = {}; _filmIntroCache = {}; }
 }
 
 async function saveFilmOrder(filmName, orderedClipIds) {
-  // Replace all rows for this film with the new order
+  // Replace all rows for this film with the new order, preserving is_intro flag.
   await ensureFilmOrderTab();
-  // Read all rows
-  const data = await sheetsGet(`'${FILM_ORDER_TAB}'!A:C`);
+  const data = await sheetsGet(`'${FILM_ORDER_TAB}'!A:D`);
   const allRows = data.values || [];
-  const header = allRows[0] || ['film_name','clip_id','order_index'];
+  const header = allRows[0] || ['film_name','clip_id','order_index','is_intro'];
+  // Read existing intro flag for this film from the in-memory cache so it survives reorders
+  const introId = _filmIntroCache?.[filmName] || '';
   // Keep rows for OTHER films; replace this film's rows with new ones
   const otherRows = allRows.slice(1).filter(r => r[0] !== filmName);
-  const newRows = orderedClipIds.map((id, i) => [filmName, String(id), String(i)]);
-  // Clear sheet then rewrite
-  await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(`'${FILM_ORDER_TAB}'!A:C`)}:clear`, {
+  const newRows = orderedClipIds.map((id, i) => [filmName, String(id), String(i), String(id) === String(introId) ? 'TRUE' : 'FALSE']);
+  await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(`'${FILM_ORDER_TAB}'!A:D`)}:clear`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
   });
   await sheetsSet(`'${FILM_ORDER_TAB}'!A1`, [header, ...otherRows, ...newRows]);
@@ -5301,23 +5580,387 @@ async function saveFilmOrder(filmName, orderedClipIds) {
   newRows.forEach(([f, id, ord]) => { _filmOrderCache[filmName][id] = parseInt(ord); });
 }
 
+// Mark a chapter as the film's intro. Only one chapter per film can be marked intro;
+// marking a new one auto-unmarks any previous one. Set introClipId='' to clear.
+async function setFilmIntro(filmName, introClipId) {
+  await ensureFilmOrderTab();
+  const data = await sheetsGet(`'${FILM_ORDER_TAB}'!A:D`);
+  const allRows = data.values || [];
+  const header = allRows[0] || ['film_name','clip_id','order_index','is_intro'];
+  // Update rows for this film: set is_intro = TRUE only on matching clip_id
+  const updatedRows = allRows.slice(1).map(r => {
+    if (r[0] !== filmName) return r;
+    const newIntro = String(r[1]) === String(introClipId) ? 'TRUE' : 'FALSE';
+    return [r[0], r[1], r[2] || '0', newIntro];
+  });
+  // If the chosen intro clip_id doesn't have a row yet, add it (order=0 default)
+  if (introClipId && !updatedRows.some(r => r[0] === filmName && String(r[1]) === String(introClipId))) {
+    updatedRows.push([filmName, String(introClipId), '0', 'TRUE']);
+  }
+  await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(`'${FILM_ORDER_TAB}'!A:D`)}:clear`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+  });
+  await sheetsSet(`'${FILM_ORDER_TAB}'!A1`, [header, ...updatedRows]);
+  if (!_filmIntroCache) _filmIntroCache = {};
+  if (introClipId) _filmIntroCache[filmName] = String(introClipId);
+  else delete _filmIntroCache[filmName];
+}
+let _filmIntroCache = {};
+
 function getOrderedChapters(filmName) {
   const bucket = S.byType['film_chapter'];
   if (!bucket) return [];
   const chapters = bucket.clips.filter(c => c.filmName === filmName);
+  // Helper: parse the trailing chapter number from clip_id (e.g. "F-1234-7" → 7, "LT-805" → fallback to _rowNum).
+  // Chapter clip IDs typically end with the chapter number; ascending = chapter 1 first.
+  const chapterNum = (c) => {
+    const m = String(c.clipId || '').match(/(\d+)\s*$/);
+    if (m) return parseInt(m[1]);
+    // Fallback to row number if clip_id has no trailing number
+    return c._rowNum || 0;
+  };
   if (!_filmOrderCache || !_filmOrderCache[filmName]) {
-    // Default — sort by clip ID (row number)
-    return [...chapters].sort((a, b) => a._rowNum - b._rowNum);
+    // Default: ascending by chapter number → first chapter first
+    return [...chapters].sort((a, b) => chapterNum(a) - chapterNum(b));
   }
   const orderMap = _filmOrderCache[filmName];
   return [...chapters].sort((a, b) => {
     const ai = orderMap[String(a._rowNum)];
     const bi = orderMap[String(b._rowNum)];
-    if (ai === undefined && bi === undefined) return a._rowNum - b._rowNum;
+    if (ai === undefined && bi === undefined) return chapterNum(a) - chapterNum(b);
     if (ai === undefined) return 1;
     if (bi === undefined) return -1;
     return ai - bi;
   });
+}
+
+// ══════════════════════════════════════════════
+// FILMS SECTION — list view + per-film workstation
+// ══════════════════════════════════════════════
+
+// Currently-open film in the workstation, keyed by _rowNum of the Films-bucket "clip"
+let _filmWorkstationRow = null;
+// Per-film expand/collapse state for chapter rows. Map: { rowNum: Set(chapterRowNums) }
+let _fwExpandedChapters = {};
+
+// Compute per-film status rollup for the Films List grid
+function computeFilmRollup(filmClip) {
+  const filmName = filmClip.filmName;
+  const chapters = (S.byType['film_chapter']?.clips || []).filter(c => c.filmName === filmName);
+  const totalChapters = chapters.length;
+  const approvedChapters = chapters.filter(c => getStatus(c) === 'approved').length;
+  const overviewStatus = getStatus(filmClip);
+  return { totalChapters, approvedChapters, overviewStatus };
+}
+
+function renderFilmsListView() {
+  const bucket = S.byType['films'] || { clips: [] };
+  const search = (document.getElementById('filmsListSearch')?.value || '').toLowerCase().trim();
+  let films = bucket.clips.slice();
+  if (search) films = films.filter(f => (f.title || '').toLowerCase().includes(search) || (f.filmName || '').toLowerCase().includes(search));
+  // Sort alphabetically by title
+  films.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+
+  const sub = document.getElementById('filmsListSub');
+  const total = bucket.clips.length;
+  const approved = bucket.clips.filter(c => getStatus(c) === 'approved').length;
+  if (sub) sub.innerHTML = `<strong>${total}</strong> films · <strong>${approved}</strong> overviews approved · Click a card to open its workstation`;
+
+  const grid = document.getElementById('filmsListGrid');
+  if (!grid) return;
+  if (!films.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">No films match.</div>`;
+    return;
+  }
+  grid.innerHTML = films.map(f => {
+    const r = computeFilmRollup(f);
+    const pct = r.totalChapters ? Math.round((r.approvedChapters / r.totalChapters) * 100) : 0;
+    const statusClass = `film-card-status-${r.overviewStatus}`;
+    const statusLabel = { approved: '✓ Approved', draft: '📝 Draft', flagged: '🚩 Flagged', unprocessed: 'Unprocessed' }[r.overviewStatus] || r.overviewStatus;
+    const thumbHTML = f.thumbnail
+      ? `<img class="film-card-thumb" src="${esc(f.thumbnail)}" loading="lazy" onerror="this.style.display='none'">`
+      : `<div class="film-card-thumb" style="display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--tx4)">🎬</div>`;
+    return `<div class="film-card" onclick="openFilmWorkstation(${f._rowNum})">
+      ${thumbHTML}
+      <div class="film-card-body">
+        <div class="film-card-status-row">
+          <span class="film-card-status-chip ${statusClass}">${statusLabel}</span>
+        </div>
+        <div class="film-card-title">${esc(f.title)}</div>
+        ${f.subtitle ? `<div class="film-card-subtitle">${esc(f.subtitle)}</div>` : ''}
+        <div class="film-card-meta">
+          <div class="film-card-progress" title="${r.approvedChapters} of ${r.totalChapters} chapters approved">
+            <div class="film-card-progress-fill" style="width:${pct}%"></div>
+          </div>
+          <span class="film-card-progress-text">${r.approvedChapters}/${r.totalChapters}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openFilmWorkstation(filmRowNum) {
+  _filmWorkstationRow = filmRowNum;
+  switchView('film_workstation', null);
+}
+
+function renderFilmWorkstation() {
+  const container = document.getElementById('filmWorkstationContainer');
+  if (!container) return;
+  if (!_filmWorkstationRow) {
+    container.innerHTML = `<div class="empty-state">No film selected. <button class="btn btn-sm" onclick="switchView('films_list')" style="margin-left:8px">← Films List</button></div>`;
+    return;
+  }
+  const film = (S.byType['films']?.clips || []).find(c => c._rowNum === _filmWorkstationRow);
+  if (!film) {
+    container.innerHTML = `<div class="empty-state">Film not found. <button class="btn btn-sm" onclick="switchView('films_list')" style="margin-left:8px">← Films List</button></div>`;
+    return;
+  }
+  // Compute prev/next film navigation
+  const allFilms = (S.byType['films']?.clips || []).slice().sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  const idx = allFilms.findIndex(f => f._rowNum === film._rowNum);
+  const prevFilm = idx > 0 ? allFilms[idx - 1] : null;
+  const nextFilm = idx >= 0 && idx < allFilms.length - 1 ? allFilms[idx + 1] : null;
+
+  const rollup = computeFilmRollup(film);
+  const fd = formatClipDate(film.date);
+  const dur = formatDuration(film.durationMs);
+
+  // Build chapter list with intro chapter pinned to top
+  const chapters = getOrderedChapters(film.filmName);
+  const introId = _filmIntroCache?.[film.filmName] || '';
+  const introChapter = introId ? chapters.find(c => String(c.clipId) === String(introId)) : null;
+  const otherChapters = introChapter ? chapters.filter(c => String(c.clipId) !== String(introId)) : chapters;
+  const orderedChapters = introChapter ? [introChapter, ...otherChapters] : chapters;
+
+  const expanded = _fwExpandedChapters[film._rowNum] || new Set();
+
+  const thumbHTML = film.thumbnail
+    ? `<img class="fw-film-header-thumb" src="${esc(film.thumbnail)}" onerror="this.style.display='none'">`
+    : `<div class="fw-film-header-thumb" style="display:flex;align-items:center;justify-content:center;font-size:48px;color:var(--tx4)">🎬</div>`;
+
+  container.innerHTML = `
+    <div class="fw-back-nav">
+      <button class="btn btn-sm" onclick="switchView('films_list')">← Films List</button>
+      <span class="nav-spacer"></span>
+      <button class="btn btn-sm" ${prevFilm ? `onclick="openFilmWorkstation(${prevFilm._rowNum})"` : 'disabled'} title="${prevFilm ? esc(prevFilm.title) : ''}">↑ Prev film</button>
+      <button class="btn btn-sm" ${nextFilm ? `onclick="openFilmWorkstation(${nextFilm._rowNum})"` : 'disabled'} title="${nextFilm ? esc(nextFilm.title) : ''}">↓ Next film</button>
+    </div>
+
+    <div class="fw-film-header">
+      ${thumbHTML}
+      <div style="flex:1;min-width:0">
+        <div class="fw-film-title">${esc(film.title)}</div>
+        <div class="fw-film-meta">${fd ? esc(fd) + ' · ' : ''}${dur ? '⏱ ' + esc(dur) + ' · ' : ''}${rollup.totalChapters} chapters</div>
+        ${film.filmId ? `<a class="btn btn-sm btn-primary" href="https://videos.jem.tv/video-player?produced=${esc(film.filmId)}" target="_blank" rel="noopener" style="text-decoration:none">▶ Watch on JEM.tv</a>` : ''}
+      </div>
+    </div>
+
+    <!-- SUBTITLE -->
+    <div class="fw-section" id="fwSubtitleSection_${film._rowNum}">
+      <div class="fw-section-header"><span class="fw-section-icon">🏷️</span> Film Subtitle</div>
+      <div class="fw-subtitle-row">
+        <input type="text" id="fwSubtitleInput_${film._rowNum}" class="subtitle-input" value="${esc(film.subtitle || '')}" oninput="onFilmSubtitleInput(${film._rowNum})" placeholder="Add a short evocative subtitle (or click ✨ to generate one)…" style="flex:1">
+        <button id="fwSubtitleSaveBtn_${film._rowNum}" class="btn btn-sm btn-primary" onclick="saveFilmSubtitle(${film._rowNum})" style="display:none">💾 Save</button>
+        <button class="btn btn-sm" onclick="generateFilmSubtitle(${film._rowNum})" title="Ask AI to suggest a subtitle for this film">✨ AI suggest</button>
+        ${getReviewField(film, 'subtitleOriginalBackup') ? `<button class="btn btn-sm" onclick="revertFilmSubtitle(${film._rowNum})" title="Restore the original subtitle">↩ Revert</button>` : ''}
+      </div>
+    </div>
+
+    <!-- OVERVIEW -->
+    <div class="fw-section">
+      <div class="fw-section-header"><span class="fw-section-icon">📖</span> Film Overview</div>
+      <div id="fwOverviewBody_${film._rowNum}">${renderInlineEditingSurface(film)}</div>
+    </div>
+
+    <!-- CHAPTERS -->
+    <div class="fw-section">
+      <div class="fw-section-header">
+        <span class="fw-section-icon">🎞️</span> Chapters
+        <span class="fw-rollup-text">${rollup.approvedChapters} of ${rollup.totalChapters} approved</span>
+      </div>
+      ${orderedChapters.length === 0
+        ? `<div class="empty-state">No chapters found for this film. Make sure the film name on chapter rows in the main sheet matches "<strong>${esc(film.filmName)}</strong>" exactly.</div>`
+        : orderedChapters.map(ch => renderChapterRow(film, ch, expanded.has(ch._rowNum), String(ch.clipId) === String(introId))).join('')
+      }
+    </div>
+  `;
+}
+
+// Render a single chapter row in the workstation. Collapsed = header only; expanded = full editing surface.
+function renderChapterRow(film, chapter, isExpanded, isIntro) {
+  const status = getStatus(chapter);
+  const statusLabel = { approved: '✓ Approved', draft: '📝 Draft', flagged: '🚩 Flagged', unprocessed: 'Unprocessed' }[status] || status;
+  const statusClass = `film-card-status-${status}`;
+  const preview = (chapter._draft || chapter.description || '').substring(0, 200);
+  const thumbHTML = chapter.thumbnail
+    ? `<img class="fw-chapter-thumb" src="${esc(chapter.thumbnail)}" loading="lazy" onerror="this.style.display='none'">`
+    : `<div class="fw-chapter-thumb" style="display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--tx4)">🎬</div>`;
+  return `<div class="fw-chapter-row ${isExpanded ? 'expanded' : ''} ${isIntro ? 'is-intro' : ''}" id="fwChap_${chapter._rowNum}">
+    <div class="fw-chapter-header" onclick="toggleChapterExpand(${film._rowNum}, ${chapter._rowNum})">
+      ${thumbHTML}
+      <div class="fw-chapter-info">
+        <div class="fw-chapter-title">${isIntro ? '<span class="fw-intro-badge">🎬 Intro</span> ' : ''}${esc(chapter.title)}</div>
+        <div class="fw-chapter-preview">${esc(preview)}</div>
+      </div>
+      <span class="fw-chapter-status ${statusClass}">${statusLabel}</span>
+    </div>
+    ${isExpanded ? `<div class="fw-chapter-body">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:500;color:var(--tx2);background:var(--panel);padding:5px 12px;border-radius:var(--radius-pill);box-shadow:var(--shadow-inner);user-select:none" title="Mark this chapter as the film's intro. Only one chapter per film can be the intro.">
+          <input type="checkbox" ${isIntro ? 'checked' : ''} onchange="toggleChapterIntro(${film._rowNum}, ${chapter._rowNum})" style="margin:0;cursor:pointer;accent-color:var(--accent)">
+          🎬 Mark as intro
+        </label>
+        ${chapter.clipId ? `<a href="https://videos.jem.tv/video-player?clip=${esc(chapter.clipId)}" target="_blank" rel="noopener" class="btn btn-sm" style="text-decoration:none">▶ Watch on JEM.tv</a>` : ''}
+        <span style="font-size:11px;color:var(--tx4);margin-left:auto">${chapter.durationMs ? '⏱ ' + esc(formatDuration(chapter.durationMs)) : ''}</span>
+      </div>
+      ${renderInlineEditingSurface(chapter)}
+    </div>` : ''}
+  </div>`;
+}
+
+// Renders the side-by-side Original + New Summary editing surface for a clip,
+// reused from the main queue detail panel. Inline version (no sticky header etc.)
+function renderInlineEditingSurface(clip) {
+  // Reuse the existing renderDetail by computing the same pieces inline.
+  // For brevity we hand off to a simplified inline template that mirrors the standard flow.
+  const status = getStatus(clip);
+  const rd = (S.byType[clip.typeKey]?.reviewData || {})[String(clip._rowNum)] || {};
+  const originalText = clip.description || '';
+  const draftValue = rd.draftText || clip._draft || '';
+  const dm = getReviewField(clip, 'draftModel') || '';
+  const usedTrans = !!getReviewField(clip, 'draftUsedTranscript') || rd.draftUsedTranscript === true;
+  const hasDraft = !!(draftValue && draftValue.trim());
+  const useT = !!_useTranscriptForClip[clip._rowNum];
+  const wcDraft = wordCount(draftValue);
+  return `<div class="orig-draft-row">
+    <div class="card">
+      <div class="card-header" style="display:flex;align-items:center;gap:8px">
+        <span>Original ${clip.typeKey === 'films' ? 'Overview' : 'Description'}</span>
+        ${status !== 'approved' ? '<span style="font-size:10px;color:var(--tx4);font-weight:400;letter-spacing:0;text-transform:none">— click to start a manual edit below</span>' : ''}
+      </div>
+      <div class="card-body">
+        <textarea id="origTA_${clip._rowNum}" class="orig-text orig-text-readonly" data-original="${esc(originalText)}" data-row="${clip._rowNum}" readonly
+          ${status !== 'approved' ? `onclick="jumpToDraftFromOriginal(${clip._rowNum}, event)"` : ''}
+          placeholder="No description on file">${esc(originalText)}</textarea>
+        <div class="word-count">${originalText.trim() ? wordCount(originalText) + ' words' : ''}</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header" style="flex-wrap:wrap;align-items:center;row-gap:6px">
+        ${status === 'approved' ? 'Approved' : status === 'draft' ? 'New Draft' : status === 'flagged' ? 'New (Flagged)' : 'New'}
+        ${status === 'approved' ? '<span class="status-badge status-approved">✓ Approved</span>' : ''}
+        ${status === 'draft' ? '<span class="status-badge status-awaiting">Awaiting review</span>' : ''}
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label class="transcript-toggle ${useT ? 'on' : ''}" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;font-weight:500;color:var(--tx2);background:var(--bg2);padding:6px 12px;border-radius:var(--radius-pill);box-shadow:var(--shadow-inner);user-select:none">
+            <input type="checkbox" ${useT ? 'checked' : ''} onchange="toggleUseTranscript(${clip._rowNum})" style="margin:0;cursor:pointer;accent-color:var(--accent)">
+            <span>Use transcript</span>
+          </label>
+          ${(activeBucket().rulesArr?.filter(r=>r.active).length||0) === 0
+            ? `<button class="btn btn-sm" disabled title="No active rules — add rules first">✨ Generate (no rules)</button>`
+            : `<button class="btn btn-sm btn-primary" onclick="regenerateClip(${clip._rowNum})">${hasDraft ? '🔄 Regenerate' : '✨ Generate'}</button>`}
+        </div>
+      </div>
+      <div class="card-body">
+        <textarea id="draftTA_${clip._rowNum}" class="orig-text" data-row="${clip._rowNum}" oninput="onDraftInput(${clip._rowNum})" placeholder="Click ✨ Generate, or type a new ${clip.typeKey === 'films' ? 'overview' : 'description'} here.">${esc(draftValue)}</textarea>
+        <div class="word-count" id="wc_${clip._rowNum}">${draftValue.trim() ? wcDraft + ' words' : ''}</div>
+      </div>
+    </div>
+  </div>
+  <div class="action-bar action-bar-standalone" style="margin-top:14px">
+    ${getReviewField(clip, 'originalBackup') ? `<button class="btn btn-sm" onclick="revertClip(${clip._rowNum})">↩ Revert to Original</button>` : ''}
+    <button class="btn btn-sm" onclick="acceptOriginal(${clip._rowNum})">✓ Accept Original</button>
+    <span style="flex:1"></span>
+    <button class="btn btn-sm btn-green" ${hasDraft ? '' : 'disabled'} onclick="approveClip(${clip._rowNum})">✅ Approve ${clip.typeKey === 'films' ? 'Overview' : 'Draft'}</button>
+  </div>`;
+}
+
+function toggleChapterExpand(filmRowNum, chapterRowNum) {
+  if (!_fwExpandedChapters[filmRowNum]) _fwExpandedChapters[filmRowNum] = new Set();
+  const set = _fwExpandedChapters[filmRowNum];
+  if (set.has(chapterRowNum)) set.delete(chapterRowNum);
+  else set.add(chapterRowNum);
+  renderFilmWorkstation();
+}
+
+async function toggleChapterIntro(filmRowNum, chapterRowNum) {
+  const film = (S.byType['films']?.clips || []).find(c => c._rowNum === filmRowNum);
+  const chapter = (S.byType['film_chapter']?.clips || []).find(c => c._rowNum === chapterRowNum);
+  if (!film || !chapter) return;
+  const currentIntroId = _filmIntroCache?.[film.filmName] || '';
+  const newIntroId = String(currentIntroId) === String(chapter.clipId) ? '' : chapter.clipId;
+  showLoading('Saving intro mark…');
+  try {
+    await setFilmIntro(film.filmName, newIntroId);
+    hideLoading();
+    renderFilmWorkstation();
+    showToast(newIntroId ? `Marked "${chapter.title}" as intro` : 'Intro mark cleared', 'success');
+  } catch(e) { hideLoading(); showToast('Failed: ' + e.message, 'error'); }
+}
+
+// Subtitle handling for the Films section (mirrors the existing Short Film subtitle flow)
+function onFilmSubtitleInput(rowNum) {
+  const input = document.getElementById('fwSubtitleInput_' + rowNum);
+  const saveBtn = document.getElementById('fwSubtitleSaveBtn_' + rowNum);
+  const film = (S.byType['films']?.clips || []).find(c => c._rowNum === rowNum);
+  if (!input || !saveBtn || !film) return;
+  saveBtn.style.display = input.value !== (film.subtitle || '') ? 'inline-flex' : 'none';
+}
+async function saveFilmSubtitle(rowNum) {
+  const input = document.getElementById('fwSubtitleInput_' + rowNum);
+  const film = (S.byType['films']?.clips || []).find(c => c._rowNum === rowNum);
+  if (!input || !film) return;
+  const newSub = input.value.trim();
+  showLoading('Saving subtitle…');
+  try {
+    // Back up original on first edit
+    if (!getReviewField(film, 'subtitleOriginalBackup') && film.subtitle) {
+      setReviewField(film, 'subtitleOriginalBackup', film.subtitle);
+    }
+    setReviewField(film, 'subtitleCurrent', newSub);
+    film.subtitle = newSub;
+    await saveReviewRow(film);
+    // Write to main sheet column I
+    await sheetsSet(`'${CONFIG.MAIN_TAB}'!I${rowNum}:I${rowNum}`, [[newSub]]);
+    hideLoading();
+    renderFilmWorkstation();
+    showToast('Subtitle saved', 'success');
+  } catch(e) { hideLoading(); showToast('Save failed: ' + e.message, 'error'); }
+}
+async function revertFilmSubtitle(rowNum) {
+  const film = (S.byType['films']?.clips || []).find(c => c._rowNum === rowNum);
+  if (!film) return;
+  const backup = getReviewField(film, 'subtitleOriginalBackup');
+  if (!backup) { showToast('No backup to revert to', 'error'); return; }
+  if (!await jemConfirm('Revert subtitle to the original?')) return;
+  showLoading('Reverting…');
+  try {
+    setReviewField(film, 'subtitleCurrent', backup);
+    setReviewField(film, 'subtitleOriginalBackup', '');
+    film.subtitle = backup;
+    await saveReviewRow(film);
+    await sheetsSet(`'${CONFIG.MAIN_TAB}'!I${rowNum}:I${rowNum}`, [[backup]]);
+    hideLoading();
+    renderFilmWorkstation();
+    showToast('Reverted', 'success');
+  } catch(e) { hideLoading(); showToast('Revert failed: ' + e.message, 'error'); }
+}
+async function generateFilmSubtitle(rowNum) {
+  const film = (S.byType['films']?.clips || []).find(c => c._rowNum === rowNum);
+  if (!film) return;
+  showLoading('Asking AI for subtitle…');
+  try {
+    const prompt = `You are writing a subtitle for a Jewish educational film. The film is titled "${film.title}". ${film.description ? 'Its overview is: "' + film.description + '"' : ''}\n\nGenerate ONE evocative subtitle, 3 to 7 words, that captures the essence of the film. Output ONLY the subtitle text, no quotes, no preamble.`;
+    const result = await callAI([{ role: 'user', content: prompt }], { temperature: 0.8, maxTokens: 80 });
+    const subtitle = smartenQuotes(result.trim().replace(/^["']|["']$/g, ''));
+    const input = document.getElementById('fwSubtitleInput_' + rowNum);
+    if (input) {
+      input.value = subtitle;
+      onFilmSubtitleInput(rowNum);
+    }
+    hideLoading();
+    showToast('AI suggestion ready — review and Save to confirm', 'success');
+  } catch(e) { hideLoading(); showToast('AI failed: ' + e.message, 'error'); }
 }
 
 async function renderFilmsView() {
@@ -6261,7 +6904,7 @@ function switchView(view, btn, opts) {
   S.currentView = view;
   // Reset member detail state if leaving team view
   if (view !== 'team') { _selectedMember = null; }
-  const views = ['overallView','teamView','notesView','typeNotesView','dashboardView','queueView','attentionView','exportView','bookView','fullBookView','rulesView','filmsView'];
+  const views = ['overallView','teamView','notesView','typeNotesView','dashboardView','queueView','attentionView','exportView','bookView','fullBookView','rulesView','filmsView','filmsListView','filmWorkstationView'];
   views.forEach(v => { const el = document.getElementById(v); if (el) el.style.display = 'none'; });
   if (view === 'overall') { document.getElementById('overallView').style.display = 'block'; renderOverallDashboard(); }
   else if (view === 'fullbook') { document.getElementById('fullBookView').style.display = 'block'; renderFullBookView(); }
@@ -6278,6 +6921,8 @@ function switchView(view, btn, opts) {
   else if (view === 'export') { document.getElementById('exportView').style.display = 'block'; renderExportView(); }
   else if (view === 'book') { document.getElementById('bookView').style.display = 'block'; renderBookView(); }
   else if (view === 'films') { document.getElementById('filmsView').style.display = 'block'; renderFilmsView(); }
+  else if (view === 'films_list') { document.getElementById('filmsListView').style.display = 'block'; renderFilmsListView(); }
+  else if (view === 'film_workstation') { document.getElementById('filmWorkstationView').style.display = 'block'; renderFilmWorkstation(); }
   else if (view === 'rules') { document.getElementById('rulesView').style.display = 'block'; renderRulesView(); }
   else if (view === 'notes') { document.getElementById('notesView').style.display = 'block'; renderNotesView(); }
   else if (view === 'typenotes') { document.getElementById('typeNotesView').style.display = 'block'; renderTypeNotesView(); }
