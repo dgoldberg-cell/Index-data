@@ -266,6 +266,11 @@
   .film-card-status-approved { background: var(--green-light); color: var(--green); }
   .film-card-status-flagged { background: var(--red-light); color: var(--red); }
 
+  /* Film Workstation textareas should display more text without scrolling — auto-grow
+     fires on render, but a generous floor prevents tiny boxes when content is short. */
+  .film-workstation .orig-text { min-height: 140px; font-size: 16px; line-height: 1.7; }
+  .fw-chapter-body .orig-text { min-height: 120px; }
+
   /* Film Workstation — the per-film working page */
   .film-workstation {
     max-width: 1100px; margin: 0 auto; padding: 24px;
@@ -5785,6 +5790,11 @@ function renderFilmWorkstation() {
       }
     </div>
   `;
+  // Auto-grow every textarea so original descriptions and drafts display fully —
+  // no scroll-trapped tiny boxes. Runs after innerHTML is committed.
+  setTimeout(() => {
+    container.querySelectorAll('textarea').forEach(ta => autoGrowTextarea(ta));
+  }, 0);
 }
 
 // Render a single chapter row in the workstation. Collapsed = header only; expanded = full editing surface.
