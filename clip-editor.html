@@ -3717,7 +3717,16 @@ function updateBatchBtn() {
 function updateAttentionCount() {
   const el = document.getElementById('attentionCount');
   if (!el) return;
-  const n = activeBucket().clips.filter(c => getStatus(c) === 'flagged').length;
+  // In the Films section, the Attention badge counts BOTH overview-flagged and chapter-flagged
+  // clips since they share one consolidated Attention view.
+  let n;
+  if (S.activeType === 'films' || S.activeType === 'film_chapter') {
+    const ov = (S.byType['films']?.clips || []).filter(c => getStatus(c) === 'flagged').length;
+    const ch = (S.byType['film_chapter']?.clips || []).filter(c => getStatus(c) === 'flagged').length;
+    n = ov + ch;
+  } else {
+    n = activeBucket().clips.filter(c => getStatus(c) === 'flagged').length;
+  }
   if (n > 0) { el.textContent = n; el.style.display = 'inline'; }
   else el.style.display = 'none';
 }
@@ -4292,28 +4301,76 @@ function setTypeNotesFilter(f, btn) {
 
 function renderTypeNotesView() {
   const typeCfg = activeTypeCfg();
-  document.getElementById('typeNotesTitle').textContent = typeCfg.displayName + ' — Notes';
-  document.getElementById('typeNotesSub').textContent = `Notes on clips in the ${typeCfg.displayName} section`;
+  // Films section: consolidate notes from both 'films' and 'film_chapter' with a scope toggle.
+  const isFilmsSection = typeCfg.key === 'films' || typeCfg.key === 'film_chapter';
   const el = document.getElementById('typeNotesList');
   if (!el) return;
-  let notes = S.notes.filter(n => n.scope === 'clip' && n.typeKey === typeCfg.key);
-  if (_typeNotesFilter === 'unresolved') notes = notes.filter(n => !n.resolved);
-  notes.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-  if (!notes.length) {
-    el.innerHTML = `<div class="empty-state">No ${_typeNotesFilter === 'unresolved' ? 'unresolved ' : ''}notes for ${esc(typeCfg.displayName)} yet.<br><br><span style="font-size:12px;color:var(--tx4);font-style:normal">Add per-clip notes from any clip's detail panel.</span></div>`;
+
+  if (!isFilmsSection) {
+    // Original single-type behavior
+    document.getElementById('typeNotesTitle').textContent = typeCfg.displayName + ' — Notes';
+    document.getElementById('typeNotesSub').textContent = `Notes on clips in the ${typeCfg.displayName} section`;
+    let notes = S.notes.filter(n => n.scope === 'clip' && n.typeKey === typeCfg.key);
+    if (_typeNotesFilter === 'unresolved') notes = notes.filter(n => !n.resolved);
+    notes.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    if (!notes.length) {
+      el.innerHTML = `<div class="empty-state">No ${_typeNotesFilter === 'unresolved' ? 'unresolved ' : ''}notes for ${esc(typeCfg.displayName)} yet.<br><br><span style="font-size:12px;color:var(--tx4);font-style:normal">Add per-clip notes from any clip's detail panel.</span></div>`;
+      return;
+    }
+    const bucket = S.byType[typeCfg.key];
+    el.innerHTML = notes.map(n => {
+      const clip = bucket?.clips.find(c => String(c._rowNum) === n.clipRow);
+      const context = clip
+        ? `<div class="note-context" onclick="jumpToClipFromNote('${typeCfg.key}', ${clip._rowNum})">${esc(clip.title)} →</div>`
+        : `<div class="note-context" style="opacity:0.6">Clip #${esc(n.clipRow)} (not found)</div>`;
+      return `<div style="margin-bottom:12px">${context}${renderNoteCard(n)}</div>`;
+    }).join('');
     return;
   }
-  const bucket = S.byType[typeCfg.key];
-  el.innerHTML = notes.map(n => {
+
+  // Films section combined view
+  document.getElementById('typeNotesTitle').textContent = 'Films — Notes';
+  document.getElementById('typeNotesSub').textContent = 'Notes across film overviews and chapters';
+  if (!S.filmsNotesScope) S.filmsNotesScope = 'both';
+  const overviewNotes = S.notes.filter(n => n.scope === 'clip' && n.typeKey === 'films');
+  const chapterNotes = S.notes.filter(n => n.scope === 'clip' && n.typeKey === 'film_chapter');
+
+  let visible = [];
+  if (S.filmsNotesScope === 'overviews') visible = overviewNotes;
+  else if (S.filmsNotesScope === 'chapters') visible = chapterNotes;
+  else visible = [...overviewNotes, ...chapterNotes];
+  if (_typeNotesFilter === 'unresolved') visible = visible.filter(n => !n.resolved);
+  visible.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+
+  const toggleHTML = `
+    <div class="filter-row" style="margin-bottom:14px;padding:10px 0;border-bottom:1px dashed var(--border)">
+      <span style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-right:4px;align-self:center">Show:</span>
+      <button class="filter-chip ${S.filmsNotesScope === 'overviews' ? 'active' : ''}" onclick="setFilmsNotesScope('overviews')">📖 Overviews <span class="filter-chip-count">(${overviewNotes.length})</span></button>
+      <button class="filter-chip ${S.filmsNotesScope === 'chapters' ? 'active' : ''}" onclick="setFilmsNotesScope('chapters')">🎞️ Chapters <span class="filter-chip-count">(${chapterNotes.length})</span></button>
+      <button class="filter-chip ${S.filmsNotesScope === 'both' ? 'active' : ''}" onclick="setFilmsNotesScope('both')">Both <span class="filter-chip-count">(${overviewNotes.length + chapterNotes.length})</span></button>
+    </div>`;
+
+  if (!visible.length) {
+    el.innerHTML = toggleHTML + `<div class="empty-state">No ${_typeNotesFilter === 'unresolved' ? 'unresolved ' : ''}notes for ${S.filmsNotesScope === 'overviews' ? 'overviews' : S.filmsNotesScope === 'chapters' ? 'chapters' : 'film items'} yet.<br><br><span style="font-size:12px;color:var(--tx4);font-style:normal">Add per-clip notes from any clip's detail panel.</span></div>`;
+    return;
+  }
+
+  el.innerHTML = toggleHTML + visible.map(n => {
+    const bucket = S.byType[n.typeKey];
     const clip = bucket?.clips.find(c => String(c._rowNum) === n.clipRow);
-    let context = '';
-    if (clip) {
-      context = `<div class="note-context" onclick="jumpToClipFromNote('${typeCfg.key}', ${clip._rowNum})">${esc(clip.title)} →</div>`;
-    } else {
-      context = `<div class="note-context" style="opacity:0.6">Clip #${esc(n.clipRow)} (not found)</div>`;
-    }
+    const typeBadge = n.typeKey === 'films'
+      ? '<span style="font-size:10px;font-weight:600;color:var(--accent2);background:var(--accent-light);padding:2px 8px;border-radius:var(--radius-pill);margin-right:6px">📖 Overview</span>'
+      : '<span style="font-size:10px;font-weight:600;color:var(--tx2);background:var(--bg2);padding:2px 8px;border-radius:var(--radius-pill);margin-right:6px">🎞️ Chapter</span>';
+    const context = clip
+      ? `<div class="note-context" onclick="jumpToClipFromNote('${n.typeKey}', ${clip._rowNum})">${typeBadge}${esc(clip.title)} →</div>`
+      : `<div class="note-context" style="opacity:0.6">${typeBadge}Clip #${esc(n.clipRow)} (not found)</div>`;
     return `<div style="margin-bottom:12px">${context}${renderNoteCard(n)}</div>`;
   }).join('');
+}
+
+function setFilmsNotesScope(scope) {
+  S.filmsNotesScope = scope;
+  renderTypeNotesView();
 }
 
 function updateNotesBadge() {
@@ -5273,25 +5330,108 @@ function useAsDraft(rowNum, msgIdx) {
 // ATTENTION VIEW
 // ══════════════════════════════════════════════
 function renderAttentionView() {
-  const flagged = activeBucket().clips.filter(c => getStatus(c) === 'flagged');
+  // For the Films section (active type 'films' OR 'film_chapter'), Attention is
+  // consolidated: it shows flagged clips from BOTH buckets (film overviews + chapters)
+  // with a toggle to filter to Overviews / Chapters / Both. Other clip types keep the
+  // single-bucket flagged list unchanged.
+  const isFilmsSection = S.activeType === 'films' || S.activeType === 'film_chapter';
   const el = document.getElementById('attentionGrid');
-  if (!flagged.length) { el.innerHTML = `<div class="empty-state">No flagged clips 🎉</div>`; return; }
-  el.innerHTML = `<h2 style="font-size:18px;color:var(--tx);margin-bottom:8px">Needs Attention (${flagged.length})</h2>` +
-    flagged.map(clip => {
-      const thumbHTML = clip.thumbnail
-        ? `<img class="attention-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
-        : `<div class="attention-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--tx4)">🎬</div>`;
-      return `<div class="attention-card" onclick="goToClip(${clip._rowNum})">
-        ${thumbHTML}
-        <div class="attention-body">
-          <div class="attention-title">${esc(clip.title)}</div>
-          <div style="font-size:11px;color:var(--tx3);margin-bottom:4px">LT ${esc(clip.programNum)}${formatClipDate(clip.date) ? ' · ' + esc(formatClipDate(clip.date)) : ''}</div>
-          <div class="attention-flag">🚩 ${esc(getReviewField(clip, 'flagReason'))}</div>
-          <div class="attention-orig">${esc((clip.description||'').substring(0,120))}…</div>
-        </div>
-        <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();goToClip(${clip._rowNum})">Open →</button>
-      </div>`;
-    }).join('');
+  if (!el) return;
+
+  if (!isFilmsSection) {
+    // Original behavior for non-films types
+    const flagged = activeBucket().clips.filter(c => getStatus(c) === 'flagged');
+    if (!flagged.length) { el.innerHTML = `<div class="empty-state">No flagged clips 🎉</div>`; return; }
+    el.innerHTML = `<h2 style="font-size:18px;color:var(--tx);margin-bottom:8px">Needs Attention (${flagged.length})</h2>` +
+      flagged.map(clip => renderAttentionCard(clip)).join('');
+    return;
+  }
+
+  // Films section: build combined list + toggle UI
+  if (!S.filmsAttentionScope) S.filmsAttentionScope = 'both';
+  const overviewFlagged = (S.byType['films']?.clips || []).filter(c => getStatus(c) === 'flagged');
+  const chapterFlagged = (S.byType['film_chapter']?.clips || []).filter(c => getStatus(c) === 'flagged');
+  let visible = [];
+  if (S.filmsAttentionScope === 'overviews') visible = overviewFlagged;
+  else if (S.filmsAttentionScope === 'chapters') visible = chapterFlagged;
+  else visible = [...overviewFlagged, ...chapterFlagged];
+  // Sort: overviews first (when both shown), then by title
+  visible.sort((a, b) => {
+    if (a.typeKey !== b.typeKey) return a.typeKey === 'films' ? -1 : 1;
+    return (a.title || '').localeCompare(b.title || '');
+  });
+
+  const toggleHTML = `
+    <div class="filter-row" style="margin-bottom:14px;padding:10px 0;border-bottom:1px dashed var(--border)">
+      <span style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-right:4px;align-self:center">Show:</span>
+      <button class="filter-chip ${S.filmsAttentionScope === 'overviews' ? 'active' : ''}" onclick="setFilmsAttentionScope('overviews')">📖 Overviews <span class="filter-chip-count">(${overviewFlagged.length})</span></button>
+      <button class="filter-chip ${S.filmsAttentionScope === 'chapters' ? 'active' : ''}" onclick="setFilmsAttentionScope('chapters')">🎞️ Chapters <span class="filter-chip-count">(${chapterFlagged.length})</span></button>
+      <button class="filter-chip ${S.filmsAttentionScope === 'both' ? 'active' : ''}" onclick="setFilmsAttentionScope('both')">Both <span class="filter-chip-count">(${overviewFlagged.length + chapterFlagged.length})</span></button>
+    </div>`;
+
+  if (!visible.length) {
+    el.innerHTML = toggleHTML + `<div class="empty-state">No flagged ${S.filmsAttentionScope === 'overviews' ? 'overviews' : S.filmsAttentionScope === 'chapters' ? 'chapters' : 'film items'} 🎉</div>`;
+    return;
+  }
+  el.innerHTML = toggleHTML +
+    `<h2 style="font-size:18px;color:var(--tx);margin-bottom:8px">Needs Attention (${visible.length})</h2>` +
+    visible.map(clip => renderAttentionCard(clip, true)).join('');
+}
+
+// Single attention card render — factored out so films/non-films share the same template.
+// In films mode (`showTypeBadge=true`) the card shows a small badge marking it as Overview vs Chapter.
+function renderAttentionCard(clip, showTypeBadge) {
+  const thumbHTML = clip.thumbnail
+    ? `<img class="attention-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
+    : `<div class="attention-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--tx4)">🎬</div>`;
+  const typeBadge = showTypeBadge
+    ? (clip.typeKey === 'films'
+        ? '<span style="font-size:10px;font-weight:600;color:var(--accent2);background:var(--accent-light);padding:2px 8px;border-radius:var(--radius-pill);margin-right:6px">📖 Overview</span>'
+        : '<span style="font-size:10px;font-weight:600;color:var(--tx2);background:var(--bg2);padding:2px 8px;border-radius:var(--radius-pill);margin-right:6px">🎞️ Chapter</span>')
+    : '';
+  return `<div class="attention-card" onclick="goToFlaggedClip(${clip._rowNum}, '${clip.typeKey}')">
+    ${thumbHTML}
+    <div class="attention-body">
+      <div class="attention-title">${typeBadge}${esc(clip.title)}</div>
+      <div style="font-size:11px;color:var(--tx3);margin-bottom:4px">${clip.programNum ? 'LT ' + esc(clip.programNum) : ''}${clip.filmName && clip.typeKey === 'film_chapter' ? ' · in <em>' + esc(clip.filmName) + '</em>' : ''}${formatClipDate(clip.date) ? ' · ' + esc(formatClipDate(clip.date)) : ''}</div>
+      <div class="attention-flag">🚩 ${esc(getReviewField(clip, 'flagReason'))}</div>
+      <div class="attention-orig">${esc((clip.description||'').substring(0,120))}…</div>
+    </div>
+    <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();goToFlaggedClip(${clip._rowNum}, '${clip.typeKey}')">Open →</button>
+  </div>`;
+}
+
+function setFilmsAttentionScope(scope) {
+  S.filmsAttentionScope = scope;
+  renderAttentionView();
+}
+
+// Smart routing from Attention cards: overview cards open the Film Workstation;
+// chapter cards open the Film Workstation for the chapter's parent film with the chapter expanded.
+function goToFlaggedClip(rowNum, typeKey) {
+  if (typeKey === 'films') {
+    openFilmWorkstation(rowNum);
+    return;
+  }
+  if (typeKey === 'film_chapter') {
+    // Find the parent film for this chapter and open the workstation with the chapter expanded
+    const chapter = (S.byType['film_chapter']?.clips || []).find(c => c._rowNum === rowNum);
+    if (chapter && chapter.filmName) {
+      const parentFilm = (S.byType['films']?.clips || []).find(f => f.filmName === chapter.filmName);
+      if (parentFilm) {
+        if (!_fwExpandedChapters[parentFilm._rowNum]) _fwExpandedChapters[parentFilm._rowNum] = new Set();
+        _fwExpandedChapters[parentFilm._rowNum].add(rowNum);
+        openFilmWorkstation(parentFilm._rowNum);
+        setTimeout(() => {
+          const el = document.getElementById('fwChap_' + rowNum);
+          if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+        return;
+      }
+    }
+  }
+  // Fallback: standard goToClip
+  goToClip(rowNum);
 }
 
 function goToClip(rowNum) {
@@ -5649,11 +5789,11 @@ function renderSidebar() {
             </div>
             <div class="sb-nested-children">
               <div class="sb-sub-item ${fcActive && S.currentView === 'queue' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('film_chapter','queue')">Queue</div>
-              <div class="sb-sub-item ${fcActive && S.currentView === 'attention' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('film_chapter','attention')">Attention</div>
-              <div class="sb-sub-item ${fcActive && S.currentView === 'typenotes' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('film_chapter','typenotes')">Notes</div>
-              <!-- AI Rules deliberately omitted here — all film-related rules (overview / subtitle /
-                   chapter / intro) live in the single "Films AI Rules" tab, accessed via the
-                   AI Rules sub-item under the Films parent. -->
+              <!-- Attention, Notes, and AI Rules deliberately omitted here — they are
+                   consolidated at the Films parent level. The Attention and Notes views
+                   include a scope toggle (Overviews / Chapters / Both) so the user can
+                   filter to whichever subset they need. AI Rules is one tab covering all
+                   film-related rules (overview / subtitle / chapter / intro). -->
             </div>
           </div>`;
         })() : ''}
