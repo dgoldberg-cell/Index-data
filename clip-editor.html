@@ -566,7 +566,8 @@
     align-items: stretch;
     margin-bottom: 18px;
   }
-  .orig-draft-row > .card {
+  .orig-draft-row > .card,
+  .orig-draft-row > .source-card-stack {
     flex: 1; min-width: 0;
     margin-bottom: 0; /* override default card spacing — handled by row */
     display: flex; flex-direction: column;
@@ -574,6 +575,34 @@
   .orig-draft-row > .card > .card-body {
     flex: 1; display: flex; flex-direction: column;
   }
+
+  /* Dual-source layout (Conversations / Timeless / My Encounter):
+     The left column contains TWO stacked source cards (Old = col H, Current = col A)
+     so the user can review both originals and accept either one. The right column
+     stays the regular New Summary card. */
+  .source-card-stack {
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .source-card-stack > .source-card {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column;
+  }
+  .source-card .source-card-label {
+    font-size: 11px; font-weight: 700;
+    color: var(--accent2);
+    text-transform: none; letter-spacing: 0.3px;
+    background: var(--accent-light);
+    padding: 2px 10px; border-radius: var(--radius-pill);
+  }
+  .source-card-textarea.is-empty {
+    font-style: italic; color: var(--tx4);
+    min-height: 44px;
+  }
+  /* Highlight the source card that was ultimately accepted */
+  .source-card.source-card-chosen {
+    box-shadow: var(--shadow-clay), 0 0 0 2px var(--green);
+  }
+
   /* Narrow viewports: stack vertically again so each side has full width to work in */
   @media (max-width: 1100px) {
     .orig-draft-row { flex-direction: column; }
@@ -2124,8 +2153,11 @@ const REVIEW_COLS = { ID: 0, STATUS: 1, ORIGINAL_BACKUP: 2, FLAG_REASON: 3, APPR
 async function ensureReviewTab(typeCfg) {
   const tabName = typeCfg.reviewTab;
   const baseHeader = ['clip_id','status','original_backup','flag_reason','approved_by','approved_at','draft_text','chat_history','desc_source_col','draft_model','draft_used_transcript'];
-  // Short Film also tracks a subtitle (column I in the main sheet)
-  // Addresses (Sichos) also tracks length-flag metadata from trim-to-length
+  // Conversations / Timeless Moments / My Encounter have TWO original sources (H and A).
+  // The user can accept either one or generate AI from either — `desc_source_chosen` records
+  // which column the user ultimately approved (and `desc_source_ai_pick` the last column
+  // the user generated from). Both default to '' until the user makes a choice.
+  const isDualSource = ['conversations', 'timeless', 'my_encounter'].includes(typeCfg.key);
   let fullHeader, lastCol;
   if (typeCfg.key === 'short_film') {
     fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current'];
@@ -2138,6 +2170,9 @@ async function ensureReviewTab(typeCfg) {
     // strategy this draft was generated under.
     fullHeader = [...baseHeader, 'length_flag', 'length_flag_wc', 'length_action', 'length_input_wc', 'length_output_wc', 'cohort_used'];
     lastCol = 'Q';
+  } else if (isDualSource) {
+    fullHeader = [...baseHeader, 'desc_source_chosen', 'desc_source_ai_pick'];
+    lastCol = 'M';
   } else {
     fullHeader = baseHeader;
     lastCol = 'K';
@@ -2171,10 +2206,13 @@ async function loadReviewData(typeCfg) {
   bucket.reviewData = {};
   const isShortFilm = typeCfg.key === 'short_film';
   const isSichos = typeCfg.key === 'sichos';
-  // short_film extends to M (subtitle cols); sichos extends to Q (length + cohort cols)
+  const isDualSource = ['conversations', 'timeless', 'my_encounter'].includes(typeCfg.key);
+  // short_film extends to M (subtitle cols); sichos extends to Q (length + cohort cols);
+  // dual-source types extend to M (desc_source_chosen + desc_source_ai_pick cols)
   let range;
   if (isSichos) range = `'${typeCfg.reviewTab}'!A:Q`;
   else if (isShortFilm) range = `'${typeCfg.reviewTab}'!A:M`;
+  else if (isDualSource) range = `'${typeCfg.reviewTab}'!A:M`;
   else range = `'${typeCfg.reviewTab}'!A:K`;
   try {
     const data = await sheetsGet(range);
@@ -2203,6 +2241,9 @@ async function loadReviewData(typeCfg) {
         lengthOutputWc: isSichos ? (parseInt(row[15]) || 0) : 0,
         // Sichos: which rule cohort produced this draft ('default' or 'short')
         cohortUsed: isSichos ? (row[16] || '') : '',
+        // Dual-source types: which column ('H' or 'A') was accepted, and last AI-pick
+        descSourceChosen: isDualSource ? (row[11] || '') : '',
+        descSourceAiPick: isDualSource ? (row[12] || '') : '',
       };
       const id = row[0];
       const clip = bucket.clips?.find(c => String(c._rowNum) === id);
@@ -2232,6 +2273,7 @@ async function saveReviewRow(clip) {
   const draftText = rd.draftText || '';
   const chatHist = S.chatHistory[parseInt(id)] ? JSON.stringify(S.chatHistory[parseInt(id)]) : '';
   const isSichos = typeCfg.key === 'sichos';
+  const isDualSource = ['conversations', 'timeless', 'my_encounter'].includes(typeCfg.key);
   const baseValues = [
     id,
     rd.status || 'unprocessed',
@@ -2259,6 +2301,9 @@ async function saveReviewRow(clip) {
       rd.cohortUsed || '',
     ]];
     lastCol = 'Q';
+  } else if (isDualSource) {
+    values = [[...baseValues, rd.descSourceChosen || '', rd.descSourceAiPick || '']];
+    lastCol = 'M';
   } else {
     values = [baseValues];
     lastCol = 'K';
@@ -2906,6 +2951,13 @@ async function loadAllData() {
         // Track the original (sheet-declared) type so we can show "moved from X" in the UI
         originalTypeKey: override ? override.sourceType : tCfg.key,
       };
+      // Dual-source clip types (Conversations / Timeless / My Encounter) keep BOTH the
+      // H column ("Old") and A column ("Current") descriptions so the UI can show
+      // both side-by-side and let the user accept either one or generate AI from either.
+      if (['conversations', 'timeless', 'my_encounter'].includes(tCfg.key)) {
+        clip.descriptionH = sanitizeDescription(row[CONFIG.COL.DESCRIPTION_H] || '');
+        clip.descriptionA = sanitizeDescription(row[CONFIG.COL.DESCRIPTION_A] || '');
+      }
       if (tCfg.hasFilmName || (override && override.sourceType === 'film_chapter')) clip.filmName = filmName;
       // Short Film: capture the subtitle (column I)
       if (tCfg.key === 'short_film') {
@@ -3077,7 +3129,7 @@ function setReviewField(clip, field, val) {
   const bucket = S.byType[clip.typeKey];
   if (!bucket) return;
   const id = String(clip._rowNum);
-  if (!bucket.reviewData[id]) bucket.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '', draftText: '', chatHistory: '', descSourceCol: clip.descSourceCol || 'H', draftModel: '', draftUsedTranscript: false, subtitleOriginalBackup: '', subtitleCurrent: '', lengthFlag: '', lengthFlagWc: 0, lengthAction: '', lengthInputWc: 0, lengthOutputWc: 0, cohortUsed: '' };
+  if (!bucket.reviewData[id]) bucket.reviewData[id] = { status: 'unprocessed', originalBackup: '', flagReason: '', approvedBy: '', approvedAt: '', draftText: '', chatHistory: '', descSourceCol: clip.descSourceCol || 'H', draftModel: '', draftUsedTranscript: false, subtitleOriginalBackup: '', subtitleCurrent: '', lengthFlag: '', lengthFlagWc: 0, lengthAction: '', lengthInputWc: 0, lengthOutputWc: 0, cohortUsed: '', descSourceChosen: '', descSourceAiPick: '' };
   bucket.reviewData[id][field] = val;
 }
 
@@ -3596,24 +3648,72 @@ function renderDetail() {
     ${status === 'flagged' ? `<div class="flag-banner"><div class="flag-icon">🚩</div><div><strong>Needs Attention:</strong> ${esc(flagReason)}<br><small>Use the AI chat below to provide more context, then regenerate.</small></div></div>` : ''}
 
     <div class="orig-draft-row">
-      <div class="card">
-      <div class="card-header" style="display:flex;align-items:center;gap:8px">
-        <span>Original Description</span>
-        ${status !== 'approved' ? '<span style="font-size:10px;color:var(--tx4);font-weight:400;letter-spacing:0;text-transform:none">— click to start a manual edit below</span>' : ''}
-      </div>
-      <div class="card-body">
-        <textarea
-          id="origTA_${clip._rowNum}"
-          class="orig-text orig-text-readonly"
-          data-original="${esc(originalText)}"
-          data-row="${clip._rowNum}"
-          readonly
-          ${status !== 'approved' ? `onclick="jumpToDraftFromOriginal(${clip._rowNum}, event)"` : ''}
-          placeholder="No description on file">${esc(originalText)}</textarea>
-        <div class="word-count" id="origWc_${clip._rowNum}">${originalText.trim() ? wordCount(originalText) + ' words' : ''}</div>
-        ${originalBackup && status === 'approved' ? `<div style="font-size:11px;color:var(--tx3);margin-top:6px">📦 Pre-approval original (backed up)</div>` : ''}
-      </div>
-    </div>
+      ${(() => {
+        const isDualSource = ['conversations', 'timeless', 'my_encounter'].includes(clip.typeKey);
+        if (!isDualSource) {
+          // Single Original card (existing behavior for Sichos / Short Film / Film Chapter)
+          return `<div class="card">
+            <div class="card-header" style="display:flex;align-items:center;gap:8px">
+              <span>Original Description</span>
+              ${status !== 'approved' ? '<span style="font-size:10px;color:var(--tx4);font-weight:400;letter-spacing:0;text-transform:none">— click to start a manual edit below</span>' : ''}
+            </div>
+            <div class="card-body">
+              <textarea
+                id="origTA_${clip._rowNum}"
+                class="orig-text orig-text-readonly"
+                data-original="${esc(originalText)}"
+                data-row="${clip._rowNum}"
+                readonly
+                ${status !== 'approved' ? `onclick="jumpToDraftFromOriginal(${clip._rowNum}, event)"` : ''}
+                placeholder="No description on file">${esc(originalText)}</textarea>
+              <div class="word-count" id="origWc_${clip._rowNum}">${originalText.trim() ? wordCount(originalText) + ' words' : ''}</div>
+              ${originalBackup && status === 'approved' ? `<div style="font-size:11px;color:var(--tx3);margin-top:6px">📦 Pre-approval original (backed up)</div>` : ''}
+            </div>
+          </div>`;
+        }
+        // Dual-source types: render TWO stacked cards (Old = col H, Current = col A) in a column.
+        // Each card has its own readonly textarea, word count, click-to-edit-below behavior,
+        // and "✓ Accept this version" button. Empty boxes still render with a placeholder so
+        // both columns are always visible side-by-side in shape.
+        const hText = (clip.descriptionH || '').trim();
+        const aText = (clip.descriptionA || '').trim();
+        const rd = bucket.reviewData[String(clip._rowNum)] || {};
+        const chosen = rd.descSourceChosen || ''; // 'H' or 'A' once accepted
+        const isApproved = status === 'approved';
+
+        const renderSourceCard = (label, sublabel, text, colKey) => {
+          const isThisChosen = isApproved && chosen === colKey;
+          const hasContent = !!text;
+          const labelTag = colKey === 'H' ? '📜 Old' : '✨ Current';
+          return `<div class="card source-card ${isThisChosen ? 'source-card-chosen' : ''}">
+            <div class="card-header" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span class="source-card-label">${labelTag}</span>
+              <span style="font-size:10px;color:var(--tx4);font-weight:400;letter-spacing:0;text-transform:none">${esc(sublabel)}</span>
+              ${isThisChosen ? '<span class="status-badge status-approved" style="margin-left:auto">✓ Approved</span>' : ''}
+            </div>
+            <div class="card-body">
+              <textarea
+                id="origTA${colKey}_${clip._rowNum}"
+                class="orig-text orig-text-readonly source-card-textarea ${hasContent ? '' : 'is-empty'}"
+                data-original="${esc(text)}"
+                data-row="${clip._rowNum}"
+                data-source-col="${colKey}"
+                readonly
+                ${(hasContent && !isApproved) ? `onclick="jumpToDraftFromOriginalDual(${clip._rowNum}, '${colKey}', event)"` : ''}
+                placeholder="(empty — no ${colKey === 'H' ? 'old' : 'current'} description)">${esc(text)}</textarea>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+                <div class="word-count" style="margin-top:0">${hasContent ? wordCount(text) + ' words' : ''}</div>
+                ${hasContent && !isApproved ? `<button class="btn btn-sm btn-green" style="margin-left:auto;font-size:11px;padding:5px 10px" onclick="acceptOriginalDual(${clip._rowNum}, '${colKey}')" title="Accept this version as the approved description — marks the clip approved with column ${colKey} as the source">✓ Accept this version</button>` : ''}
+              </div>
+            </div>
+          </div>`;
+        };
+
+        return `<div class="source-card-stack">
+          ${renderSourceCard('Old', 'column H — the previous description', hText, 'H')}
+          ${renderSourceCard('Current', 'column A — the newer description', aText, 'A')}
+        </div>`;
+      })()}
 
     <div class="card">
       <div class="card-header" style="flex-wrap:wrap;align-items:center;row-gap:6px">
@@ -3635,6 +3735,20 @@ function renderDetail() {
         ${status === 'approved' ? '<span class="status-badge status-approved">✓ Approved</span>' : ''}
         ${status === 'draft' ? '<span class="status-badge status-awaiting">Awaiting review</span>' : ''}
         <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${(() => {
+            // Source picker (Conversations / Timeless / My Encounter only): pick which
+            // column (H = Old, A = Current) the AI should rewrite. Persisted per-clip
+            // in localStorage so the choice survives reloads.
+            const isDualSource = ['conversations', 'timeless', 'my_encounter'].includes(clip.typeKey);
+            if (!isDualSource) return '';
+            const pick = getDualSourceAiPick(clip);
+            const hasH = !!(clip.descriptionH || '').trim();
+            const hasA = !!(clip.descriptionA || '').trim();
+            return `<div class="source-pick" style="display:inline-flex;background:var(--bg2);border-radius:var(--radius-pill);box-shadow:var(--shadow-inner);padding:3px;font-size:11px;font-weight:500" title="Which version the AI will rewrite when you click Generate">
+              <button class="source-pick-btn ${pick === 'H' ? 'on' : ''}" ${hasH ? '' : 'disabled'} onclick="setDualSourceAiPick(${clip._rowNum}, 'H')" style="padding:4px 10px;border:none;background:${pick === 'H' ? 'var(--panel)' : 'transparent'};color:${pick === 'H' ? 'var(--tx)' : 'var(--tx3)'};border-radius:var(--radius-pill);cursor:${hasH ? 'pointer' : 'not-allowed'};opacity:${hasH ? '1' : '0.4'};font-size:11px;font-weight:500">📜 Old</button>
+              <button class="source-pick-btn ${pick === 'A' ? 'on' : ''}" ${hasA ? '' : 'disabled'} onclick="setDualSourceAiPick(${clip._rowNum}, 'A')" style="padding:4px 10px;border:none;background:${pick === 'A' ? 'var(--panel)' : 'transparent'};color:${pick === 'A' ? 'var(--tx)' : 'var(--tx3)'};border-radius:var(--radius-pill);cursor:${hasA ? 'pointer' : 'not-allowed'};opacity:${hasA ? '1' : '0.4'};font-size:11px;font-weight:500">✨ Current</button>
+            </div>`;
+          })()}
           ${(() => {
             const hasTranscript = !!S.transcriptLoaded[clip._rowNum];
             const useT = !!_useTranscriptForClip[clip._rowNum];
@@ -4023,6 +4137,38 @@ function jumpToDraftFromOriginal(rowNum, ev) {
   }
 }
 
+// Dual-source variant of jumpToDraftFromOriginal (Conversations / Timeless / My Encounter):
+// the user can click into EITHER the Old (col H) or Current (col A) box, and the draft
+// below gets seeded from THAT specific column. Otherwise identical to the single-source flow.
+function jumpToDraftFromOriginalDual(rowNum, colKey, ev) {
+  const origTA = document.getElementById('origTA' + colKey + '_' + rowNum);
+  const draftTA = document.getElementById('draftTA_' + rowNum);
+  if (!origTA || !draftTA) return;
+  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  const caret = origTA.selectionStart ?? origTA.value.length;
+  const original = origTA.dataset.original || origTA.value || '';
+  if (!draftTA.value || !draftTA.value.trim()) {
+    draftTA.value = original;
+    clip._draft = original;
+    clip._draftSource = 'manual';
+    autoGrowTextarea(draftTA);
+    updateDraftSourceBadge(rowNum, 'manual');
+    queueDraftSave(clip);
+  } else if (clip._draftSource !== 'ai') {
+    updateDraftSourceBadge(rowNum, 'manual');
+  }
+  draftTA.focus();
+  const targetPos = Math.min(caret, draftTA.value.length);
+  try { draftTA.setSelectionRange(targetPos, targetPos); } catch {}
+  const wcEl = document.getElementById('wc_' + rowNum);
+  if (wcEl) {
+    const wc = wordCount(draftTA.value);
+    wcEl.textContent = draftTA.value.trim() ? (wc + ' words' + (wc > 110 ? ' — over limit!' : wc > 90 ? ' ✓' : '')) : '';
+    wcEl.className = 'word-count' + (wc > 110 ? ' over' : '');
+  }
+}
+
 // Show or hide the "Manual" / "AI Generated" badge on the New Summary card header.
 function updateDraftSourceBadge(rowNum, source) {
   const wrap = document.getElementById('draftSrcBadge_' + rowNum);
@@ -4097,6 +4243,41 @@ function isShortCohortClip(clip) {
   return wordCount(clip.description || '') < SHORT_COHORT_WORD_THRESHOLD;
 }
 
+// Dual-source AI pick (Conversations / Timeless / My Encounter): which column —
+// 'H' (Old) or 'A' (Current) — should AI rewrite? Stored per-clip in localStorage.
+// Default 'H' unless H is empty and A has content (then default 'A').
+function dualSourceKey(clip) { return 'jem_cse_dualpick_' + clip._rowNum; }
+function getDualSourceAiPick(clip) {
+  const stored = localStorage.getItem(dualSourceKey(clip));
+  if (stored === 'H' || stored === 'A') return stored;
+  // No stored choice — pick the one that has content; prefer H if both
+  const hasH = !!(clip.descriptionH || '').trim();
+  const hasA = !!(clip.descriptionA || '').trim();
+  if (hasH) return 'H';
+  if (hasA) return 'A';
+  return 'H';
+}
+function setDualSourceAiPick(rowNum, colKey) {
+  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  // Don't allow picking an empty column
+  const text = colKey === 'A' ? clip.descriptionA : clip.descriptionH;
+  if (!text || !text.trim()) { showToast(`That column is empty for this clip`, 'error'); return; }
+  localStorage.setItem(dualSourceKey(clip), colKey);
+  renderDetail();
+}
+
+// Return the actual description text the AI should rewrite for this clip.
+// For dual-source types, honors the user's H/A pick. For all others, returns clip.description.
+function descriptionForAI(clip) {
+  if (['conversations', 'timeless', 'my_encounter'].includes(clip.typeKey)) {
+    const pick = getDualSourceAiPick(clip);
+    const text = pick === 'A' ? clip.descriptionA : clip.descriptionH;
+    return (text || '').trim() || clip.description || '';
+  }
+  return clip.description || '';
+}
+
 function buildAIPrompt(clip, extraContext, useTranscript) {
   const isShort = isShortCohortClip(clip);
   const transcript = useTranscript ? S.transcriptLoaded[clip._rowNum] : null;
@@ -4107,9 +4288,9 @@ function buildAIPrompt(clip, extraContext, useTranscript) {
   if (isShort) {
     // Short-cohort lead-in: explicitly frame the task before the rules are listed —
     // the original is too thin to polish; treat it as a brief and expand using the transcript.
-    prompt += '\n\n---\n\n## TASK (SHORT-CLIP MODE)\n\nThe original description below is under 70 words — too thin to polish on its own. It captures the correct editorial ANGLE for this clip, but lacks the substance for a full summary. Your task:\n\n1. Treat the original as a BRIEF — keep its angle, focus, and tone.\n2. Use the transcript as a SOURCE of supporting detail (names, examples, specifics).\n3. Do NOT summarize the transcript top-to-bottom. Do NOT shift the angle.\n4. Output dense article-style prose — NOT a transcription of the speech.\n5. Target 70–95 words.\n\nORIGINAL BRIEF:\n' + clip.description;
+    prompt += '\n\n---\n\n## TASK (SHORT-CLIP MODE)\n\nThe original description below is under 70 words — too thin to polish on its own. It captures the correct editorial ANGLE for this clip, but lacks the substance for a full summary. Your task:\n\n1. Treat the original as a BRIEF — keep its angle, focus, and tone.\n2. Use the transcript as a SOURCE of supporting detail (names, examples, specifics).\n3. Do NOT summarize the transcript top-to-bottom. Do NOT shift the angle.\n4. Output dense article-style prose — NOT a transcription of the speech.\n5. Target 70–95 words.\n\nORIGINAL BRIEF:\n' + descriptionForAI(clip);
   } else {
-    prompt += '\n\n---\n\nNow rewrite this summary:\n\n' + clip.description;
+    prompt += '\n\n---\n\nNow rewrite this summary:\n\n' + descriptionForAI(clip);
   }
 
   if (transcript) prompt += '\n\n---\n\n' + (isShort ? 'TRANSCRIPT (source material — fill in supporting detail; do NOT summarize wholesale):\n' : 'Additional context from transcript:\n') + transcript.substring(0, 4000);
@@ -4469,6 +4650,10 @@ async function processClip(clip) {
   setReviewField(clip, 'draftModel', result.draft ? S.aiModel : '');
   setReviewField(clip, 'draftUsedTranscript', !!result.usedTranscript);
   if (result.cohort) setReviewField(clip, 'cohortUsed', result.cohort);
+  // Dual-source: persist the H/A pick that produced this draft (for export + provenance)
+  if (['conversations', 'timeless', 'my_encounter'].includes(clip.typeKey)) {
+    setReviewField(clip, 'descSourceAiPick', getDualSourceAiPick(clip));
+  }
   if (result.flagged) {
     setReviewField(clip, 'status', 'flagged');
     setReviewField(clip, 'flagReason', result.reason);
@@ -4510,6 +4695,10 @@ async function regenerateClip(rowNum) {
     setReviewField(clip, 'draftModel', result.draft ? S.aiModel : '');
     setReviewField(clip, 'draftUsedTranscript', !!result.usedTranscript);
     if (result.cohort) setReviewField(clip, 'cohortUsed', result.cohort);
+  // Dual-source: persist the H/A pick that produced this draft (for export + provenance)
+  if (['conversations', 'timeless', 'my_encounter'].includes(clip.typeKey)) {
+    setReviewField(clip, 'descSourceAiPick', getDualSourceAiPick(clip));
+  }
     if (result.flagged) {
       setReviewField(clip, 'status', 'flagged');
       setReviewField(clip, 'flagReason', result.reason);
@@ -4622,6 +4811,46 @@ async function acceptOriginal(rowNum) {
     renderQueue();
     updateAttentionCount();
     showToast('Original accepted ✅', 'success');
+  } catch(e) { hideLoading(); showToast('Save failed: ' + e.message, 'error'); }
+}
+
+// Dual-source accept (Conversations / Timeless / My Encounter): user clicks ✓ Accept on
+// either the Old (col H) or Current (col A) box. We take that column's text, write it to
+// the main sheet as the approved version, back up the previously-displayed original,
+// and record which column was chosen so the source can be traced.
+async function acceptOriginalDual(rowNum, colKey) {
+  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  if (!clip) return;
+  const text = (colKey === 'A' ? clip.descriptionA : clip.descriptionH) || '';
+  if (!text.trim()) { showToast('That box is empty — nothing to accept', 'error'); return; }
+  const label = colKey === 'H' ? 'Old (column H)' : 'Current (column A)';
+  if (!await jemConfirm(`Accept the <strong>${label}</strong> version as the approved description?<br><br><span style="color:var(--tx3);font-size:12px">This writes it to the main sheet and marks the clip approved.</span>`)) return;
+  showLoading('Saving…');
+  try {
+    setReviewField(clip, 'status', 'approved');
+    setReviewField(clip, 'approvedBy', S.user?.email || '');
+    setReviewField(clip, 'approvedAt', new Date().toISOString());
+    setReviewField(clip, 'draftText', '');
+    setReviewField(clip, 'descSourceCol', colKey);
+    setReviewField(clip, 'descSourceChosen', colKey);
+    if (!getReviewField(clip, 'originalBackup')) {
+      // Back up the version that WAS the live description before this acceptance
+      setReviewField(clip, 'originalBackup', clip.description);
+    }
+    clip.description = text;
+    clip.descSourceCol = colKey;
+    clip.rewrite = text;
+    await saveReviewRow(clip);
+    // Also write the chosen text to the main sheet (column H or A as the live description)
+    const mainCol = colKey === 'A' ? 'A' : 'H';
+    try {
+      await sheetsSet(`'${CONFIG.MAIN_TAB}'!${mainCol}${rowNum}:${mainCol}${rowNum}`, [[text]]);
+    } catch(e) { console.warn('Main sheet write failed (review row still saved):', e); }
+    hideLoading();
+    renderDetail();
+    renderQueue();
+    updateAttentionCount();
+    showToast(`${label} accepted ✅`, 'success');
   } catch(e) { hideLoading(); showToast('Save failed: ' + e.message, 'error'); }
 }
 
