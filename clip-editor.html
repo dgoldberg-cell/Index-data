@@ -361,6 +361,19 @@
     font-size: 10px; font-weight: 700; letter-spacing: 1px;
     text-transform: uppercase; flex-shrink: 0;
   }
+  /* Chapter that has been "Treated as Address" — visually distinct so the user can spot
+     them at a glance in the chapter list. Slightly different color from intro to avoid
+     confusion. */
+  .fw-treated-badge {
+    background: #6B7DAA; color: white;
+    padding: 3px 10px; border-radius: var(--radius-pill);
+    font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+    flex-shrink: 0; display: inline-block; margin-right: 4px;
+  }
+  .fw-chapter-row.is-treated-as-address:not(.is-intro) {
+    border-left: 4px solid #6B7DAA;
+    background: linear-gradient(to right, rgba(107,125,170,0.08) 0%, var(--panel) 60%);
+  }
   .fw-chapters-controls {
     display: flex; align-items: center; gap: 10px;
     margin-bottom: 14px; flex-wrap: wrap;
@@ -5944,23 +5957,34 @@ async function setFilmIntro(filmName, introClipId) {
 let _filmIntroCache = {};
 
 function getOrderedChapters(filmName) {
-  const bucket = S.byType['film_chapter'];
-  if (!bucket) return [];
-  const chapters = bucket.clips.filter(c => c.filmName === filmName);
-  // Helper: parse the trailing chapter number from clip_id (e.g. "F-1234-7" → 7, "LT-805" → fallback to _rowNum).
+  // Walk ALL buckets to find clips that belong to this film. A chapter that has been
+  // "Treated as Address" lives in the 'sichos' bucket but still carries filmName and
+  // originalTypeKey='film_chapter'. We need it to show up here so the user sees the
+  // complete film in the workstation regardless of how individual chapters were re-routed.
+  const chapters = [];
+  for (const t of CLIP_TYPES) {
+    const buc = S.byType[t.key];
+    if (!buc) continue;
+    for (const c of buc.clips) {
+      // Match by filmName AND original-type=film_chapter so we don't accidentally pull in
+      // (say) a Conversations clip that was moved into 'sichos' from somewhere else.
+      const wasFilmChapter = c.originalTypeKey === 'film_chapter' || c.typeKey === 'film_chapter';
+      if (wasFilmChapter && c.filmName === filmName) chapters.push(c);
+    }
+  }
+  // Helper: parse the trailing chapter number from clip_id (e.g. "F-1234-7" → 7).
   // Chapter clip IDs typically end with the chapter number; ascending = chapter 1 first.
   const chapterNum = (c) => {
     const m = String(c.clipId || '').match(/(\d+)\s*$/);
     if (m) return parseInt(m[1]);
-    // Fallback to row number if clip_id has no trailing number
     return c._rowNum || 0;
   };
   if (!_filmOrderCache || !_filmOrderCache[filmName]) {
     // Default: ascending by chapter number → first chapter first
-    return [...chapters].sort((a, b) => chapterNum(a) - chapterNum(b));
+    return chapters.sort((a, b) => chapterNum(a) - chapterNum(b));
   }
   const orderMap = _filmOrderCache[filmName];
-  return [...chapters].sort((a, b) => {
+  return chapters.sort((a, b) => {
     const ai = orderMap[String(a._rowNum)];
     const bi = orderMap[String(b._rowNum)];
     if (ai === undefined && bi === undefined) return chapterNum(a) - chapterNum(b);
@@ -5981,8 +6005,10 @@ let _fwExpandedChapters = {};
 
 // Compute per-film status rollup for the Films List grid
 function computeFilmRollup(filmClip) {
-  const filmName = filmClip.filmName;
-  const chapters = (S.byType['film_chapter']?.clips || []).filter(c => c.filmName === filmName);
+  // Use getOrderedChapters so chapters moved to other buckets (e.g. "Treated as Address")
+  // still count toward the film's total — the film as JEM published it has N chapters
+  // regardless of how we internally re-categorize them.
+  const chapters = getOrderedChapters(filmClip.filmName);
   const totalChapters = chapters.length;
   const approvedChapters = chapters.filter(c => getStatus(c) === 'approved').length;
   const overviewStatus = getStatus(filmClip);
@@ -6134,14 +6160,17 @@ function renderChapterRow(film, chapter, isExpanded, isIntro) {
   const statusLabel = { approved: '✓ Approved', draft: '📝 Draft', flagged: '🚩 Flagged', unprocessed: 'Unprocessed' }[status] || status;
   const statusClass = `film-card-status-${status}`;
   const preview = (chapter._draft || chapter.description || '').substring(0, 200);
+  // Is this chapter currently treated as a Sicha (Address)? It's still part of the film
+  // visually, but editorially flows through the Addresses pipeline.
+  const isTreatedAsAddress = chapter.typeKey === 'sichos' && chapter.originalTypeKey === 'film_chapter';
   const thumbHTML = chapter.thumbnail
     ? `<img class="fw-chapter-thumb" src="${esc(chapter.thumbnail)}" loading="lazy" onerror="this.style.display='none'">`
     : `<div class="fw-chapter-thumb" style="display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--tx4)">🎬</div>`;
-  return `<div class="fw-chapter-row ${isExpanded ? 'expanded' : ''} ${isIntro ? 'is-intro' : ''}" id="fwChap_${chapter._rowNum}">
+  return `<div class="fw-chapter-row ${isExpanded ? 'expanded' : ''} ${isIntro ? 'is-intro' : ''} ${isTreatedAsAddress ? 'is-treated-as-address' : ''}" id="fwChap_${chapter._rowNum}">
     <div class="fw-chapter-header" onclick="toggleChapterExpand(${film._rowNum}, ${chapter._rowNum})">
       ${thumbHTML}
       <div class="fw-chapter-info">
-        <div class="fw-chapter-title">${isIntro ? '<span class="fw-intro-badge">🎬 Intro</span> ' : ''}${esc(chapter.title)}</div>
+        <div class="fw-chapter-title">${isIntro ? '<span class="fw-intro-badge">🎬 Intro</span> ' : ''}${isTreatedAsAddress ? '<span class="fw-treated-badge" title="This chapter is editorially treated as a Sicha (Address). It uses Addresses AI rules and appears in the Addresses queue.">📍 Treated as Address</span> ' : ''}${esc(chapter.title)}</div>
         <div class="fw-chapter-preview">${esc(preview)}</div>
       </div>
       <span class="fw-chapter-status ${statusClass}">${statusLabel}</span>
@@ -6152,12 +6181,47 @@ function renderChapterRow(film, chapter, isExpanded, isIntro) {
           <input type="checkbox" ${isIntro ? 'checked' : ''} onchange="toggleChapterIntro(${film._rowNum}, ${chapter._rowNum})" style="margin:0;cursor:pointer;accent-color:var(--accent)">
           🎬 Mark as intro
         </label>
+        ${isTreatedAsAddress
+          ? `<button class="btn btn-sm" onclick="restoreChapterFromAddress(${chapter._rowNum})" title="This chapter was marked as a Sicha. Click to restore it to a regular Film Chapter — it'll go back to using Film Chapter / Films AI rules and disappear from the Addresses queue." style="font-size:11.5px">↩ Restore to Film Chapter</button>`
+          : `<button class="btn btn-sm" onclick="treatChapterAsAddress(${chapter._rowNum})" title="This chapter is editorially a Sicha (Address) rather than a normal film chapter. Click to move it to the Addresses queue. It still stays visible here in the film. The Index Workspace will treat it as an Address." style="font-size:11.5px">📍 Treat as Address</button>`
+        }
         ${chapter.clipId ? `<a href="https://videos.jem.tv/video-player?clip=${esc(chapter.clipId)}" target="_blank" rel="noopener" class="btn btn-sm" style="text-decoration:none">▶ Watch on JEM.tv</a>` : ''}
         <span style="font-size:11px;color:var(--tx4);margin-left:auto">${chapter.durationMs ? '⏱ ' + esc(formatDuration(chapter.durationMs)) : ''}</span>
       </div>
       ${renderInlineEditingSurface(chapter)}
     </div>` : ''}
   </div>`;
+}
+
+// Mark a chapter as a Sicha — moves it to the Addresses queue + records in _TypeOverrides.
+// The chapter stays visible in the workstation (getOrderedChapters spans all buckets).
+async function treatChapterAsAddress(chapterRowNum) {
+  // Find chapter across buckets (it lives in film_chapter currently)
+  const chapter = (S.byType['film_chapter']?.clips || []).find(c => c._rowNum === chapterRowNum);
+  if (!chapter) { showToast('Chapter not found', 'error'); return; }
+  try {
+    // Temporarily switch activeType so moveClipToType (which uses activeBucket()) finds it
+    const savedActive = S.activeType;
+    S.activeType = 'film_chapter';
+    await moveClipToType(chapterRowNum, 'sichos');
+    S.activeType = savedActive;
+    renderFilmWorkstation();
+  } catch(e) { showToast('Failed: ' + e.message, 'error'); }
+}
+
+// Restore a chapter from "Treated as Address" back to a regular Film Chapter.
+async function restoreChapterFromAddress(chapterRowNum) {
+  if (!await jemConfirm('Restore this chapter to a regular Film Chapter? It will leave the Addresses queue and revert to using Film Chapter / Films AI rules.')) return;
+  // The chapter currently lives in the 'sichos' bucket
+  const chapter = (S.byType['sichos']?.clips || []).find(c => c._rowNum === chapterRowNum);
+  if (!chapter) { showToast('Chapter not found', 'error'); return; }
+  try {
+    const savedActive = S.activeType;
+    S.activeType = 'sichos';
+    await clearTypeOverride(chapterRowNum);
+    S.activeType = savedActive;
+    renderFilmWorkstation();
+  } catch(e) { showToast('Failed: ' + e.message, 'error'); }
 }
 
 // Renders the side-by-side Original + New Summary editing surface for a clip,
@@ -6230,13 +6294,12 @@ async function toggleChapterIntro(filmRowNum, chapterRowNum) {
   if (!film || !chapter) return;
   const currentIntroId = _filmIntroCache?.[film.filmName] || '';
   const newIntroId = String(currentIntroId) === String(chapter.clipId) ? '' : chapter.clipId;
-  showLoading('Saving intro mark…');
+  // No full-screen overlay for a quick checkbox click — the toast handles user feedback.
   try {
     await setFilmIntro(film.filmName, newIntroId);
-    hideLoading();
     renderFilmWorkstation();
     showToast(newIntroId ? `Marked "${chapter.title}" as intro` : 'Intro mark cleared', 'success');
-  } catch(e) { hideLoading(); showToast('Failed: ' + e.message, 'error'); }
+  } catch(e) { showToast('Failed: ' + e.message, 'error'); }
 }
 
 // Subtitle handling for the Films section (mirrors the existing Short Film subtitle flow)
@@ -6289,7 +6352,10 @@ async function revertFilmSubtitle(rowNum) {
 async function generateFilmSubtitle(rowNum) {
   const film = (S.byType['films']?.clips || []).find(c => c._rowNum === rowNum);
   if (!film) return;
-  showLoading('Asking AI for subtitle…');
+  // Inline progress on the button — no full-screen overlay for short AI calls.
+  const btn = document.querySelector(`button[onclick="generateFilmSubtitle(${rowNum})"]`);
+  const origBtnHTML = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Thinking…'; }
   try {
     // Pull subtitle-scoped rules from the Films AI Rules tab. If none defined, fall back
     // to a sensible default prompt so the button always works out of the box.
@@ -6305,9 +6371,12 @@ async function generateFilmSubtitle(rowNum) {
       input.value = subtitle;
       onFilmSubtitleInput(rowNum);
     }
-    hideLoading();
+    if (btn) { btn.disabled = false; btn.innerHTML = origBtnHTML; }
     showToast('AI suggestion ready — review and Save to confirm', 'success');
-  } catch(e) { hideLoading(); showToast('AI failed: ' + e.message, 'error'); }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = origBtnHTML; }
+    showToast('AI failed: ' + e.message, 'error');
+  }
 }
 
 // Generate a subtitle for a Short Film using the short_film type's subtitle-scoped rules.
@@ -6315,7 +6384,9 @@ async function generateFilmSubtitle(rowNum) {
 async function generateShortFilmSubtitle(rowNum) {
   const clip = findClipByRow(rowNum);
   if (!clip || clip.typeKey !== 'short_film') return;
-  showLoading('Asking AI for subtitle…');
+  const btn = document.querySelector(`button[onclick="generateShortFilmSubtitle(${rowNum})"]`);
+  const origBtnHTML = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Thinking…'; }
   try {
     const rulesText = buildRulesPrompt('short_film', false, false, 'subtitle');
     const intro = rulesText
@@ -6329,9 +6400,12 @@ async function generateShortFilmSubtitle(rowNum) {
       input.value = subtitle;
       onSubtitleInput(rowNum);
     }
-    hideLoading();
+    if (btn) { btn.disabled = false; btn.innerHTML = origBtnHTML; }
     showToast('AI suggestion ready — review and Save to confirm', 'success');
-  } catch(e) { hideLoading(); showToast('AI failed: ' + e.message, 'error'); }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = origBtnHTML; }
+    showToast('AI failed: ' + e.message, 'error');
+  }
 }
 
 async function renderFilmsView() {
