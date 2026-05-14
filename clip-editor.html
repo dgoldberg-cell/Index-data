@@ -2469,10 +2469,11 @@ async function ensureReviewTab(typeCfg) {
     fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current', 'title_original_backup'];
     lastCol = 'N';
   } else if (typeCfg.key === 'films') {
-    // Films: same as Short Film (subtitle backup + current) since both have a subtitle field
-    // pulled from column I of the main sheet. Films don't have length-trim rules so no extra cols.
-    fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current', 'title_original_backup'];
-    lastCol = 'N';
+    // Films: same as Short Film (subtitle backup + current), plus title_original_backup, plus
+    // ai_version_one — a preserved first AI/imported draft that the user can restore at any
+    // time via the "↺ Use AI Version One" button on the film overview surface.
+    fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current', 'title_original_backup', 'ai_version_one'];
+    lastCol = 'O';
   } else if (typeCfg.key === 'sichos') {
     // length_flag/length_flag_wc: trim FAILURE state (persisted for queue badges + attention).
     // length_action/length_input_wc/length_output_wc: SUCCESS metadata for the provenance line.
@@ -2521,6 +2522,7 @@ async function loadReviewData(typeCfg) {
   // short_film + films extend to M (subtitle cols); sichos extends to Q (length + cohort cols)
   let range;
   if (isSichos) range = `'${typeCfg.reviewTab}'!A:R`;
+  else if (isFilms) range = `'${typeCfg.reviewTab}'!A:O`;
   else if (hasSubtitleCols) range = `'${typeCfg.reviewTab}'!A:N`;
   else range = `'${typeCfg.reviewTab}'!A:L`;
   try {
@@ -2555,6 +2557,9 @@ async function loadReviewData(typeCfg) {
         titleOriginalBackup: isSichos ? (row[17] || '')
                             : hasSubtitleCols ? (row[13] || '')
                             : (row[11] || ''),
+        // AI Version One: the preserved first AI/imported draft (films only, col O / idx 14).
+        // Stored once and never auto-overwritten; user can restore it via the workstation button.
+        aiVersionOne: isFilms ? (row[14] || '') : '',
       };
       const id = row[0];
       const clip = bucket.clips?.find(c => String(c._rowNum) === id);
@@ -2600,7 +2605,11 @@ async function saveReviewRow(clip) {
     rd.draftUsedTranscript ? 'TRUE' : 'FALSE',
   ];
   let values, lastCol;
-  if (hasSubtitleCols) {
+  if (isFilms) {
+    // Films extend one column further than Short Film to hold the AI Version One slot
+    values = [[...baseValues, rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '', rd.titleOriginalBackup || '', rd.aiVersionOne || '']];
+    lastCol = 'O';
+  } else if (hasSubtitleCols) {
     values = [[...baseValues, rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '', rd.titleOriginalBackup || '']];
     lastCol = 'N';
   } else if (isSichos) {
@@ -3368,6 +3377,10 @@ async function loadAllData() {
     // Load film chapter order if film_chapter type has clips
     if (S.byType['film_chapter']?.clips?.length) {
       try { await ensureFilmOrderTab(); await loadFilmOrder(); } catch(e) { console.warn('Film order load failed:', e); }
+    }
+    // Load any imported film overviews and seed them into the Films bucket where missing.
+    if (S.byType['films']?.clips?.length) {
+      try { await loadFilmsImportedOverviews(); } catch(e) { console.warn('Films imported overviews load failed:', e); }
     }
     // After review data is loaded, set the "rewrite" field on each clip from current desc value
     Object.values(S.byType).forEach(bucket => {
@@ -6193,6 +6206,54 @@ function selectTypeView(typeKey, view) {
 // keyed by clip_id (row number). Default order = clip ID.
 let _filmOrderCache = null; // { rowNum: orderIndex } map after load
 const FILM_ORDER_TAB = 'Film Chapter Order';
+const FILMS_IMPORTED_OVERVIEWS_TAB = 'Films Imported Overviews';
+
+// Read the imported overviews tab. For each row, find the matching film in the Films bucket
+// (by title, case-insensitive trim match) and seed its AI Version One slot if not already set.
+// If the film has no current draft, also seed the live draft. Persists changes to the
+// Films Review Data tab so the user can keep working with the imported drafts.
+async function loadFilmsImportedOverviews() {
+  // Tab is optional — if it doesn't exist, silently skip.
+  const meta = await getSheetMeta();
+  const exists = meta.sheets?.some(s => s.properties.title === FILMS_IMPORTED_OVERVIEWS_TAB);
+  if (!exists) return;
+  const data = await sheetsGet(`'${FILMS_IMPORTED_OVERVIEWS_TAB}'!A:B`);
+  const rows = data.values || [];
+  if (rows.length < 2) return;
+  // Build a map: normalized film name → overview text
+  const importMap = {};
+  rows.slice(1).forEach(r => {
+    const name = (r[0] || '').toString().trim();
+    const ov = (r[1] || '').toString().trim();
+    if (!name || !ov) return;
+    importMap[name.toLowerCase()] = ov;
+  });
+  if (!Object.keys(importMap).length) return;
+
+  const films = S.byType['films']?.clips || [];
+  let seededCount = 0;
+  for (const film of films) {
+    const key = (film.title || film.filmName || '').toLowerCase().trim();
+    const imported = importMap[key];
+    if (!imported) continue;
+    const rd = S.byType['films'].reviewData[String(film._rowNum)] || {};
+    // Only seed if AI Version One is empty for this film — never overwrite an existing slot.
+    if (rd.aiVersionOne) continue;
+    // Persist via the standard review row save
+    setReviewField(film, 'aiVersionOne', imported);
+    // If there's no current draft, also seed the live draft so it shows in the box on open.
+    const hasDraft = !!(rd.draftText && rd.draftText.trim());
+    if (!hasDraft) {
+      setReviewField(film, 'draftText', imported);
+      setReviewField(film, 'status', 'draft');
+      setReviewField(film, 'draftModel', 'imported');
+      film._draft = imported;
+      film._draftSource = 'ai';
+    }
+    try { await saveReviewRow(film); seededCount++; } catch(e) { console.warn('Save imported overview failed for', film.title, e); }
+  }
+  if (seededCount) console.log(`[imports] Seeded ${seededCount} film overview(s) from "${FILMS_IMPORTED_OVERVIEWS_TAB}"`);
+}
 let _selectedFilm = null;
 
 async function ensureFilmOrderTab() {
@@ -6522,6 +6583,30 @@ function renderChapterRow(film, chapter, isExpanded, isIntro) {
   </div>`;
 }
 
+// Restore the preserved "AI Version One" overview into the live draft for a film. The slot
+// itself stays intact, so the button is still available afterward — the user can keep
+// regenerating with AI, then come back to the imported version at any point.
+async function useAIVersionOne(filmRowNum) {
+  const film = (S.byType['films']?.clips || []).find(c => c._rowNum === filmRowNum);
+  if (!film) return;
+  const aiV1 = getReviewField(film, 'aiVersionOne');
+  if (!aiV1) { showToast('No AI Version One available for this film', 'error'); return; }
+  const currentDraft = getReviewField(film, 'draftText') || film._draft || '';
+  if (currentDraft && currentDraft.trim() && currentDraft !== aiV1) {
+    if (!await jemConfirm('Replace the current draft with AI Version One?<br><br><span style="color:var(--tx3);font-size:12px">Any unsaved generated draft will be lost. The AI Version One slot stays intact so you can come back to it later.</span>')) return;
+  }
+  setReviewField(film, 'draftText', aiV1);
+  setReviewField(film, 'status', 'draft');
+  setReviewField(film, 'flagReason', '');
+  film._draft = aiV1;
+  film._draftSource = 'ai';
+  try {
+    await saveReviewRow(film);
+    renderFilmWorkstation();
+    showToast('Restored AI Version One', 'success');
+  } catch(e) { showToast('Save failed: ' + e.message, 'error'); }
+}
+
 // Mark a chapter as a Sicha — moves it to the Addresses queue + records in _TypeOverrides.
 // The chapter stays visible in the workstation (getOrderedChapters spans all buckets).
 async function treatChapterAsAddress(chapterRowNum) {
@@ -6598,6 +6683,9 @@ function renderInlineEditingSurface(clip) {
             <input type="checkbox" ${useT ? 'checked' : ''} onchange="toggleUseTranscript(${clip._rowNum})" style="margin:0;cursor:pointer;accent-color:var(--accent)">
             <span>Use transcript</span>
           </label>
+          ${clip.typeKey === 'films' && getReviewField(clip, 'aiVersionOne')
+            ? `<button class="btn btn-sm" onclick="useAIVersionOne(${clip._rowNum})" title="Restore the preserved first imported/AI overview into the draft box. Any current draft will be replaced.">↺ Use AI Version One</button>`
+            : ''}
           ${(activeBucket().rulesArr?.filter(r=>r.active).length||0) === 0
             ? `<button class="btn btn-sm" disabled title="No active rules — add rules first">✨ Generate (no rules)</button>`
             : `<button class="btn btn-sm btn-primary" onclick="regenerateClip(${clip._rowNum})">${hasDraft ? '🔄 Regenerate' : '✨ Generate'}</button>`}
