@@ -443,19 +443,18 @@
   .overall-type-card .otc-stat-num { font-weight: 600; color: var(--tx); font-size: 12px; }
 
 
-  /* Queue list collapse */
+  /* Queue list collapse — when collapsed the entire queue sidebar disappears since the
+     Hide/Show queue button is now in the top bar. No leftover strip. */
   #queueView.queue-list-collapsed .queue-sidebar {
-    flex: 0 0 56px; min-width: 56px; max-width: 56px;
+    flex: 0 0 0; min-width: 0; max-width: 0;
     overflow: hidden;
+    border: none;
+    padding: 0;
   }
   #queueView.queue-list-collapsed .queue-controls,
   #queueView.queue-list-collapsed .queue-list,
-  #queueView.queue-list-collapsed .queue-sidebar > *:not(.queue-collapse-bar) { display: none; }
-  #queueView.queue-list-collapsed .queue-collapse-bar {
-    flex-direction: column; padding: 14px 0; align-items: center;
-    writing-mode: vertical-rl; text-orientation: mixed;
-  }
-  #queueView.queue-list-collapsed .queue-collapse-label { display: block; }
+  #queueView.queue-list-collapsed .queue-collapse-bar,
+  #queueView.queue-list-collapsed .queue-sidebar > * { display: none; }
   .queue-collapse-bar {
     display: flex; align-items: center; justify-content: space-between;
     padding: 10px 14px; border-bottom: 1px solid var(--border);
