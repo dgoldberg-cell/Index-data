@@ -934,6 +934,26 @@
   }
   .subtitle-input:focus { box-shadow: var(--shadow-inner), 0 0 0 3px var(--accent-soft); }
 
+  /* Inline transcript viewer — collapsible panel near the draft box. Looks like a card,
+     scrolls inside itself so it doesn't push the editing surface off-screen. */
+  .inline-transcript-panel {
+    margin-top: 10px;
+    background: var(--bg2);
+    border-radius: var(--radius2);
+    box-shadow: var(--shadow-inner);
+    padding: 14px 18px;
+    max-height: 360px;
+    overflow-y: auto;
+  }
+  .inline-transcript-content {
+    font-family: 'Lora', 'Source Serif Pro', Georgia, serif;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--tx);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
   /* Title input — reads as prose by default. Hover/focus reveal it's editable
      without making it look like a noisy form input at rest. */
   .title-edit-input {
@@ -1338,7 +1358,16 @@
 
 <!-- TOP BAR -->
 <div id="topBar">
-  <button class="btn btn-sm" id="sidebarToggleBtn" onclick="toggleSidebar()" style="padding:6px 10px;font-size:14px;line-height:1" title="Toggle sidebar">☰</button>
+  <!-- Layout controls — Hide Sidebar and Hide Queue paired together top-left. Both buttons
+       update their labels to reflect the current state (Hide ↔ Show), so they're always clear. -->
+  <div class="topbar-layout-controls" style="display:flex;gap:6px;align-items:center;margin-right:8px">
+    <button class="btn btn-sm" id="sidebarToggleBtn" onclick="toggleSidebar()" title="Show or hide the left sidebar" style="padding:6px 10px;font-size:12px;display:flex;align-items:center;gap:5px;white-space:nowrap">
+      <span id="sidebarToggleIcon">◧</span> <span id="sidebarToggleLabel">Hide sidebar</span>
+    </button>
+    <button class="btn btn-sm" id="queueToggleBtn" onclick="toggleQueueList()" title="Show or hide the queue list (only visible when on a queue view)" style="padding:6px 10px;font-size:12px;display:flex;align-items:center;gap:5px;white-space:nowrap">
+      <span id="queueToggleIcon">▤</span> <span id="queueToggleLabel">Hide queue</span>
+    </button>
+  </div>
   <img id="topbarLogoImg" class="topbar-logo" alt="JEM">
   <div class="topbar-sep"></div>
   <div class="topbar-title">Summary Editor</div>
@@ -2089,8 +2118,31 @@ function silentRefreshIframe() {
 function toggleSidebar() {
   const shell = document.getElementById('appShell');
   shell.classList.toggle('sb-collapsed');
-  // Persist
-  localStorage.setItem('jem_cse_sb_collapsed', shell.classList.contains('sb-collapsed') ? '1' : '0');
+  const collapsed = shell.classList.contains('sb-collapsed');
+  localStorage.setItem('jem_cse_sb_collapsed', collapsed ? '1' : '0');
+  syncLayoutToggleLabels();
+}
+
+// Keep the Hide/Show button labels in sync with current state. Called after any layout
+// toggle, and at boot once the DOM is ready.
+function syncLayoutToggleLabels() {
+  const shell = document.getElementById('appShell');
+  const sbCollapsed = shell?.classList.contains('sb-collapsed');
+  const sbLabel = document.getElementById('sidebarToggleLabel');
+  const sbIcon = document.getElementById('sidebarToggleIcon');
+  if (sbLabel) sbLabel.textContent = sbCollapsed ? 'Show sidebar' : 'Hide sidebar';
+  if (sbIcon) sbIcon.textContent = sbCollapsed ? '▶' : '◧';
+  const qLabel = document.getElementById('queueToggleLabel');
+  const qIcon = document.getElementById('queueToggleIcon');
+  if (qLabel) qLabel.textContent = _queueCollapsed ? 'Show queue' : 'Hide queue';
+  if (qIcon) qIcon.textContent = _queueCollapsed ? '▶' : '▤';
+  // The "Hide queue" button only makes sense when the user is on a queue view —
+  // otherwise hide it so it doesn't confuse users on the Films workstation, Dashboard, etc.
+  const qBtn = document.getElementById('queueToggleBtn');
+  if (qBtn) {
+    const queueIsRelevant = S.currentView === 'queue';
+    qBtn.style.display = queueIsRelevant ? '' : 'none';
+  }
 }
 
 function startTokenAgeMonitor() {
@@ -3873,6 +3925,8 @@ function applyQueueCollapsed() {
   view.classList.toggle('queue-list-collapsed', _queueCollapsed);
   const btn = document.getElementById('queueCollapseBtn');
   if (btn) btn.textContent = _queueCollapsed ? '▸' : '◂';
+  // Sync the paired Hide-queue button in the top bar
+  syncLayoutToggleLabels();
 }
 
 function renderDetail() {
@@ -4097,6 +4151,14 @@ function renderDetail() {
       </div>
     </div>
     </div><!-- /.orig-draft-row -->
+
+    <!-- Inline transcript viewer — expand to view the full transcript while editing -->
+    <div style="margin-top:10px">
+      <button id="transcriptToggleBtn_${clip._rowNum}" class="btn btn-sm" onclick="toggleInlineTranscript(${clip._rowNum})" style="font-size:11.5px">📄 Show transcript</button>
+      <div id="transcriptPanel_${clip._rowNum}" class="inline-transcript-panel" style="display:none">
+        <div class="inline-transcript-content" id="transcriptContent_${clip._rowNum}">${S.transcriptLoaded[clip._rowNum] ? esc(S.transcriptLoaded[clip._rowNum]) : ''}</div>
+      </div>
+    </div>
 
     <div class="action-bar action-bar-standalone">
       <button class="btn btn-sm" onclick="revertClip(${clip._rowNum})">↩ Revert to Original</button>
@@ -4437,6 +4499,10 @@ function autoGrowTextarea(ta) {
 function jumpToDraftFromOriginal(rowNum, ev) {
   const clip = findClipByRow(rowNum);
   if (!clip) return;
+  // Find the textareas — they're the standard origTA_/draftTA_ pair for this row
+  const origTA = document.getElementById('origTA_' + rowNum);
+  const draftTA = document.getElementById('draftTA_' + rowNum);
+  if (!origTA || !draftTA) return;
   // Where did the user click? selectionStart on the readonly textarea = caret offset
   // (browsers honor this even when readonly; it's the "intent to edit there" signal we want)
   const caret = origTA.selectionStart ?? origTA.value.length;
@@ -4519,7 +4585,7 @@ function onDraftInput(rowNum) {
 // TRANSCRIPT
 // ══════════════════════════════════════════════
 async function loadTranscript(rowNum) {
-  const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
+  const clip = findClipByRow(rowNum);
   if (!clip) throw new Error('Clip not found');
   const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!AC${rowNum}:AC${rowNum}`);
   const transcript = data.values?.[0]?.[0] || '';
@@ -4528,6 +4594,41 @@ async function loadTranscript(rowNum) {
   }
   S.transcriptLoaded[rowNum] = transcript;
   return transcript;
+}
+
+// State: which clips have their inline transcript panel currently expanded
+const _transcriptExpanded = {};
+
+// Inline transcript viewer — expand/collapse the transcript right below the draft box.
+// Loads on demand the first time it's opened. Plays nicely with the "Use transcript" toggle
+// (which controls whether transcript is sent to the AI on generation).
+async function toggleInlineTranscript(rowNum) {
+  const panel = document.getElementById('transcriptPanel_' + rowNum);
+  const btn = document.getElementById('transcriptToggleBtn_' + rowNum);
+  if (!panel) return;
+  const isOpen = !!_transcriptExpanded[rowNum];
+  if (isOpen) {
+    _transcriptExpanded[rowNum] = false;
+    panel.style.display = 'none';
+    if (btn) btn.innerHTML = '📄 Show transcript';
+    return;
+  }
+  // Opening — load transcript if not yet cached
+  _transcriptExpanded[rowNum] = true;
+  panel.style.display = 'block';
+  if (btn) btn.innerHTML = '📄 Hide transcript';
+  if (!S.transcriptLoaded[rowNum]) {
+    const contentEl = document.getElementById('transcriptContent_' + rowNum);
+    if (contentEl) contentEl.innerHTML = '<em style="color:var(--tx4)">Loading transcript…</em>';
+    try {
+      await loadTranscript(rowNum);
+    } catch(e) {
+      if (contentEl) contentEl.innerHTML = `<em style="color:var(--red)">${esc(e.message)}</em>`;
+      return;
+    }
+  }
+  const contentEl = document.getElementById('transcriptContent_' + rowNum);
+  if (contentEl) contentEl.textContent = S.transcriptLoaded[rowNum] || '';
 }
 
 // ══════════════════════════════════════════════
@@ -6008,6 +6109,12 @@ function selectTypeView(typeKey, view) {
     S.rangeStart = 0;
   }
   _expandedTypes.add(typeKey);
+  // If the user is opening a Queue from the sidebar and the queue list is currently
+  // collapsed (Hide Queue mode), force it back on — they clearly want to see the queue.
+  if (view === 'queue' && _queueCollapsed) {
+    _queueCollapsed = false;
+    localStorage.setItem('jem_cse_queue_collapsed', '0');
+  }
   switchView(view, null);
 }
 
@@ -6424,6 +6531,14 @@ function renderInlineEditingSurface(clip) {
         <textarea id="draftTA_${clip._rowNum}" class="orig-text" data-row="${clip._rowNum}" oninput="onDraftInput(${clip._rowNum})" placeholder="Click ✨ Generate, or type a new ${clip.typeKey === 'films' ? 'overview' : 'description'} here.">${esc(draftValue)}</textarea>
         <div class="word-count" id="wc_${clip._rowNum}">${draftValue.trim() ? wcDraft + ' words' : ''}</div>
       </div>
+    </div>
+  </div>
+  <!-- Inline transcript viewer — expand/collapse below the draft box so you can reference
+       the transcript while typing without leaving the page. -->
+  <div style="margin-top:10px">
+    <button id="transcriptToggleBtn_${clip._rowNum}" class="btn btn-sm" onclick="toggleInlineTranscript(${clip._rowNum})" style="font-size:11.5px">📄 Show transcript</button>
+    <div id="transcriptPanel_${clip._rowNum}" class="inline-transcript-panel" style="display:none">
+      <div class="inline-transcript-content" id="transcriptContent_${clip._rowNum}">${S.transcriptLoaded[clip._rowNum] ? esc(S.transcriptLoaded[clip._rowNum]) : ''}</div>
     </div>
   </div>
   <div class="action-bar action-bar-standalone" style="margin-top:14px">
@@ -7589,6 +7704,9 @@ function switchView(view, btn, opts) {
   else if (view === 'notes') { document.getElementById('notesView').style.display = 'block'; renderNotesView(); }
   else if (view === 'typenotes') { document.getElementById('typeNotesView').style.display = 'block'; renderTypeNotesView(); }
   renderSidebar();
+  // Keep the top-bar layout buttons (Hide Sidebar / Hide Queue) labeled correctly,
+  // and hide the Hide-Queue button on views where it's irrelevant.
+  syncLayoutToggleLabels();
   // Push browser history state so back button works
   if (!opts || !opts.skipHistory) {
     const stateObj = { view, activeType: S.activeType, selectedIdx: S.selectedIdx, filter: S.filter };
