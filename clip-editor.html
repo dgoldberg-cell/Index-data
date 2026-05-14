@@ -4049,6 +4049,16 @@ function renderDetail() {
 
     ${status === 'flagged' ? `<div class="flag-banner"><div class="flag-icon">🚩</div><div><strong>Needs Attention:</strong> ${esc(flagReason)}<br><small>Use the AI chat below to provide more context, then regenerate.</small></div></div>` : ''}
 
+    <!-- Inline transcript viewer — sits above the editing surface so the user can refer
+         to the transcript while typing. Collapsed by default; expanded reveals the full
+         transcript inline with a Hide button to close. -->
+    <div style="margin-bottom:14px">
+      <button id="transcriptToggleBtn_${clip._rowNum}" class="btn btn-sm" onclick="toggleInlineTranscript(${clip._rowNum})" style="font-size:11.5px">📄 Show transcript</button>
+      <div id="transcriptPanel_${clip._rowNum}" class="inline-transcript-panel" style="display:none">
+        <div class="inline-transcript-content" id="transcriptContent_${clip._rowNum}">${S.transcriptLoaded[clip._rowNum] ? esc(S.transcriptLoaded[clip._rowNum]) : ''}</div>
+      </div>
+    </div>
+
     <div class="orig-draft-row">
       <div class="card">
         <div class="card-header" style="display:flex;align-items:center;gap:8px">
@@ -4150,14 +4160,6 @@ function renderDetail() {
       </div>
     </div>
     </div><!-- /.orig-draft-row -->
-
-    <!-- Inline transcript viewer — expand to view the full transcript while editing -->
-    <div style="margin-top:10px">
-      <button id="transcriptToggleBtn_${clip._rowNum}" class="btn btn-sm" onclick="toggleInlineTranscript(${clip._rowNum})" style="font-size:11.5px">📄 Show transcript</button>
-      <div id="transcriptPanel_${clip._rowNum}" class="inline-transcript-panel" style="display:none">
-        <div class="inline-transcript-content" id="transcriptContent_${clip._rowNum}">${S.transcriptLoaded[clip._rowNum] ? esc(S.transcriptLoaded[clip._rowNum]) : ''}</div>
-      </div>
-    </div>
 
     <div class="action-bar action-bar-standalone">
       <button class="btn btn-sm" onclick="revertClip(${clip._rowNum})">↩ Revert to Original</button>
@@ -6498,7 +6500,15 @@ function renderInlineEditingSurface(clip) {
   const hasDraft = !!(draftValue && draftValue.trim());
   const useT = !!_useTranscriptForClip[clip._rowNum];
   const wcDraft = wordCount(draftValue);
-  return `<div class="orig-draft-row">
+  return `<!-- Inline transcript viewer — sits above the editing surface so the user can
+       reference the transcript while typing. Collapsed by default. -->
+  <div style="margin-bottom:14px">
+    <button id="transcriptToggleBtn_${clip._rowNum}" class="btn btn-sm" onclick="toggleInlineTranscript(${clip._rowNum})" style="font-size:11.5px">📄 Show transcript</button>
+    <div id="transcriptPanel_${clip._rowNum}" class="inline-transcript-panel" style="display:none">
+      <div class="inline-transcript-content" id="transcriptContent_${clip._rowNum}">${S.transcriptLoaded[clip._rowNum] ? esc(S.transcriptLoaded[clip._rowNum]) : ''}</div>
+    </div>
+  </div>
+  <div class="orig-draft-row">
     <div class="card">
       <div class="card-header" style="display:flex;align-items:center;gap:8px">
         <span>Original ${clip.typeKey === 'films' ? 'Overview' : 'Description'}</span>
@@ -6530,14 +6540,6 @@ function renderInlineEditingSurface(clip) {
         <textarea id="draftTA_${clip._rowNum}" class="orig-text" data-row="${clip._rowNum}" oninput="onDraftInput(${clip._rowNum})" placeholder="Click ✨ Generate, or type a new ${clip.typeKey === 'films' ? 'overview' : 'description'} here.">${esc(draftValue)}</textarea>
         <div class="word-count" id="wc_${clip._rowNum}">${draftValue.trim() ? wcDraft + ' words' : ''}</div>
       </div>
-    </div>
-  </div>
-  <!-- Inline transcript viewer — expand/collapse below the draft box so you can reference
-       the transcript while typing without leaving the page. -->
-  <div style="margin-top:10px">
-    <button id="transcriptToggleBtn_${clip._rowNum}" class="btn btn-sm" onclick="toggleInlineTranscript(${clip._rowNum})" style="font-size:11.5px">📄 Show transcript</button>
-    <div id="transcriptPanel_${clip._rowNum}" class="inline-transcript-panel" style="display:none">
-      <div class="inline-transcript-content" id="transcriptContent_${clip._rowNum}">${S.transcriptLoaded[clip._rowNum] ? esc(S.transcriptLoaded[clip._rowNum]) : ''}</div>
     </div>
   </div>
   <div class="action-bar action-bar-standalone" style="margin-top:14px">
