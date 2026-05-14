@@ -4776,8 +4776,11 @@ async function evaluateAndDraft(clip, regenCount = 0, useTranscript = false) {
   // First pass: evaluate if description is sufficient — eval is deterministic-ish, lower temp.
   // Short-cohort clips skip this gate entirely — by definition they have a thin original, and
   // we want to draft regardless (the transcript fills in the substance).
+  // Film overviews also skip the gate: the original overview on the film row is often very
+  // short or empty, and the point of generating one is to BUILD a new overview from the
+  // aggregated chapter transcripts. The gate is irrelevant here.
   let evalResult = { ok: true };
-  if (!isShort) {
+  if (!isShort && clip.typeKey !== 'films') {
     const evalPrompt = `You are evaluating a video description to decide if it has enough content to rewrite as a 90-word summary.
 
 Description: "${clip.description}"
@@ -5125,8 +5128,14 @@ async function regenerateClip(rowNum) {
       if (clip.typeKey === 'sichos') applyLengthResult(clip, result.lengthResult, { silent: false });
     }
     await saveReviewRow(clip);
-    renderDetail();
-    renderQueue();
+    // Refresh whichever view is on screen. The workstation has its own render path that
+    // pulls draftText fresh from the review data; the queue uses renderDetail.
+    if (S.currentView === 'film_workstation') {
+      renderFilmWorkstation();
+    } else {
+      renderDetail();
+      renderQueue();
+    }
     updateAttentionCount();
   } catch(e) { showToast('AI error: ' + e.message, 'error'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = '🔄 Regenerate'; } }
