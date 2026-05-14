@@ -1934,10 +1934,11 @@ const DEFAULT_SHORT_COHORT_RULES = [
 //   scope: 'intro'     → the chapter marked as the film's intro (longer than a chapter line)
 // Rules without a scope apply to all generations for the Films type.
 const DEFAULT_FILMS_RULES = [
-  // Overview scope — long, narrative film summary (~60–100 words)
-  { category: 'Overview Voice', title: 'Frame the whole film', content: 'The overview is the only place a reader learns what the entire film is ABOUT before deciding whether to watch. Open with a single sentence that names the central subject — the question, story, or theme the film explores. Avoid generic openings like "This film follows…" or "A look at…". State the matter directly.', scope: 'overview', active: true },
-  { category: 'Overview Voice', title: '60–100 words, dense prose', content: 'Target 60–100 words. Write as polished article prose, not a synopsis. Every sentence should carry weight; cut scaffolding. Do NOT list the chapters — that\'s their job. Do NOT preview the conclusion — leave reasons to watch.', scope: 'overview', active: true },
-  { category: 'Overview Voice', title: 'Invite, do not summarize', content: 'The overview\'s job is to make a viewer want to watch — through subject and tone, not promotion. Avoid marketing language ("powerful", "captivating", "must-see"). Trust the material: a clear, accurate framing of what\'s inside is more inviting than adjectives.', scope: 'overview', active: true },
+  // Overview scope — 2–3 sentence general overview that gives the feel of the film
+  { category: 'Overview Voice', title: '2–3 sentences total', content: 'The overview is exactly 2 to 3 sentences. No more. It should give a general feel for what the film is about — not a synopsis, not a chapter list. A reader should finish it knowing the subject and tone, without knowing every plot beat.', scope: 'overview', active: true },
+  { category: 'Overview Voice', title: 'Open with the subject, not the format', content: 'Start with the central subject — the question, story, person, or theme. Do NOT open with "This film…", "In this film…", "A look at…", "A journey through…", "Explore…", or "Discover…". State the matter directly, as you would in conversation.', scope: 'overview', active: true },
+  { category: 'Overview Voice', title: 'Banned AI vocabulary', content: 'NEVER use these words or phrases — they are AI tells that immediately make writing sound machine-generated:\n• "deep dive", "deep look"\n• "discover", "explore", "uncover", "delve"\n• "join us", "embark on"\n• "powerful", "captivating", "compelling", "moving", "must-see", "remarkable", "inspiring"\n• "weaves together", "rich tapestry", "intricate"\n• "showcases", "highlights", "celebrates" (when used as filler)\n• "in a world where…" openings\n\nWrite as a thoughtful human editor would write. Plain, direct, specific.', scope: 'overview', active: true },
+  { category: 'Overview Voice', title: 'Give a feel, not a plot summary', content: 'The goal is to convey what the film FEELS like and what it\'s ABOUT — not to walk through what happens. Aim for the impression a viewer would have after finishing it. Stay general; specifics belong in chapter lines.', scope: 'overview', active: true },
 
   // Subtitle scope — 3–7 word evocative tagline
   { category: 'Subtitle Voice', title: '3–7 words, evocative not literal', content: 'Output ONE phrase, 3 to 7 words. Capture the essence — the emotional center or central idea — not a literal restatement of the title. No punctuation at the end. No quotes. No "A story of…" or "The journey of…" openings.', scope: 'subtitle', active: true },
@@ -3085,20 +3086,27 @@ async function loadRulesForType(typeCfg) {
       rows.push(...values);
       await sheetsSet(`'${tabName}'!A${startRow}:H${startRow + newRules.length - 1}`, values);
     }
-    // Films backfill: if the tab is empty of scope-tagged rules, seed the 10-rule starter set
-    if (typeCfg.key === 'films' && !bucket.rulesArr.some(r => r.scope)) {
-      const maxId = bucket.rulesArr.reduce((m, r) => Math.max(m, parseInt(r.id) || 0), 0);
-      const newRules = DEFAULT_FILMS_RULES.map((r, i) => ({
-        id: String(maxId + i + 1),
-        cohort: 'default',
-        transcriptOnly: false,
-        ...r,
-      }));
-      bucket.rulesArr.push(...newRules);
-      const values = newRules.map(nr => [nr.id, nr.category, nr.title, nr.content, nr.active ? 'TRUE' : 'FALSE', 'FALSE', 'default', nr.scope || '']);
-      const startRow = rows.length + 1;
-      rows.push(...values);
-      await sheetsSet(`'${tabName}'!A${startRow}:H${startRow + newRules.length - 1}`, values);
+    // Films backfill: ensures every default rule is present. If a default rule's title
+    // isn't in the existing rules, append it. This is idempotent — running it on a tab
+    // that already has all defaults is a no-op. Importantly, it does NOT overwrite
+    // existing rules (user edits are preserved); it only adds what's missing.
+    if (typeCfg.key === 'films') {
+      const existingTitles = new Set((bucket.rulesArr || []).map(r => (r.title || '').toLowerCase().trim()));
+      const missing = DEFAULT_FILMS_RULES.filter(r => !existingTitles.has((r.title || '').toLowerCase().trim()));
+      if (missing.length) {
+        const maxId = bucket.rulesArr.reduce((m, r) => Math.max(m, parseInt(r.id) || 0), 0);
+        const newRules = missing.map((r, i) => ({
+          id: String(maxId + i + 1),
+          cohort: 'default',
+          transcriptOnly: false,
+          ...r,
+        }));
+        bucket.rulesArr.push(...newRules);
+        const values = newRules.map(nr => [nr.id, nr.category, nr.title, nr.content, nr.active ? 'TRUE' : 'FALSE', 'FALSE', 'default', nr.scope || '']);
+        const startRow = rows.length + 1;
+        rows.push(...values);
+        await sheetsSet(`'${tabName}'!A${startRow}:H${startRow + newRules.length - 1}`, values);
+      }
     }
     // Short Films backfill: seed the subtitle starter rules if not present
     if (typeCfg.key === 'short_film' && !bucket.rulesArr.some(r => r.scope === 'subtitle')) {
@@ -4588,6 +4596,12 @@ function onDraftInput(rowNum) {
 async function loadTranscript(rowNum) {
   const clip = findClipByRow(rowNum);
   if (!clip) throw new Error('Clip not found');
+  // Films don't have their own transcripts on the film-entry row (column AC is typically
+  // empty there). Instead, aggregate the transcripts of all chapters in this film, in
+  // chapter order, with chapter headers so the AI can keep track of structure.
+  if (clip.typeKey === 'films') {
+    return await loadAggregatedFilmTranscript(rowNum);
+  }
   const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!AC${rowNum}:AC${rowNum}`);
   const transcript = data.values?.[0]?.[0] || '';
   if (!transcript || !transcript.trim()) {
@@ -4595,6 +4609,33 @@ async function loadTranscript(rowNum) {
   }
   S.transcriptLoaded[rowNum] = transcript;
   return transcript;
+}
+
+// Build a combined transcript for a whole film by concatenating its chapters' transcripts.
+// Each chapter is prefixed with a header line so structure is preserved for the AI.
+// Cached in S.transcriptLoaded under the film's row number.
+async function loadAggregatedFilmTranscript(filmRowNum) {
+  const film = (S.byType['films']?.clips || []).find(c => c._rowNum === filmRowNum);
+  if (!film) throw new Error('Film not found');
+  const chapters = getOrderedChapters(film.filmName);
+  if (!chapters.length) throw new Error('No chapters found for this film');
+  // Read column AC for every chapter row in a single batchGet to keep it fast even for
+  // films with many chapters.
+  const ranges = chapters.map(ch => `'${CONFIG.MAIN_TAB}'!AC${ch._rowNum}:AC${ch._rowNum}`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values:batchGet?` +
+    ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
+  const resp = await sheetsApiCall(url, { method: 'GET' });
+  const valueRanges = resp.valueRanges || [];
+  const parts = [];
+  chapters.forEach((ch, i) => {
+    const t = valueRanges[i]?.values?.[0]?.[0] || '';
+    if (!t || !t.trim()) return;
+    parts.push(`=== Chapter ${i + 1}: ${ch.title} ===\n${t.trim()}`);
+  });
+  if (!parts.length) throw new Error('None of this film\'s chapters have transcripts available');
+  const combined = parts.join('\n\n');
+  S.transcriptLoaded[filmRowNum] = combined;
+  return combined;
 }
 
 // State: which clips have their inline transcript panel currently expanded
@@ -4672,7 +4713,12 @@ function buildAIPrompt(clip, extraContext, useTranscript) {
     prompt += '\n\n---\n\nNow rewrite this summary:\n\n' + clip.description;
   }
 
-  if (transcript) prompt += '\n\n---\n\n' + (isShort ? 'TRANSCRIPT (source material — fill in supporting detail; do NOT summarize wholesale):\n' : 'Additional context from transcript:\n') + transcript.substring(0, 4000);
+  // Transcript inclusion: most clips cap at 4000 chars (single-clip transcript). Films
+  // get a much higher cap since their "transcript" is all chapters concatenated.
+  if (transcript) {
+    const capChars = clip.typeKey === 'films' ? 40000 : 4000;
+    prompt += '\n\n---\n\n' + (isShort ? 'TRANSCRIPT (source material — fill in supporting detail; do NOT summarize wholesale):\n' : 'Additional context from transcript:\n') + transcript.substring(0, capChars);
+  }
   if (extraContext) prompt += '\n\n---\n\nAdditional guidance: ' + extraContext;
   return prompt;
 }
@@ -4714,6 +4760,18 @@ async function evaluateAndDraft(clip, regenCount = 0, useTranscript = false) {
     }
   }
   if (isShort) useTranscript = true;
+
+  // Film overviews: when "Use transcript" is on but the aggregated transcript hasn't been
+  // built yet (user hasn't opened the inline transcript panel), auto-build it. This makes
+  // "Use transcript" actually do something for films instead of silently being a no-op.
+  if (clip.typeKey === 'films' && useTranscript && !S.transcriptLoaded[clip._rowNum]) {
+    try {
+      await loadTranscript(clip._rowNum);
+    } catch(e) {
+      // No chapter transcripts available — proceed without transcript rather than failing
+      console.warn('Film transcript aggregation failed:', e.message);
+    }
+  }
 
   // First pass: evaluate if description is sufficient — eval is deterministic-ish, lower temp.
   // Short-cohort clips skip this gate entirely — by definition they have a thin original, and
