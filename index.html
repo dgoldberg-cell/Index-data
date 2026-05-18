@@ -3481,6 +3481,18 @@ async function updateTagDesc(rowIdx,entryName,newDesc){
     let tag=kw.find(t=>t.name===entryName);
     if(!tag)tag=kw.find(t=>(t.name||'').trim()===entryName.trim());
     if(!tag)tag=kw.find(t=>(t.name||'').trim().toLowerCase()===entryName.trim().toLowerCase());
+    // Tag may have been renamed — main sheet still has the ORIGINAL name. Try originals that map to this current name.
+    if(!tag&&S.activeRenames){
+      const trimmedLower=entryName.trim().toLowerCase();
+      const originals=Object.keys(S.activeRenames).filter(orig=>{
+        const cur=S.activeRenames[orig];
+        return cur===entryName||cur.trim()===entryName.trim()||cur.trim().toLowerCase()===trimmedLower;
+      });
+      for(const orig of originals){
+        tag=kw.find(t=>t.name===orig)||kw.find(t=>(t.name||'').trim()===orig.trim())||kw.find(t=>(t.name||'').trim().toLowerCase()===orig.trim().toLowerCase());
+        if(tag)break;
+      }
+    }
     if(!tag){
       console.error('updateTagDesc: tag not found!',{entryName,availableTags:kw.map(t=>t.name)});
       toast('Tag "'+entryName+'" not found in row '+rowIdx+'. Tags: '+kw.map(t=>t.name).join(', '),'error');
@@ -6290,9 +6302,11 @@ function rTools(){
   if(isAdmin){
     const existingTabsForBackup=(S.sheetMeta?.tabs||[]).map(t=>t.title).filter(t=>t.startsWith(BACKUP_TAB_PREFIX));
     existingTabsForBackup.sort().reverse(); // most recent first
-    h+='<div class="card" style="margin-bottom:16px;border:1px solid #5a9e6f;background:#f3faf5"><h4 style="margin-bottom:8px">🛟 Daily Backups</h4>';
-    h+=`<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Automatic daily snapshots of <b>metadata</b> (notes, team, review status, activity log). Keeps a rolling ${BACKUP_MAX_DAYS}-day history. <i>Description text is NOT in these backups — use "Recover from Baseline" below for that.</i> <b>${existingTabsForBackup.length}</b> backup(s) available.</p>`;
+    h+='<div class="card" style="margin-bottom:16px;border:1px solid #c4a04a;background:#fdf8eb"><h4 style="margin-bottom:8px">🛟 Daily Backups <span style="font-size:11px;font-weight:normal;color:var(--tx-3)">(disabled)</span></h4>';
+    h+=`<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Daily backups are <b>no longer needed</b>. All data is now stored in dedicated per-row tabs: <code>_Notes</code>, <code>_Review</code>, <code>_Team</code>, <code>_Activity</code>, <code>_TagNameChanges</code>, <code>_SectionMoves</code>. Each edit is its own row, so wiping all data at once isn't possible the way it was with the old blob approach.</p>`;
+    h+=`<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Description recovery: see <b>Recover from Baseline</b> below. Individual row history: see the <code>_Activity</code> tab.</p>`;
     if(existingTabsForBackup.length){
+      h+=`<p style="font-size:11px;color:var(--tx-4);margin-bottom:8px"><b>${existingTabsForBackup.length}</b> historical backup tab(s) still exist if needed for emergency restore.</p>`;
       h+='<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;max-height:200px;overflow-y:auto">';
       existingTabsForBackup.forEach(tn=>{
         const d=parseBackupDate(tn);
@@ -6303,10 +6317,8 @@ function rTools(){
         h+=`</div>`;
       });
       h+='</div>';
-    }else{
-      h+='<p style="font-size:11px;color:var(--tx-4);margin-bottom:8px">No backups yet. One will be created on next sign-in.</p>';
     }
-    h+=`<button class="btn btn-sm" id="force-backup" style="font-size:11px">💾 Create Backup Now</button>`;
+    h+=`<button class="btn btn-sm" id="force-backup" style="font-size:11px">ℹ️ Why no backups?</button>`;
     h+='</div>';
   }
 
@@ -7108,7 +7120,7 @@ if(migRes&&migRes.status==='success'&&(migRes.report.notes||migRes.report.team||
   console.log('Migration complete:',migRes.report);
   toast(`Migrated ${migRes.report.notes} notes, ${migRes.report.team} team, ${migRes.report.activity} activity, ${migRes.report.review||0} review entries`,'success');
 }
-registerTeamMember();startAutoRefresh();render();runDailyBackupIfDue().then(res=>{if(res.status==='success')console.log('Daily backup created:',res.tabName);});if(!k)toast('Signed in without AI features. Add a code in settings to enable AI.','info')}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
+registerTeamMember();startAutoRefresh();render();if(!k)toast('Signed in without AI features. Add a code in settings to enable AI.','info')}catch(e){$('#se').textContent=e.message;$('#btn-con').textContent='Sign In';$('#btn-con').disabled=false}};
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -7372,34 +7384,7 @@ function bindAll(){
 
   // Backup handlers
   on('#force-backup','click',async()=>{
-    const btn=$('#force-backup');
-    if(btn){btn.disabled=true;btn.textContent='Creating…';}
-    try{
-      // Force: override the 20-hour throttle by deleting any existing backup for today first
-      const todayName=backupTabName(new Date());
-      const existing=(S.sheetMeta?.tabs||[]).find(t=>t.title===todayName);
-      if(existing){
-        try{
-          await gapi.client.sheets.spreadsheets.batchUpdate({
-            spreadsheetId:S.sheetId,
-            resource:{requests:[{deleteSheet:{sheetId:existing.sid}}]}
-          });
-          const m=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
-          S.sheetMeta={title:m.result.properties.title,tabs:m.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
-        }catch(_){}
-      }
-      const res=await runDailyBackupIfDue();
-      if(res.status==='success'){
-        toast(`Backup created: ${res.tabName}`,'success');
-        logActivity(`Manual backup created: ${res.tabName}`);
-        render();
-      }else if(res.status==='refused'){
-        toast('Backup refused: '+((res.losses||[]).join(', ')||'data-loss detected'),'error');
-      }else{
-        toast('Backup '+res.status+': '+(res.reason||res.error||'unknown'),'warn');
-      }
-    }catch(e){console.error('Force backup failed:',e);toast('Backup failed: '+(e?.message||e),'error')}
-    finally{if(btn){btn.disabled=false;btn.textContent='💾 Create Backup Now';}}
+    await customConfirm('Daily backups have been disabled.\n\nWith the new per-row architecture (notes, reviews, team, activity, renames, moves all in dedicated tabs), every edit is appended/upserted as its own row. Wiping all data at once isn\'t possible the way it was with the old blob approach.\n\nIndividual row recovery is still possible from the _Activity tab if needed.');
   });
   $$('[data-restorebackup]').forEach(el=>el.onclick=async()=>{
     const tabName=el.dataset.restorebackup;
@@ -9332,7 +9317,6 @@ window.addEventListener('resize',fixIdxScroll);
       await loadTab(0);
       registerTeamMember();
       startAutoRefresh();
-      runDailyBackupIfDue().then(res=>{if(res.status==='success')console.log('Daily backup created:',res.tabName);});
     }catch(e){
       console.log('Auto-reconnect failed, showing login:',e.message);
     }
