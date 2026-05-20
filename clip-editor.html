@@ -5913,10 +5913,12 @@ async function generateSheetExport() {
     // Approved By, Approved At.
     const isShortFilm = typeKey === 'short_film';
     const isFilmChapter = typeKey === 'film_chapter';
+    const isSichosExp = typeKey === 'sichos';
     const header = ['Thumbnail', 'Title'];
     if (isFilmChapter) header.push('Film', 'Chapter Title');
     else header.push('Program');
     if (isShortFilm) header.push('Subtitle');
+    if (isSichosExp) header.push('Event Type');
     header.push('New Description', 'Tags', 'Date', 'Duration', 'Watch URL', 'Approved By', 'Approved At');
 
     const rows = approved.map(clip => {
@@ -5934,6 +5936,9 @@ async function generateSheetExport() {
       }
       if (isShortFilm) {
         row.push(clip.subtitle || '');
+      }
+      if (isSichosExp) {
+        row.push((clip.eventTypes || []).join(', '));
       }
       row.push(
         summary,
@@ -6012,10 +6017,12 @@ function downloadCsv() {
   if (!approved.length) { showToast('No approved clips to export', 'error'); return; }
   const isShortFilm = typeKey === 'short_film';
   const isFilmChapter = typeKey === 'film_chapter';
+  const isSichosExp = typeKey === 'sichos';
   const header = ['Title'];
   if (isFilmChapter) header.push('Film', 'Chapter Title');
   else header.push('Program');
   if (isShortFilm) header.push('Subtitle');
+  if (isSichosExp) header.push('Event Type');
   header.push('New Description', 'Tags', 'Date', 'Duration', 'Watch URL');
   // CSV-escape: wrap in quotes if value contains comma, quote, or newline; double-up internal quotes
   const csvCell = (v) => {
@@ -6032,6 +6039,7 @@ function downloadCsv() {
     if (isFilmChapter) row.push(clip.filmName || '', clip.title || '');
     else row.push(clip.programNum ? 'LT ' + clip.programNum : '');
     if (isShortFilm) row.push(clip.subtitle || '');
+    if (isSichosExp) row.push((clip.eventTypes || []).join(', '));
     row.push(summary, tags, formatClipDate(clip.date), formatDuration(clip.durationMs), watchUrl);
     lines.push(row.map(csvCell).join(','));
   });
@@ -6049,10 +6057,12 @@ function exportHTML() {
   const rows = approved.map(clip => {
     const tags = parseTags(clip);
     const summary = clip.rewrite || clip.description || '';
+    const eventType = (clip.eventTypes || []).join(', ');
     return `<tr>
       <td><img src="${clip.thumbnail}" style="width:80px;height:52px;object-fit:cover;border-radius:4px"></td>
       <td>${clip.title}</td>
       <td>LT ${clip.programNum}</td>
+      <td>${eventType}</td>
       <td>${formatClipDate(clip.date)}</td>
       <td>${formatDuration(clip.durationMs)}</td>
       <td>${summary}</td>
@@ -6062,7 +6072,7 @@ function exportHTML() {
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>JEM Sichos Summaries Export</title>
 <style>body{font-family:Georgia,serif;padding:24px;background:#faf7f2}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d4c9b5;padding:8px;vertical-align:top;font-size:12px}th{background:#f0ece3;font-weight:bold}</style></head>
 <body><h1 style="font-size:20px;margin-bottom:16px">JEM Sichos Summaries — ${approved.length} clips</h1>
-<table><thead><tr><th>Thumb</th><th>Title</th><th>Program</th><th>Date</th><th>Duration</th><th>Summary</th><th>Tags</th></tr></thead>
+<table><thead><tr><th>Thumb</th><th>Title</th><th>Program</th><th>Event Type</th><th>Date</th><th>Duration</th><th>Summary</th><th>Tags</th></tr></thead>
 <tbody>${rows}</tbody></table></body></html>`;
   const blob = new Blob([html], { type: 'text/html' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -6103,7 +6113,7 @@ function renderBookView() {
           ${thumbHTML}
           <div class="book-entry-content">
             <div class="book-entry-title">${esc(clip.title)}</div>
-            <div class="book-entry-meta">LT ${esc(clip.programNum)}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ⏱ ' + esc(dur) : ''}</div>
+            <div class="book-entry-meta">LT ${esc(clip.programNum)}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ⏱ ' + esc(dur) : ''}${clip.typeKey === 'sichos' && clip.eventTypes && clip.eventTypes.length ? ' · ' + esc(clip.eventTypes.join(', ')) : ''}</div>
             <div class="book-entry-summary">${esc(summary)}</div>
             ${tags.length ? `<div class="book-entry-tags">${tags.map(t=>`<span class="book-tag">${esc(t)}</span>`).join('')}</div>` : ''}
           </div>
@@ -7152,7 +7162,7 @@ function renderFullBookView() {
             <div class="book-entry-content">
               ${clip.filmName ? `<div style="font-size:8px;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;font-weight:600">${esc(clip.filmName)}</div>` : ''}
               <div class="book-entry-title">${esc(clip.title)}</div>
-              <div class="book-entry-meta">${clip.programNum ? 'LT ' + esc(clip.programNum) : ''}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ' + esc(dur) : ''}</div>
+              <div class="book-entry-meta">${clip.programNum ? 'LT ' + esc(clip.programNum) : ''}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ' + esc(dur) : ''}${clip.typeKey === 'sichos' && clip.eventTypes && clip.eventTypes.length ? ' · ' + esc(clip.eventTypes.join(', ')) : ''}</div>
               <div class="book-entry-summary">${esc(summary)}</div>
               ${tags.length ? `<div class="book-entry-tags">${tags.map(tg=>`<span class="book-tag">${esc(tg)}</span>`).join('')}</div>` : ''}
             </div>
