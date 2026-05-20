@@ -593,6 +593,18 @@
   .detail-title { font-family: var(--font-serif); font-size: 24px; color: var(--tx); line-height: 1.2; margin-bottom: 8px; font-weight: 500; letter-spacing: -0.3px; }
   .detail-meta-row { font-size: 12.5px; color: var(--tx3); display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
   .detail-meta-item { display: flex; align-items: center; gap: 5px; font-weight: 500; }
+  /* Event-type badge (Sichos only) — shows the kind of event the clip is from
+     (e.g. "Farbrengen", "Children's Rally"). Parsed from column C JSON. */
+  .event-type-badge {
+    background: #EDE2C9;
+    color: #6B5230;
+    padding: 3px 11px;
+    border-radius: var(--radius-pill);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    box-shadow: var(--shadow-inner);
+  }
 
   /* Cards — claymorphic */
   .card {
@@ -1746,6 +1758,7 @@ const CONFIG = {
   COL: {
     DESCRIPTION_A: 0, // A - sometimes the description lives here
     DURATION: 1,      // B - duration in milliseconds
+    EVENTS: 2,        // C - JSON array of event objects: [{id, name, type, description}, ...]
     CLIP_ID: 3,       // D - clip ID for video URL
     THUMBNAIL: 4,     // E
     KEYWORDS: 6,      // G
@@ -3369,6 +3382,28 @@ async function loadAllData() {
       if (tCfg.key === 'short_film' || tCfg.key === 'films') {
         clip.subtitle = (row[CONFIG.COL.SUBTITLE] || '').toString().trim();
       }
+      // Sichos (Addresses): parse the event-type JSON in column C. The column holds an
+      // array like [{"id":4296,"name":"Farbrengen, Yud Tes Kislev, 5744","type":"Farbrengen",...}].
+      // We only display the `type` field (e.g. "Farbrengen", "Children's Rally") near the
+      // clip title in the detail header.
+      if (tCfg.key === 'sichos') {
+        const raw = (row[CONFIG.COL.EVENTS] || '').toString().trim();
+        clip.eventTypes = [];
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            const arr = Array.isArray(parsed) ? parsed : [parsed];
+            // Collect unique non-empty types, preserving first-seen order
+            const seen = new Set();
+            arr.forEach(ev => {
+              const t = (ev?.type || '').toString().trim();
+              if (t && !seen.has(t)) { seen.add(t); clip.eventTypes.push(t); }
+            });
+          } catch (e) {
+            // Malformed JSON — silently skip rather than poison the whole load
+          }
+        }
+      }
       // Films: also capture the film_id explicitly so chapter rows can be linked to it
       if (tCfg.key === 'films') {
         clip.filmId = (row[CONFIG.COL.FILM_ID] || '').toString().trim();
@@ -4039,6 +4074,9 @@ function renderDetail() {
         <div class="detail-meta-row" style="margin-bottom:10px">
           ${formattedDate ? `<span class="detail-meta-item" style="font-size:13px;color:var(--tx2)">${esc(formattedDate)}</span>` : ''}
           ${clip.programNum ? `<span class="detail-meta-item">LT ${esc(clip.programNum)}</span>` : ''}
+          ${clip.typeKey === 'sichos' && clip.eventTypes && clip.eventTypes.length
+            ? clip.eventTypes.map(t => `<span class="detail-meta-item event-type-badge" title="Event type — from column C of the main sheet">${esc(t)}</span>`).join('')
+            : ''}
           <span class="detail-meta-item">${statusBadgeHTML(status)}</span>
           ${(() => {
             // Length-flag badge for sichos: shown when trim-to-length failed
