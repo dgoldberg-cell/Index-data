@@ -374,6 +374,13 @@
     border-left: 4px solid #6B7DAA;
     background: linear-gradient(to right, rgba(107,125,170,0.08) 0%, var(--panel) 60%);
   }
+  /* Duplicate chapter — faded, leftbar in warm tone matching the duplicate badge */
+  .fw-chapter-row.is-duplicate {
+    opacity: 0.55;
+    border-left: 4px solid #B89968;
+  }
+  .fw-chapter-row.is-duplicate:hover { opacity: 0.85; }
+  .fw-chapter-row.is-duplicate.expanded { opacity: 1; }
   .fw-chapters-controls {
     display: flex; align-items: center; gap: 10px;
     margin-bottom: 14px; flex-wrap: wrap;
@@ -1079,6 +1086,29 @@
   .book-entry-content { flex: 1; }
   .book-entry-title { font-size: 11px; font-weight: bold; color: var(--tx); margin-bottom: 3px; line-height: 1.3; }
   .book-entry-meta { font-size: 9px; color: var(--tx3); margin-bottom: 6px; }
+  /* Duplicate badge — shown in the detail header when a clip is marked as a duplicate */
+  .duplicate-badge {
+    background: #E8DACA;
+    color: #6B5230;
+    padding: 4px 12px;
+    border-radius: var(--radius-pill);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    box-shadow: var(--shadow-inner);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 320px;
+  }
+  /* Queue list item: when this clip is a duplicate, fade it visually so users see at a
+     glance that it's been deferred from the normal workflow. */
+  .queue-item.queue-item-duplicate { opacity: 0.62; }
+  .queue-item.queue-item-duplicate .queue-item-title::after {
+    content: ' 🔁';
+    font-size: 0.85em;
+    opacity: 0.7;
+  }
   /* Featured people line in Book View — prominent, distinct from regular meta */
   .book-entry-featured {
     font-size: 11px;
@@ -1674,6 +1704,7 @@
           <button class="filter-chip" data-status="flagged" onclick="setFilter('flagged',this)">Flagged</button>
           <button class="filter-chip" data-status="draft" onclick="setFilter('draft',this)">Draft</button>
           <button class="filter-chip" data-status="approved" onclick="setFilter('approved',this)">Approved</button>
+          <button class="filter-chip" data-status="duplicate" onclick="setFilter('duplicate',this)" title="Clips marked as duplicates of another clip — excluded from the usual workflow queues">🔁 Duplicates</button>
         </div>
         <div id="rangeRow" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--border);padding-top:8px;">
           <span style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-right:2px">Range:</span>
@@ -2515,34 +2546,25 @@ async function ensureReviewTab(typeCfg) {
   const tabName = typeCfg.reviewTab;
   const baseHeader = ['clip_id','status','original_backup','flag_reason','approved_by','approved_at','draft_text','chat_history','desc_source_col','draft_model','draft_used_transcript'];
   let fullHeader, lastCol;
+  // duplicate_of + duplicate_note are appended to EVERY type's schema. They're added at the
+  // end so the existing per-type column indices stay stable. duplicate_of: clip_id of the
+  // canonical (non-duplicate) clip OR free-text reference. duplicate_note: optional
+  // annotation. Non-empty duplicate_of marks the clip as a duplicate.
   if (typeCfg.key === 'short_film') {
-    fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current', 'title_original_backup'];
-    lastCol = 'N';
+    fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current', 'title_original_backup', 'duplicate_of', 'duplicate_note'];
+    lastCol = 'P';
   } else if (typeCfg.key === 'films') {
-    // Films: same as Short Film (subtitle backup + current), plus title_original_backup, plus
-    // ai_version_one — a preserved first AI/imported draft that the user can restore at any
-    // time via the "↺ Use AI Version One" button on the film overview surface.
-    fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current', 'title_original_backup', 'ai_version_one'];
-    lastCol = 'O';
+    fullHeader = [...baseHeader, 'subtitle_original_backup', 'subtitle_current', 'title_original_backup', 'ai_version_one', 'duplicate_of', 'duplicate_note'];
+    lastCol = 'Q';
   } else if (typeCfg.key === 'sichos') {
-    // length_flag/length_flag_wc: trim FAILURE state (persisted for queue badges + attention).
-    // length_action/length_input_wc/length_output_wc: SUCCESS metadata for the provenance line.
-    // cohort_used: which rule cohort produced the draft ('default' or 'short') — drives the
-    // 🪶 Short-clip badge in the provenance line so reviewers can see at a glance which
-    // strategy this draft was generated under.
-    // title_original_backup: original title from main sheet col J, backed up once when the
-    // user first edits the title via the workstation UI.
-    fullHeader = [...baseHeader, 'length_flag', 'length_flag_wc', 'length_action', 'length_input_wc', 'length_output_wc', 'cohort_used', 'title_original_backup'];
-    lastCol = 'R';
+    fullHeader = [...baseHeader, 'length_flag', 'length_flag_wc', 'length_action', 'length_input_wc', 'length_output_wc', 'cohort_used', 'title_original_backup', 'duplicate_of', 'duplicate_note'];
+    lastCol = 'T';
   } else if (typeCfg.key === 'conversations' || typeCfg.key === 'my_encounter') {
-    // Conversations + My Encounter add a "Featured People" field at the top of the clip
-    // (interviewee / in-conversation-with names). User-editable, with backup column for
-    // restoring the auto-derived value.
-    fullHeader = [...baseHeader, 'title_original_backup', 'featured_people_backup', 'featured_people_current'];
-    lastCol = 'N';
+    fullHeader = [...baseHeader, 'title_original_backup', 'featured_people_backup', 'featured_people_current', 'duplicate_of', 'duplicate_note'];
+    lastCol = 'P';
   } else {
-    fullHeader = [...baseHeader, 'title_original_backup'];
-    lastCol = 'L';
+    fullHeader = [...baseHeader, 'title_original_backup', 'duplicate_of', 'duplicate_note'];
+    lastCol = 'N';
   }
   const meta = await getSheetMeta();
   const exists = meta.sheets?.some(s => s.properties.title === tabName);
@@ -2576,20 +2598,33 @@ async function loadReviewData(typeCfg) {
   const isFilms = typeCfg.key === 'films';
   const isConvOrEnc = typeCfg.key === 'conversations' || typeCfg.key === 'my_encounter';
   const hasSubtitleCols = isShortFilm || isFilms; // both have subtitle backup + current in cols L,M
-  // short_film + films extend to N (subtitle + title cols); films extends to O (ai_version_one);
-  // sichos extends to R (length + cohort cols); conversations + my_encounter extend to N
-  // (title backup + featured_people backup + current).
+  // short_film extends to P (subtitle + title + duplicate cols); films extends to Q (+ ai_version_one);
+  // sichos extends to T (length + cohort + title + duplicate); conv/my_enc extend to P
+  // (title backup + featured_people + duplicate); others extend to N (title + duplicate).
   let range;
-  if (isSichos) range = `'${typeCfg.reviewTab}'!A:R`;
-  else if (isFilms) range = `'${typeCfg.reviewTab}'!A:O`;
-  else if (hasSubtitleCols) range = `'${typeCfg.reviewTab}'!A:N`;
-  else if (isConvOrEnc) range = `'${typeCfg.reviewTab}'!A:N`;
-  else range = `'${typeCfg.reviewTab}'!A:L`;
+  if (isSichos) range = `'${typeCfg.reviewTab}'!A:T`;
+  else if (isFilms) range = `'${typeCfg.reviewTab}'!A:Q`;
+  else if (hasSubtitleCols) range = `'${typeCfg.reviewTab}'!A:P`;
+  else if (isConvOrEnc) range = `'${typeCfg.reviewTab}'!A:P`;
+  else range = `'${typeCfg.reviewTab}'!A:N`;
   try {
     const data = await sheetsGet(range);
     const rows = data.values || [];
     rows.slice(1).forEach(row => {
       if (!row[0]) return;
+      // Per-type column indices for the new duplicate fields:
+      //   short_film: O=14, P=15
+      //   films:      P=15, Q=16
+      //   sichos:     S=18, T=19
+      //   conv/my_enc:O=14, P=15
+      //   others:     M=12, N=13
+      let dupOfIdx, dupNoteIdx;
+      if (isSichos) { dupOfIdx = 18; dupNoteIdx = 19; }
+      else if (isFilms) { dupOfIdx = 15; dupNoteIdx = 16; }
+      else if (hasSubtitleCols) { dupOfIdx = 14; dupNoteIdx = 15; }
+      else if (isConvOrEnc) { dupOfIdx = 14; dupNoteIdx = 15; }
+      else { dupOfIdx = 12; dupNoteIdx = 13; }
+
       bucket.reviewData[row[0]] = {
         status: row[1] || 'unprocessed',
         originalBackup: row[2] || '',
@@ -2612,20 +2647,16 @@ async function loadReviewData(typeCfg) {
         lengthOutputWc: isSichos ? (parseInt(row[15]) || 0) : 0,
         // Sichos: which rule cohort produced this draft ('default' or 'short')
         cohortUsed: isSichos ? (row[16] || '') : '',
-        // Title backup: written once when the title is first edited. Column index varies:
-        //   Sichos col R (idx 17), short_film/films col N (idx 13), conv/my_enc col L (idx 11), others col L (idx 11).
         titleOriginalBackup: isSichos ? (row[17] || '')
                             : hasSubtitleCols ? (row[13] || '')
                             : (row[11] || ''),
-        // AI Version One: the preserved first AI/imported draft (films only, col O / idx 14).
-        // Stored once and never auto-overwritten; user can restore it via the workstation button.
         aiVersionOne: isFilms ? (row[14] || '') : '',
-        // Featured People: backup + current (conversations + my_encounter only).
-        // featuredPeopleBackup → col M (idx 12) — written once when the field is first edited
-        //   (holds the original auto-derived value as backup).
-        // featuredPeopleCurrent → col N (idx 13) — the current saved value, may be edited.
         featuredPeopleBackup: isConvOrEnc ? (row[12] || '') : '',
         featuredPeopleCurrent: isConvOrEnc ? (row[13] || '') : '',
+        // Duplicate marking: duplicateOf = canonical clip_id OR free-text reference; non-empty
+        // means this clip is a duplicate. duplicateNote = optional annotation.
+        duplicateOf: row[dupOfIdx] || '',
+        duplicateNote: row[dupNoteIdx] || '',
       };
       const id = row[0];
       const clip = bucket.clips?.find(c => String(c._rowNum) === id);
@@ -2673,14 +2704,16 @@ async function saveReviewRow(clip) {
     rd.draftUsedTranscript ? 'TRUE' : 'FALSE',
   ];
   const isConvOrEnc = typeCfg.key === 'conversations' || typeCfg.key === 'my_encounter';
+  // Duplicate-marking fields appended to EVERY type's row
+  const dupOf = rd.duplicateOf || '';
+  const dupNote = rd.duplicateNote || '';
   let values, lastCol;
   if (isFilms) {
-    // Films extend one column further than Short Film to hold the AI Version One slot
-    values = [[...baseValues, rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '', rd.titleOriginalBackup || '', rd.aiVersionOne || '']];
-    lastCol = 'O';
+    values = [[...baseValues, rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '', rd.titleOriginalBackup || '', rd.aiVersionOne || '', dupOf, dupNote]];
+    lastCol = 'Q';
   } else if (hasSubtitleCols) {
-    values = [[...baseValues, rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '', rd.titleOriginalBackup || '']];
-    lastCol = 'N';
+    values = [[...baseValues, rd.subtitleOriginalBackup || '', rd.subtitleCurrent || '', rd.titleOriginalBackup || '', dupOf, dupNote]];
+    lastCol = 'P';
   } else if (isSichos) {
     values = [[...baseValues,
       rd.lengthFlag || '',
@@ -2690,16 +2723,15 @@ async function saveReviewRow(clip) {
       rd.lengthOutputWc ? String(rd.lengthOutputWc) : '',
       rd.cohortUsed || '',
       rd.titleOriginalBackup || '',
+      dupOf, dupNote,
     ]];
-    lastCol = 'R';
+    lastCol = 'T';
   } else if (isConvOrEnc) {
-    // Conv/My Encounter: title_backup at col L (idx 11), featured_people_backup at M (idx 12),
-    // featured_people_current at N (idx 13)
-    values = [[...baseValues, rd.titleOriginalBackup || '', rd.featuredPeopleBackup || '', rd.featuredPeopleCurrent || '']];
-    lastCol = 'N';
+    values = [[...baseValues, rd.titleOriginalBackup || '', rd.featuredPeopleBackup || '', rd.featuredPeopleCurrent || '', dupOf, dupNote]];
+    lastCol = 'P';
   } else {
-    values = [[...baseValues, rd.titleOriginalBackup || '']];
-    lastCol = 'L';
+    values = [[...baseValues, rd.titleOriginalBackup || '', dupOf, dupNote]];
+    lastCol = 'N';
   }
   if (sheetRow > 0) {
     await sheetsSet(`'${typeCfg.reviewTab}'!A${sheetRow}:${lastCol}${sheetRow}`, values);
@@ -2926,6 +2958,176 @@ async function loadTypeOverrides() {
 }
 
 // Move a clip from its current bucket to a different one, persisting the override.
+// ══════════════════════════════════════════════
+// DUPLICATE MARKING (cross-type)
+// ══════════════════════════════════════════════
+// Mark a clip as a duplicate of another clip. The "duplicate of" reference can be:
+//   - A clip_id picked from the same-type dropdown (preferred — proper cross-reference)
+//   - Or free-text (e.g. "LT 245 around 18 min" if the canonical isn't in the workspace)
+// Plus an optional free-text note for additional context.
+//
+// Mutual exclusivity rule: duplicate marking REPLACES draft/unprocessed/flagged status as the
+// effective filter. A clip can be both approved AND a duplicate (e.g. approved before being
+// discovered as a dup), but cannot be both draft/unprocessed/flagged AND a duplicate at the
+// same time — for those statuses, the duplicate filter wins.
+
+function openDuplicatesQueue(typeKey) {
+  S.activeType = typeKey;
+  localStorage.setItem('jem_cse_active_type', typeKey);
+  S.filter = 'duplicate';
+  S.selectedIdx = null;
+  S.rangeStart = 0;
+  _expandedTypes.add(typeKey);
+  // Force the queue list visible — same pattern as selectTypeView
+  if (_queueCollapsed) {
+    _queueCollapsed = false;
+    localStorage.setItem('jem_cse_queue_collapsed', '0');
+  }
+  switchView('queue', null);
+  // Sync the filter chip UI
+  setTimeout(() => {
+    const chips = document.querySelectorAll('#filterRow .filter-chip');
+    chips.forEach(ch => {
+      ch.classList.toggle('active', ch.dataset.status === 'duplicate');
+    });
+  }, 0);
+}
+
+async function openDuplicateDialog(rowNum) {
+  const clip = findClipByRow(rowNum);
+  if (!clip) return;
+  const bucket = S.byType[clip.typeKey];
+  if (!bucket) return;
+  // Build candidate list — all OTHER clips of the same type, sorted by program number.
+  // Exclude the current clip and any already-duplicate clips (no chained duplicates).
+  const candidates = bucket.clips
+    .filter(c => c._rowNum !== rowNum && !isDuplicate(c))
+    .sort((a, b) => {
+      const an = parseInt(String(a.programNum || '').match(/(\d+)/)?.[1]) || 9999;
+      const bn = parseInt(String(b.programNum || '').match(/(\d+)/)?.[1]) || 9999;
+      if (an !== bn) return an - bn;
+      return (a.title || '').localeCompare(b.title || '');
+    });
+
+  // Build a modal body. Two options:
+  //   1) Pick from the dropdown (clip_id reference)
+  //   2) OR free-text reference (for things not in the workspace, e.g. "LT 245 ~18 min")
+  // Plus optional note. The dropdown is searchable by title or program number.
+  const modal = document.createElement('div');
+  modal.className = 'jem-modal-overlay';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(28,22,12,0.55);backdrop-filter:blur(3px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div class="jem-modal" style="background:var(--panel);border-radius:var(--radius2);box-shadow:0 24px 64px rgba(0,0,0,0.3);max-width:560px;width:100%;padding:28px;max-height:90vh;overflow:auto">
+      <h2 style="margin:0 0 6px 0;font-family:var(--font-serif);font-size:22px;color:var(--tx)">🔁 Mark as duplicate</h2>
+      <p style="margin:0 0 18px 0;color:var(--tx3);font-size:13px;line-height:1.5">
+        This clip — <strong style="color:var(--tx)">${esc(clip.title || '(untitled)')}</strong>${clip.programNum ? ` (LT ${esc(clip.programNum)})` : ''} — will be moved to the Duplicates queue. Choose the canonical version below.
+      </p>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:6px">Pick the canonical clip (same type)</label>
+        <input type="text" id="dupPickerSearch" placeholder="Filter by title or program number…" oninput="filterDupPicker()" style="width:100%;font-size:13px;padding:8px 12px;border:none;border-radius:var(--radius);background:#FAF6EC;box-shadow:var(--shadow-inner);outline:none;font-family:inherit;color:var(--tx);margin-bottom:6px">
+        <div id="dupPickerList" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2)">
+          ${candidates.map(c => {
+            const label = `${c.programNum ? 'LT ' + c.programNum + ' — ' : ''}${c.title || '(untitled)'}`;
+            return `<div class="dup-picker-item" data-clipid="${esc(String(c.clipId || c._rowNum))}" data-label="${esc(label.toLowerCase())}" onclick="selectDupCandidate('${esc(String(c.clipId || c._rowNum))}', this)" style="padding:7px 12px;cursor:pointer;font-size:12.5px;color:var(--tx2);border-bottom:1px solid var(--border-soft, var(--border))">${esc(label)}</div>`;
+          }).join('')}
+          ${!candidates.length ? '<div style="padding:14px;color:var(--tx4);font-size:12px;text-align:center">No other clips of this type to choose from</div>' : ''}
+        </div>
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:6px">— or — Free-text reference</label>
+        <input type="text" id="dupFreeText" placeholder="e.g. LT 245, around 18 minute mark" style="width:100%;font-size:13px;padding:8px 12px;border:none;border-radius:var(--radius);background:#FAF6EC;box-shadow:var(--shadow-inner);outline:none;font-family:inherit;color:var(--tx)">
+        <div style="font-size:11px;color:var(--tx4);margin-top:4px">Use this if the canonical version isn't in the workspace, or for any other reference text.</div>
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:6px">Optional note</label>
+        <input type="text" id="dupNote" placeholder="Anything extra worth recording…" style="width:100%;font-size:13px;padding:8px 12px;border:none;border-radius:var(--radius);background:#FAF6EC;box-shadow:var(--shadow-inner);outline:none;font-family:inherit;color:var(--tx)">
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-sm" onclick="closeDupDialog()">Cancel</button>
+        <button class="btn btn-sm btn-primary" id="dupConfirmBtn" onclick="confirmMarkDuplicate(${rowNum})">🔁 Mark as duplicate</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal._jemDupDialog = true;
+  window._dupModal = modal;
+  window._dupSelectedClipId = '';
+  setTimeout(() => document.getElementById('dupPickerSearch')?.focus(), 50);
+}
+
+function filterDupPicker() {
+  const q = (document.getElementById('dupPickerSearch')?.value || '').toLowerCase().trim();
+  const items = document.querySelectorAll('.dup-picker-item');
+  items.forEach(it => {
+    const matches = !q || it.dataset.label.includes(q);
+    it.style.display = matches ? '' : 'none';
+  });
+}
+
+function selectDupCandidate(clipId, el) {
+  window._dupSelectedClipId = clipId;
+  document.querySelectorAll('.dup-picker-item').forEach(it => {
+    it.style.background = '';
+    it.style.color = '';
+  });
+  if (el) {
+    el.style.background = 'var(--accent-light)';
+    el.style.color = 'var(--accent2)';
+    el.style.fontWeight = '600';
+  }
+  // Clear the free-text so the user's intent is unambiguous
+  const ft = document.getElementById('dupFreeText');
+  if (ft) ft.value = '';
+}
+
+function closeDupDialog() {
+  if (window._dupModal) { window._dupModal.remove(); window._dupModal = null; }
+  window._dupSelectedClipId = '';
+}
+
+async function confirmMarkDuplicate(rowNum) {
+  const clip = findClipByRow(rowNum);
+  if (!clip) return;
+  const pickedClipId = window._dupSelectedClipId || '';
+  const freeText = (document.getElementById('dupFreeText')?.value || '').trim();
+  const note = (document.getElementById('dupNote')?.value || '').trim();
+  // Free-text wins if both provided AND user typed in free-text after picking
+  const dupOf = freeText || pickedClipId;
+  if (!dupOf) {
+    showToast('Pick a canonical clip OR enter a free-text reference', 'error');
+    return;
+  }
+  closeDupDialog();
+  showLoading('Marking duplicate…');
+  try {
+    setReviewField(clip, 'duplicateOf', dupOf);
+    setReviewField(clip, 'duplicateNote', note);
+    await saveReviewRow(clip);
+    hideLoading();
+    renderDetail();
+    renderQueue();
+    renderSidebar();
+    showToast('Marked as duplicate ✓', 'success');
+  } catch(e) { hideLoading(); showToast('Save failed: ' + e.message, 'error'); }
+}
+
+async function unmarkDuplicate(rowNum) {
+  const clip = findClipByRow(rowNum);
+  if (!clip) return;
+  if (!await jemConfirm('Restore this clip to the normal workflow?<br><br><span style="color:var(--tx3);font-size:12px">The duplicate reference will be cleared. The clip will reappear in whichever queue its status puts it in (Unprocessed / Draft / Approved / etc).</span>', { okLabel: 'Restore' })) return;
+  showLoading('Restoring…');
+  try {
+    setReviewField(clip, 'duplicateOf', '');
+    setReviewField(clip, 'duplicateNote', '');
+    await saveReviewRow(clip);
+    hideLoading();
+    renderDetail();
+    renderQueue();
+    renderSidebar();
+    showToast('Restored to normal queue', 'success');
+  } catch(e) { hideLoading(); showToast('Save failed: ' + e.message, 'error'); }
+}
+
 async function moveClipToType(rowNum, targetTypeKey) {
   const clip = activeBucket().clips.find(c => c._rowNum === rowNum);
   if (!clip) return;
@@ -3736,6 +3938,15 @@ function getReviewField(clip, field) {
   return bucket.reviewData[String(clip._rowNum)]?.[field] || '';
 }
 
+// True if this clip has been marked as a duplicate of another clip.
+// Duplicate marking is orthogonal to status — a clip can be both "approved" AND a duplicate
+// (rare but possible — e.g. it was approved before being discovered as a dup). But for queue
+// routing, duplicate ALWAYS wins over unprocessed/draft/flagged: those queues exclude dups,
+// and the Duplicates queue lists them instead.
+function isDuplicate(clip) {
+  return !!getReviewField(clip, 'duplicateOf');
+}
+
 function setReviewField(clip, field, val) {
   const bucket = S.byType[clip.typeKey];
   if (!bucket) return;
@@ -3796,7 +4007,21 @@ function allMatchingClips() {
       return S.lengthFilter === 'gte70' ? wc >= 70 : wc < 70;
     });
   }
-  if (S.filter !== 'all') clips = clips.filter(c => getStatus(c) === S.filter);
+  if (S.filter !== 'all') {
+    // Special filter: 'duplicate' shows only clips marked as duplicates (regardless of underlying status)
+    if (S.filter === 'duplicate') {
+      clips = clips.filter(c => isDuplicate(c));
+    } else {
+      // For all other filters (unprocessed / draft / flagged): EXCLUDE duplicates entirely —
+      // a duplicate-marked clip doesn't belong in those workflows. Approved is an exception:
+      // a clip can be both approved AND a duplicate, so the approved filter still includes them.
+      clips = clips.filter(c => {
+        if (getStatus(c) !== S.filter) return false;
+        if (S.filter === 'approved') return true; // approved+dup allowed
+        return !isDuplicate(c);
+      });
+    }
+  }
   if (S.search) {
     const q = S.search.toLowerCase();
     clips = clips.filter(c => c.title.toLowerCase().includes(q) || (c.description||'').toLowerCase().includes(q) || (c.date||'').toLowerCase().includes(q) || (c.programNum||'').toLowerCase().includes(q) || (c.filmName||'').toLowerCase().includes(q));
@@ -3907,7 +4132,7 @@ function renderQueue() {
       : `<div class="queue-item-thumb-placeholder">🎬</div>`;
     const preview = (clip.rewrite || clip.description || '').substring(0, 80);
     const dur = formatDuration(clip.durationMs);
-    return `<div class="queue-item ${S.selectedIdx === clip._rowNum ? 'selected' : ''}" onclick="selectClip(${clip._rowNum}, event)">
+    return `<div class="queue-item ${S.selectedIdx === clip._rowNum ? 'selected' : ''} ${isDuplicate(clip) ? 'queue-item-duplicate' : ''}" onclick="selectClip(${clip._rowNum}, event)">
       <input type="checkbox" class="queue-item-cb" data-row="${clip._rowNum}" onclick="event.stopPropagation()" onchange="updateBatchBtn()">
       ${thumbHTML}
       <div class="queue-item-body">
@@ -4278,6 +4503,21 @@ function renderDetail() {
                 ${isMoved && sourceTypeCfg ? `<div class="move-menu-divider"></div><div class="move-menu-item move-menu-restore" onclick="clearTypeOverride(${clip._rowNum}); toggleMoveMenu(${clip._rowNum})">↩ Restore to ${esc(sourceTypeCfg.displayName)} (original)</div>` : ''}
               </div>
             </span>`;
+          })()}
+          ${(() => {
+            // Duplicate marking button — opens a modal to choose the canonical clip + add note.
+            // Once marked, the button changes to "Unmark duplicate" and shows the reference.
+            const isDup = isDuplicate(clip);
+            if (isDup) {
+              const dupOf = getReviewField(clip, 'duplicateOf');
+              const dupNote = getReviewField(clip, 'duplicateNote');
+              const refText = dupNote ? `${dupOf} — ${dupNote}` : dupOf;
+              return `<span class="detail-meta-item" style="display:inline-flex;align-items:center;gap:6px">
+                <span class="duplicate-badge" title="Duplicate of: ${esc(refText)}">🔁 Duplicate of: ${esc(refText.length > 40 ? refText.substring(0, 37) + '…' : refText)}</span>
+                <button class="btn btn-sm" onclick="unmarkDuplicate(${clip._rowNum})" title="Restore this clip to the normal workflow" style="font-size:11px">↩ Unmark</button>
+              </span>`;
+            }
+            return `<button class="btn btn-sm detail-meta-item" onclick="openDuplicateDialog(${clip._rowNum})" title="Mark this clip as a duplicate of another clip — moves it to the Duplicates queue" style="font-size:11px">🔁 Mark as duplicate</button>`;
           })()}
         </div>
         ${(() => {
@@ -6497,6 +6737,14 @@ function renderSidebar() {
         })() : ''}
         ${t.hasFilmName ? `<div class="sb-sub-item ${isActiveType && S.currentView === 'films' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','films')">Films</div>` : ''}
         <div class="sb-sub-item ${isActiveType && S.currentView === 'attention' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','attention')">Attention</div>
+        ${(() => {
+          // Duplicates sub-item — only renders when at least one clip in this type is
+          // marked as a duplicate. Clicking jumps to the queue with the duplicate filter on.
+          const dupCount = (S.byType[t.key]?.clips || []).filter(c => isDuplicate(c)).length;
+          if (!dupCount) return '';
+          const isActiveDup = isActiveType && S.currentView === 'queue' && S.filter === 'duplicate';
+          return `<div class="sb-sub-item ${isActiveDup ? 'active' : ''}" onclick="event.stopPropagation();openDuplicatesQueue('${t.key}')" title="Clips marked as duplicates of another clip">🔁 Duplicates <span style="opacity:0.55;font-size:11px">(${dupCount})</span></div>`;
+        })()}
         <div class="sb-sub-item ${isActiveType && S.currentView === 'export' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','export')">Export</div>
         <div class="sb-sub-item ${isActiveType && S.currentView === 'book' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','book')">Book View</div>
         <div class="sb-sub-item ${isActiveType && S.currentView === 'typenotes' ? 'active' : ''}" onclick="event.stopPropagation();selectTypeView('${t.key}','typenotes')">Notes</div>
@@ -6764,8 +7012,12 @@ function computeFilmRollup(filmClip) {
   // still count toward the film's total — the film as JEM published it has N chapters
   // regardless of how we internally re-categorize them.
   const chapters = getOrderedChapters(filmClip.filmName);
-  const totalChapters = chapters.length;
-  const approvedChapters = chapters.filter(c => getStatus(c) === 'approved').length;
+  // For approval counting: duplicate chapters count as "done" — they're not part of the
+  // workflow, so they shouldn't pad the unapproved bucket. A film with 9 chapters where
+  // 3 are duplicates and 6 are approved should read as fully done, not "6 of 9".
+  const nonDup = chapters.filter(c => !isDuplicate(c));
+  const totalChapters = nonDup.length;
+  const approvedChapters = nonDup.filter(c => getStatus(c) === 'approved').length;
   const overviewStatus = getStatus(filmClip);
   return { totalChapters, approvedChapters, overviewStatus };
 }
@@ -6927,11 +7179,13 @@ function renderChapterRow(film, chapter, isExpanded, isIntro) {
   const thumbHTML = chapter.thumbnail
     ? `<img class="fw-chapter-thumb" src="${esc(chapter.thumbnail)}" loading="lazy" onerror="this.style.display='none'">`
     : `<div class="fw-chapter-thumb" style="display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--tx4)">🎬</div>`;
-  return `<div class="fw-chapter-row ${isExpanded ? 'expanded' : ''} ${isIntro ? 'is-intro' : ''} ${isTreatedAsAddress ? 'is-treated-as-address' : ''}" id="fwChap_${chapter._rowNum}">
+  const chapterIsDup = isDuplicate(chapter);
+  const chapterDupOf = chapterIsDup ? getReviewField(chapter, 'duplicateOf') : '';
+  return `<div class="fw-chapter-row ${isExpanded ? 'expanded' : ''} ${isIntro ? 'is-intro' : ''} ${isTreatedAsAddress ? 'is-treated-as-address' : ''} ${chapterIsDup ? 'is-duplicate' : ''}" id="fwChap_${chapter._rowNum}">
     <div class="fw-chapter-header" onclick="toggleChapterExpand(${film._rowNum}, ${chapter._rowNum})">
       ${thumbHTML}
       <div class="fw-chapter-info">
-        <div class="fw-chapter-title">${isIntro ? '<span class="fw-intro-badge">🎬 Intro</span> ' : ''}${isTreatedAsAddress ? '<span class="fw-treated-badge" title="This chapter is editorially treated as a Sicha (Address). It uses Addresses AI rules and appears in the Addresses queue.">📍 Treated as Address</span> ' : ''}${esc(chapter.title)}</div>
+        <div class="fw-chapter-title">${isIntro ? '<span class="fw-intro-badge">🎬 Intro</span> ' : ''}${isTreatedAsAddress ? '<span class="fw-treated-badge" title="This chapter is editorially treated as a Sicha (Address). It uses Addresses AI rules and appears in the Addresses queue.">📍 Treated as Address</span> ' : ''}${chapterIsDup ? `<span class="fw-treated-badge" title="Duplicate of: ${esc(chapterDupOf)}" style="background:#E8DACA;color:#6B5230">🔁 Duplicate</span> ` : ''}${esc(chapter.title)}</div>
         <div class="fw-chapter-preview">${esc(preview)}</div>
       </div>
       <span class="fw-chapter-status ${statusClass}">${statusLabel}</span>
