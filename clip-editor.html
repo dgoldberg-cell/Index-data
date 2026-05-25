@@ -1079,6 +1079,15 @@
   .book-entry-content { flex: 1; }
   .book-entry-title { font-size: 11px; font-weight: bold; color: var(--tx); margin-bottom: 3px; line-height: 1.3; }
   .book-entry-meta { font-size: 9px; color: var(--tx3); margin-bottom: 6px; }
+  /* Featured people line in Book View — prominent, distinct from regular meta */
+  .book-entry-featured {
+    font-size: 11px;
+    color: var(--accent2);
+    margin: 3px 0 6px 0;
+    font-style: italic;
+    letter-spacing: 0.2px;
+  }
+  .book-entry-featured strong { color: var(--tx); font-style: normal; font-weight: 600; }
   .book-entry-summary { font-size: 10px; color: var(--tx); line-height: 1.6; font-family: 'Georgia', serif; }
   .book-entry-tags { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 6px; }
   .book-tag { font-size: 8px; padding: 1px 6px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--border); color: var(--tx3); }
@@ -2525,6 +2534,12 @@ async function ensureReviewTab(typeCfg) {
     // user first edits the title via the workstation UI.
     fullHeader = [...baseHeader, 'length_flag', 'length_flag_wc', 'length_action', 'length_input_wc', 'length_output_wc', 'cohort_used', 'title_original_backup'];
     lastCol = 'R';
+  } else if (typeCfg.key === 'conversations' || typeCfg.key === 'my_encounter') {
+    // Conversations + My Encounter add a "Featured People" field at the top of the clip
+    // (interviewee / in-conversation-with names). User-editable, with backup column for
+    // restoring the auto-derived value.
+    fullHeader = [...baseHeader, 'title_original_backup', 'featured_people_backup', 'featured_people_current'];
+    lastCol = 'N';
   } else {
     fullHeader = [...baseHeader, 'title_original_backup'];
     lastCol = 'L';
@@ -2559,12 +2574,16 @@ async function loadReviewData(typeCfg) {
   const isShortFilm = typeCfg.key === 'short_film';
   const isSichos = typeCfg.key === 'sichos';
   const isFilms = typeCfg.key === 'films';
+  const isConvOrEnc = typeCfg.key === 'conversations' || typeCfg.key === 'my_encounter';
   const hasSubtitleCols = isShortFilm || isFilms; // both have subtitle backup + current in cols L,M
-  // short_film + films extend to M (subtitle cols); sichos extends to Q (length + cohort cols)
+  // short_film + films extend to N (subtitle + title cols); films extends to O (ai_version_one);
+  // sichos extends to R (length + cohort cols); conversations + my_encounter extend to N
+  // (title backup + featured_people backup + current).
   let range;
   if (isSichos) range = `'${typeCfg.reviewTab}'!A:R`;
   else if (isFilms) range = `'${typeCfg.reviewTab}'!A:O`;
   else if (hasSubtitleCols) range = `'${typeCfg.reviewTab}'!A:N`;
+  else if (isConvOrEnc) range = `'${typeCfg.reviewTab}'!A:N`;
   else range = `'${typeCfg.reviewTab}'!A:L`;
   try {
     const data = await sheetsGet(range);
@@ -2594,13 +2613,19 @@ async function loadReviewData(typeCfg) {
         // Sichos: which rule cohort produced this draft ('default' or 'short')
         cohortUsed: isSichos ? (row[16] || '') : '',
         // Title backup: written once when the title is first edited. Column index varies:
-        //   Sichos col R (idx 17), short_film/films col N (idx 13), others col L (idx 11).
+        //   Sichos col R (idx 17), short_film/films col N (idx 13), conv/my_enc col L (idx 11), others col L (idx 11).
         titleOriginalBackup: isSichos ? (row[17] || '')
                             : hasSubtitleCols ? (row[13] || '')
                             : (row[11] || ''),
         // AI Version One: the preserved first AI/imported draft (films only, col O / idx 14).
         // Stored once and never auto-overwritten; user can restore it via the workstation button.
         aiVersionOne: isFilms ? (row[14] || '') : '',
+        // Featured People: backup + current (conversations + my_encounter only).
+        // featuredPeopleBackup → col M (idx 12) — written once when the field is first edited
+        //   (holds the original auto-derived value as backup).
+        // featuredPeopleCurrent → col N (idx 13) — the current saved value, may be edited.
+        featuredPeopleBackup: isConvOrEnc ? (row[12] || '') : '',
+        featuredPeopleCurrent: isConvOrEnc ? (row[13] || '') : '',
       };
       const id = row[0];
       const clip = bucket.clips?.find(c => String(c._rowNum) === id);
@@ -2608,6 +2633,8 @@ async function loadReviewData(typeCfg) {
       if (clip && row[8]) clip.descSourceCol = row[8];
       // For short films + films: if there's a stored subtitleCurrent, use it as the live subtitle
       if (clip && hasSubtitleCols && row[12]) clip.subtitle = row[12];
+      // For conversations + my_encounter: if there's a stored featuredPeopleCurrent, use it
+      if (clip && isConvOrEnc && row[13]) clip.featuredPeople = row[13];
       if (row[7]) {
         try { S.chatHistory[parseInt(id)] = JSON.parse(row[7]); } catch {}
       }
@@ -2645,6 +2672,7 @@ async function saveReviewRow(clip) {
     rd.draftModel || '',
     rd.draftUsedTranscript ? 'TRUE' : 'FALSE',
   ];
+  const isConvOrEnc = typeCfg.key === 'conversations' || typeCfg.key === 'my_encounter';
   let values, lastCol;
   if (isFilms) {
     // Films extend one column further than Short Film to hold the AI Version One slot
@@ -2664,6 +2692,11 @@ async function saveReviewRow(clip) {
       rd.titleOriginalBackup || '',
     ]];
     lastCol = 'R';
+  } else if (isConvOrEnc) {
+    // Conv/My Encounter: title_backup at col L (idx 11), featured_people_backup at M (idx 12),
+    // featured_people_current at N (idx 13)
+    values = [[...baseValues, rd.titleOriginalBackup || '', rd.featuredPeopleBackup || '', rd.featuredPeopleCurrent || '']];
+    lastCol = 'N';
   } else {
     values = [[...baseValues, rd.titleOriginalBackup || '']];
     lastCol = 'L';
@@ -3451,6 +3484,15 @@ async function loadAllData() {
           }
         }
       }
+      // Conversations + My Encounter: derive a "Featured People" string from column G
+      // (the keywords JSON). For My Encounter clips: pull names where relationship is
+      // "interviewee". For Conversations: pull names where relationship is "in_conversation_with".
+      // Stored on clip.featuredPeopleAuto — the AUTO-DERIVED value. The user-editable
+      // override (if any) lives in the review tab and takes precedence at render time.
+      if (tCfg.key === 'conversations' || tCfg.key === 'my_encounter') {
+        const targetRel = tCfg.key === 'my_encounter' ? 'interviewee' : 'in_conversation_with';
+        clip.featuredPeopleAuto = deriveFeaturedPeople(row[CONFIG.COL.KEYWORDS], targetRel);
+      }
       // Films: also capture the film_id explicitly so chapter rows can be linked to it
       if (tCfg.key === 'films') {
         clip.filmId = (row[CONFIG.COL.FILM_ID] || '').toString().trim();
@@ -3585,6 +3627,69 @@ function sanitizeDescription(s) {
   // Squash multiple spaces that may have been introduced
   text = text.replace(/[ \t]{2,}/g, ' ');
   return text.trim();
+}
+
+// Derive the "Featured People" display string from the keywords JSON in column G.
+// Filter to tags whose relationship matches `targetRel` (e.g. "interviewee" for My Encounter,
+// "in_conversation_with" for Conversations). Combine same-last-name people:
+//   ["Cohen, Yossi", "Cohen, Sara"] → "Yossi and Sara Cohen"
+//   ["Cohen, Yossi", "Cohen, Sara", "Cohen, Mendel"] → "Yossi, Sara, and Mendel Cohen"
+//   ["Cohen, Yossi", "Levi, Avi"] → "Yossi Cohen, Avi Levi"
+// Returns '' if no qualifying tags found or JSON malformed.
+function deriveFeaturedPeople(rawKeywords, targetRel) {
+  if (!rawKeywords) return '';
+  const raw = (rawKeywords || '').toString().trim();
+  if (!raw) return '';
+  let tags;
+  try { tags = JSON.parse(raw); } catch (e) { return ''; }
+  if (!Array.isArray(tags)) return '';
+  // Normalize: underscore form for comparison (data uses 'in_conversation_with' style)
+  const want = (targetRel || '').toLowerCase().replace(/\s+/g, '_');
+  const peopleNames = [];
+  const seen = new Set();
+  tags.forEach(t => {
+    const rel = ((t?.relationship) || '').toString().toLowerCase().replace(/\s+/g, '_');
+    if (rel !== want) return;
+    // Only People-section tags. Path looks like "People > Cohen, Shlomo Zalman" or similar.
+    const path = ((t?.path) || '').toString();
+    if (path && !/^people\b/i.test(path.trim())) return;
+    const name = ((t?.name) || '').toString().trim();
+    if (!name) return;
+    if (seen.has(name.toLowerCase())) return;
+    seen.add(name.toLowerCase());
+    peopleNames.push(name);
+  });
+  if (!peopleNames.length) return '';
+  // Names come in as "Lastname, Firstname Middle" — convert to display "Firstname Lastname"
+  // and group by surname to detect couples/families.
+  const parsed = peopleNames.map(raw => {
+    if (raw.includes(',')) {
+      const [last, ...rest] = raw.split(',');
+      const first = rest.join(',').trim();
+      return { first, last: last.trim(), display: (first + ' ' + last.trim()).trim() };
+    }
+    const parts = raw.split(/\s+/);
+    if (parts.length === 1) return { first: '', last: parts[0], display: parts[0] };
+    const last = parts[parts.length - 1];
+    const first = parts.slice(0, -1).join(' ');
+    return { first, last, display: raw };
+  });
+  const groups = new Map();
+  const order = [];
+  parsed.forEach(p => {
+    const key = (p.last || '').toLowerCase();
+    if (!groups.has(key)) { groups.set(key, []); order.push(key); }
+    groups.get(key).push(p);
+  });
+  const rendered = order.map(key => {
+    const grp = groups.get(key);
+    if (grp.length === 1) return grp[0].display;
+    const firsts = grp.map(p => p.first || p.display).filter(Boolean);
+    const surname = grp[0].last;
+    if (firsts.length === 2) return `${firsts[0]} and ${firsts[1]} ${surname}`;
+    return `${firsts.slice(0, -1).join(', ')}, and ${firsts[firsts.length - 1]} ${surname}`;
+  });
+  return rendered.join(', ');
 }
 
 function getDescription(row, typeKey) {
@@ -4114,6 +4219,32 @@ function renderDetail() {
                     <input type="text" id="subtitleInput_${clip._rowNum}" class="subtitle-input" value="" oninput="onSubtitleInput(${clip._rowNum})" placeholder="Add a subtitle for this short film…">
                     <button id="subtitleSaveBtn_${clip._rowNum}" class="btn btn-sm btn-primary" onclick="saveSubtitle(${clip._rowNum})" style="display:none">💾 Save</button>
                     <button class="btn btn-sm" onclick="generateShortFilmSubtitle(${clip._rowNum})" title="Ask AI to suggest a subtitle for this short film">✨ AI suggest</button>
+                  </div>`
+              }
+            </div>`;
+          })() : ''}
+          ${(clip.typeKey === 'conversations' || clip.typeKey === 'my_encounter') ? (() => {
+            // Featured People card — modeled on Short Films subtitle. Editable field that
+            // shows the interviewee (My Encounter) or the people the Rebbe is speaking with
+            // (Conversations). Default value derived from column G keywords JSON; user can
+            // override. Show ⚠ + manual-add prompt when no qualifying tags found.
+            const current = clip.featuredPeople || clip.featuredPeopleAuto || '';
+            const hasValue = !!(current && current.trim());
+            const hasBackup = !!getReviewField(clip, 'featuredPeopleBackup');
+            const label = clip.typeKey === 'my_encounter' ? 'Interviewee' : 'In Conversation With';
+            return `<div class="subtitle-card ${hasValue ? '' : 'subtitle-missing'}" style="margin-bottom:12px">
+              ${hasValue
+                ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span style="font-size:10px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:1.5px;flex-shrink:0">${esc(label)}</span>
+                    <input type="text" id="featuredPeopleInput_${clip._rowNum}" class="subtitle-input" value="${esc(current)}" oninput="onFeaturedPeopleInput(${clip._rowNum})" placeholder="Featured people…">
+                    <button id="featuredPeopleSaveBtn_${clip._rowNum}" class="btn btn-sm btn-primary" onclick="saveFeaturedPeople(${clip._rowNum})" style="display:none">💾 Save</button>
+                    ${hasBackup ? `<button class="btn btn-sm" onclick="revertFeaturedPeople(${clip._rowNum})" title="Restore the auto-derived value from the keywords">↩ Revert</button>` : ''}
+                  </div>`
+                : `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span class="subtitle-flag-icon" title="No qualifying People tags found — please add names manually">⚠</span>
+                    <span style="font-size:10px;font-weight:600;color:#A86A2C;text-transform:uppercase;letter-spacing:1.5px">${esc(label)} — add manually</span>
+                    <input type="text" id="featuredPeopleInput_${clip._rowNum}" class="subtitle-input" value="" oninput="onFeaturedPeopleInput(${clip._rowNum})" placeholder="Add names — e.g. Yossi Cohen or Avi and Sara Levi…">
+                    <button id="featuredPeopleSaveBtn_${clip._rowNum}" class="btn btn-sm btn-primary" onclick="saveFeaturedPeople(${clip._rowNum})" style="display:none">💾 Save</button>
                   </div>`
               }
             </div>`;
@@ -5610,6 +5741,65 @@ function onSubtitleInput(rowNum) {
 }
 
 // ══════════════════════════════════════════════
+// FEATURED PEOPLE (Conversations + My Encounter)
+// ══════════════════════════════════════════════
+// Field shows the main characters in the clip — interviewees for My Encounter, the people
+// the Rebbe is in conversation with for Conversations. Auto-derived from column G keywords
+// JSON; user can override. Edits persist in the review tab (cols M & N).
+
+function onFeaturedPeopleInput(rowNum) {
+  const input = document.getElementById('featuredPeopleInput_' + rowNum);
+  const saveBtn = document.getElementById('featuredPeopleSaveBtn_' + rowNum);
+  const clip = findClipByRow(rowNum);
+  if (!input || !saveBtn || !clip) return;
+  const current = clip.featuredPeople || clip.featuredPeopleAuto || '';
+  const v = (input.value || '').trim();
+  saveBtn.style.display = (v !== current.trim()) ? 'inline-block' : 'none';
+}
+
+async function saveFeaturedPeople(rowNum) {
+  const clip = findClipByRow(rowNum);
+  if (!clip) return;
+  const input = document.getElementById('featuredPeopleInput_' + rowNum);
+  const newVal = (input?.value || '').trim();
+  showLoading('Saving…');
+  try {
+    // Back up the auto-derived value once (so Revert can restore it later)
+    if (!getReviewField(clip, 'featuredPeopleBackup')) {
+      setReviewField(clip, 'featuredPeopleBackup', clip.featuredPeopleAuto || '');
+    }
+    setReviewField(clip, 'featuredPeopleCurrent', newVal);
+    clip.featuredPeople = newVal;
+    await saveReviewRow(clip);
+    hideLoading();
+    renderDetail();
+    showToast('Saved ✓', 'success');
+  } catch(e) { hideLoading(); showToast('Save failed: ' + e.message, 'error'); }
+}
+
+async function revertFeaturedPeople(rowNum) {
+  const clip = findClipByRow(rowNum);
+  if (!clip) return;
+  const backup = getReviewField(clip, 'featuredPeopleBackup');
+  if (!backup && !clip.featuredPeopleAuto) {
+    showToast('Nothing to revert to', 'error');
+    return;
+  }
+  const restoreTo = backup || clip.featuredPeopleAuto;
+  if (!await jemConfirm(`Revert to the auto-derived value?<br><br><span style="color:var(--tx3);font-size:12px">"${esc(restoreTo)}"</span>`, { okLabel: 'Revert' })) return;
+  showLoading('Reverting…');
+  try {
+    setReviewField(clip, 'featuredPeopleCurrent', restoreTo);
+    setReviewField(clip, 'featuredPeopleBackup', '');
+    clip.featuredPeople = restoreTo;
+    await saveReviewRow(clip);
+    hideLoading();
+    renderDetail();
+    showToast('Reverted', 'success');
+  } catch(e) { hideLoading(); showToast('Revert failed: ' + e.message, 'error'); }
+}
+
+// ══════════════════════════════════════════════
 // TITLE EDITING (all clip types)
 // ══════════════════════════════════════════════
 // Titles are editable across every clip type. On first edit the original is backed up to
@@ -6008,8 +6198,10 @@ async function generateSheetExport() {
     const header = ['Thumbnail', 'Title'];
     if (isFilmChapter) header.push('Film', 'Chapter Title');
     else header.push('Program');
+    const isConvOrEncExp = (typeKey === 'conversations' || typeKey === 'my_encounter');
     if (isShortFilm) header.push('Subtitle');
     if (isSichosExp) header.push('Event Type');
+    if (isConvOrEncExp) header.push('Featured People');
     header.push('New Description', 'Tags', 'Date', 'Duration', 'Watch URL', 'Approved By', 'Approved At');
 
     const rows = approved.map(clip => {
@@ -6030,6 +6222,9 @@ async function generateSheetExport() {
       }
       if (isSichosExp) {
         row.push((clip.eventTypes || []).join(', '));
+      }
+      if (isConvOrEncExp) {
+        row.push(clip.featuredPeople || clip.featuredPeopleAuto || '');
       }
       row.push(
         summary,
@@ -6112,8 +6307,10 @@ function downloadCsv() {
   const header = ['Title'];
   if (isFilmChapter) header.push('Film', 'Chapter Title');
   else header.push('Program');
+  const isConvOrEncExp = (typeKey === 'conversations' || typeKey === 'my_encounter');
   if (isShortFilm) header.push('Subtitle');
   if (isSichosExp) header.push('Event Type');
+  if (isConvOrEncExp) header.push('Featured People');
   header.push('New Description', 'Tags', 'Date', 'Duration', 'Watch URL');
   // CSV-escape: wrap in quotes if value contains comma, quote, or newline; double-up internal quotes
   const csvCell = (v) => {
@@ -6131,6 +6328,7 @@ function downloadCsv() {
     else row.push(clip.programNum ? 'LT ' + clip.programNum : '');
     if (isShortFilm) row.push(clip.subtitle || '');
     if (isSichosExp) row.push((clip.eventTypes || []).join(', '));
+    if (isConvOrEncExp) row.push(clip.featuredPeople || clip.featuredPeopleAuto || '');
     row.push(summary, tags, formatClipDate(clip.date), formatDuration(clip.durationMs), watchUrl);
     lines.push(row.map(csvCell).join(','));
   });
@@ -6204,6 +6402,9 @@ function renderBookView() {
           ${thumbHTML}
           <div class="book-entry-content">
             <div class="book-entry-title">${esc(clip.title)}</div>
+            ${(clip.typeKey === 'conversations' || clip.typeKey === 'my_encounter') && (clip.featuredPeople || clip.featuredPeopleAuto)
+              ? `<div class="book-entry-featured">${clip.typeKey === 'my_encounter' ? 'Featuring' : 'In conversation with'}: <strong>${esc(clip.featuredPeople || clip.featuredPeopleAuto)}</strong></div>`
+              : ''}
             <div class="book-entry-meta">LT ${esc(clip.programNum)}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ⏱ ' + esc(dur) : ''}${clip.typeKey === 'sichos' && clip.eventTypes && clip.eventTypes.length ? ' · ' + esc(clip.eventTypes.join(', ')) : ''}</div>
             <div class="book-entry-summary">${esc(summary)}</div>
             ${tags.length ? `<div class="book-entry-tags">${tags.map(t=>`<span class="book-tag">${esc(t)}</span>`).join('')}</div>` : ''}
@@ -7253,6 +7454,9 @@ function renderFullBookView() {
             <div class="book-entry-content">
               ${clip.filmName ? `<div style="font-size:8px;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;font-weight:600">${esc(clip.filmName)}</div>` : ''}
               <div class="book-entry-title">${esc(clip.title)}</div>
+              ${(clip.typeKey === 'conversations' || clip.typeKey === 'my_encounter') && (clip.featuredPeople || clip.featuredPeopleAuto)
+                ? `<div class="book-entry-featured">${clip.typeKey === 'my_encounter' ? 'Featuring' : 'In conversation with'}: <strong>${esc(clip.featuredPeople || clip.featuredPeopleAuto)}</strong></div>`
+                : ''}
               <div class="book-entry-meta">${clip.programNum ? 'LT ' + esc(clip.programNum) : ''}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ' + esc(dur) : ''}${clip.typeKey === 'sichos' && clip.eventTypes && clip.eventTypes.length ? ' · ' + esc(clip.eventTypes.join(', ')) : ''}</div>
               <div class="book-entry-summary">${esc(summary)}</div>
               ${tags.length ? `<div class="book-entry-tags">${tags.map(tg=>`<span class="book-tag">${esc(tg)}</span>`).join('')}</div>` : ''}
