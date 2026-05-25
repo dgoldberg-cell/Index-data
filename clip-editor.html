@@ -1982,11 +1982,25 @@ const DEFAULT_FILMS_RULES = [
 ];
 
 // ══════════════════════════════════════════════
-// SHORT FILMS — starter rule set (subtitle scope only; description rules added by user)
+// SHORT FILMS — starter rule set
+//   subtitle scope: ai-suggest button on subtitle field
+//   (no scope / "default" scope): description rewrite uses these — copy-edit only
 // ══════════════════════════════════════════════
 const DEFAULT_SHORT_FILMS_RULES = [
   { category: 'Subtitle Voice', title: '3–6 words, captures the heart', content: 'A short film subtitle is 3 to 6 words. Capture the emotional or thematic heart of the piece. No punctuation, no quotes. Avoid marketing language ("inspiring", "moving"). The subtitle is read directly under the title — they should complement, not repeat.', scope: 'subtitle', active: true },
   { category: 'Subtitle Voice', title: 'Stand-alone piece, not part of a series', content: 'A Short Film is a complete, self-contained work — not one chapter of something larger. The subtitle should feel like a standalone title in itself, evocative on its own. Do NOT echo the title.', scope: 'subtitle', active: true },
+  // Description-scope rules — these apply when the user clicks Generate on a Short Film's main description.
+  // Editorial policy: NO REWRITING. Spelling and grammar fixes only.
+  { category: 'Copy Edit Only', title: 'Spelling and grammar fixes only — no rewriting', content: 'Your task is COPY EDITING, not rewriting. Take the original description and return it EXACTLY AS IS, with the following corrections only:\n\n• Fix spelling mistakes\n• Fix grammar mistakes\n• Fix punctuation errors\n• Fix obvious typos\n• Smart quotes (\' → \' and " → ")\n• Em-dashes where appropriate (-- → —)\n\nDO NOT:\n• Rewrite or restructure sentences\n• Change word choices that are not actually errors\n• Reorder content\n• Add new content\n• Remove content (unless duplicated by mistake)\n• Change tone, voice, or style\n• Improve clarity beyond fixing actual errors\n• Tighten or expand prose\n\nIf the original has no spelling or grammar errors, return it exactly as it was. The output should be virtually indistinguishable from the input except for the specific corrections you made.', scope: '', active: true },
+  { category: 'Copy Edit Only', title: 'Preserve voice, paragraph breaks, and length', content: 'Match the original\'s sentence count, paragraph structure, and approximate word count. If the original has three sentences, output three sentences. If it has a paragraph break, keep it. If a sentence is awkwardly phrased but grammatically correct, leave it alone.\n\nYou are NOT the writer. You are the proofreader. The author\'s voice — even if it\'s casual, formal, or quirky — stays exactly as written.', scope: '', active: true },
+];
+
+// ══════════════════════════════════════════════
+// CONVERSATIONS — starter rule set (copy-edit only; no rewriting)
+// ══════════════════════════════════════════════
+const DEFAULT_CONVERSATIONS_RULES = [
+  { category: 'Copy Edit Only', title: 'Spelling and grammar fixes only — no rewriting', content: 'Your task is COPY EDITING, not rewriting. Take the original description and return it EXACTLY AS IS, with the following corrections only:\n\n• Fix spelling mistakes\n• Fix grammar mistakes\n• Fix punctuation errors\n• Fix obvious typos\n• Smart quotes (\' → \' and " → ")\n• Em-dashes where appropriate (-- → —)\n\nDO NOT:\n• Rewrite or restructure sentences\n• Change word choices that are not actually errors\n• Reorder content\n• Add new content\n• Remove content (unless duplicated by mistake)\n• Change tone, voice, or style\n• Improve clarity beyond fixing actual errors\n• Tighten or expand prose\n\nIf the original has no spelling or grammar errors, return it exactly as it was. The output should be virtually indistinguishable from the input except for the specific corrections you made.', scope: '', active: true },
+  { category: 'Copy Edit Only', title: 'Preserve voice, paragraph breaks, and length', content: 'Match the original\'s sentence count, paragraph structure, and approximate word count. If the original has three sentences, output three sentences. If it has a paragraph break, keep it. If a sentence is awkwardly phrased but grammatically correct, leave it alone.\n\nYou are NOT the writer. You are the proofreader. The author\'s voice — even if it\'s casual, formal, or quirky — stays exactly as written.', scope: '', active: true },
 ];
 
 
@@ -3027,8 +3041,13 @@ async function loadRulesForType(typeCfg) {
         rows.push([String(i+1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', 'FALSE', 'default', r.scope || '']);
       });
     } else if (typeCfg.key === 'short_film') {
-      // Short Films: 2 starter subtitle rules (description rules added by user as needed)
+      // Short Films: subtitle rules + copy-edit-only description rules
       DEFAULT_SHORT_FILMS_RULES.forEach((r, i) => {
+        rows.push([String(i+1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', 'FALSE', 'default', r.scope || '']);
+      });
+    } else if (typeCfg.key === 'conversations') {
+      // Conversations: copy-edit-only rules (spelling/grammar fixes, no rewriting)
+      DEFAULT_CONVERSATIONS_RULES.forEach((r, i) => {
         rows.push([String(i+1), r.category, r.title, r.content, r.active ? 'TRUE' : 'FALSE', 'FALSE', 'default', r.scope || '']);
       });
     }
@@ -3065,6 +3084,10 @@ async function loadRulesForType(typeCfg) {
       }));
     } else if (typeCfg.key === 'short_film') {
       bucket.rulesArr = DEFAULT_SHORT_FILMS_RULES.map((r, i) => ({
+        id: String(i+1), cohort: 'default', transcriptOnly: false, ...r,
+      }));
+    } else if (typeCfg.key === 'conversations') {
+      bucket.rulesArr = DEFAULT_CONVERSATIONS_RULES.map((r, i) => ({
         id: String(i+1), cohort: 'default', transcriptOnly: false, ...r,
       }));
     } else {
@@ -3144,20 +3167,44 @@ async function loadRulesForType(typeCfg) {
         await sheetsSet(`'${tabName}'!A${startRow}:H${startRow + newRules.length - 1}`, values);
       }
     }
-    // Short Films backfill: seed the subtitle starter rules if not present
-    if (typeCfg.key === 'short_film' && !bucket.rulesArr.some(r => r.scope === 'subtitle')) {
-      const maxId = bucket.rulesArr.reduce((m, r) => Math.max(m, parseInt(r.id) || 0), 0);
-      const newRules = DEFAULT_SHORT_FILMS_RULES.map((r, i) => ({
-        id: String(maxId + i + 1),
-        cohort: 'default',
-        transcriptOnly: false,
-        ...r,
-      }));
-      bucket.rulesArr.push(...newRules);
-      const values = newRules.map(nr => [nr.id, nr.category, nr.title, nr.content, nr.active ? 'TRUE' : 'FALSE', 'FALSE', 'default', nr.scope || '']);
-      const startRow = rows.length + 1;
-      rows.push(...values);
-      await sheetsSet(`'${tabName}'!A${startRow}:H${startRow + newRules.length - 1}`, values);
+    // Short Films backfill: title-based idempotent merge — adds any default rule that
+    // isn't already present (by title), preserves user edits.
+    if (typeCfg.key === 'short_film') {
+      const existingTitles = new Set((bucket.rulesArr || []).map(r => (r.title || '').toLowerCase().trim()));
+      const missing = DEFAULT_SHORT_FILMS_RULES.filter(r => !existingTitles.has((r.title || '').toLowerCase().trim()));
+      if (missing.length) {
+        const maxId = bucket.rulesArr.reduce((m, r) => Math.max(m, parseInt(r.id) || 0), 0);
+        const newRules = missing.map((r, i) => ({
+          id: String(maxId + i + 1),
+          cohort: 'default',
+          transcriptOnly: false,
+          ...r,
+        }));
+        bucket.rulesArr.push(...newRules);
+        const values = newRules.map(nr => [nr.id, nr.category, nr.title, nr.content, nr.active ? 'TRUE' : 'FALSE', 'FALSE', 'default', nr.scope || '']);
+        const startRow = rows.length + 1;
+        rows.push(...values);
+        await sheetsSet(`'${tabName}'!A${startRow}:H${startRow + newRules.length - 1}`, values);
+      }
+    }
+    // Conversations backfill — same title-based pattern.
+    if (typeCfg.key === 'conversations') {
+      const existingTitles = new Set((bucket.rulesArr || []).map(r => (r.title || '').toLowerCase().trim()));
+      const missing = DEFAULT_CONVERSATIONS_RULES.filter(r => !existingTitles.has((r.title || '').toLowerCase().trim()));
+      if (missing.length) {
+        const maxId = bucket.rulesArr.reduce((m, r) => Math.max(m, parseInt(r.id) || 0), 0);
+        const newRules = missing.map((r, i) => ({
+          id: String(maxId + i + 1),
+          cohort: 'default',
+          transcriptOnly: false,
+          ...r,
+        }));
+        bucket.rulesArr.push(...newRules);
+        const values = newRules.map(nr => [nr.id, nr.category, nr.title, nr.content, nr.active ? 'TRUE' : 'FALSE', 'FALSE', 'default', nr.scope || '']);
+        const startRow = rows.length + 1;
+        rows.push(...values);
+        await sheetsSet(`'${tabName}'!A${startRow}:H${startRow + newRules.length - 1}`, values);
+      }
     }
   } catch(e) {
     console.warn('Rules load failed for ' + typeCfg.displayName + ':', e);
@@ -4766,8 +4813,42 @@ function buildAIPrompt(clip, extraContext, useTranscript) {
     scope = (introId && String(introId) === String(clip.clipId)) ? 'intro' : 'chapter';
     rulesTypeKey = 'films'; // pull chapter/intro rules from the Films tab
   }
-  const rulesText = buildRulesPrompt(rulesTypeKey, !!transcript, isShort, scope);
 
+  // COPY-EDIT MODE: Conversations and Short Films use a fundamentally different task —
+  // spelling/grammar fixes only, no rewriting. Even if leftover "rewrite" rules sit in the
+  // sheet, the system-level framing here forces the AI into proofreader mode.
+  const isCopyEditMode = (clip.typeKey === 'conversations' || clip.typeKey === 'short_film');
+  if (isCopyEditMode) {
+    const rulesText = buildRulesPrompt(rulesTypeKey, !!transcript, isShort, scope);
+    let prompt = `You are a COPY EDITOR, not a writer. Your job is to fix spelling, grammar, punctuation, and typo errors in the text below — NOTHING ELSE.
+
+ABSOLUTE RULES:
+• Output the text EXACTLY AS PROVIDED, with only the specific errors fixed.
+• If a sentence is grammatically correct, leave it word-for-word as is.
+• Do NOT rewrite, restructure, reorder, tighten, expand, or paraphrase anything.
+• Do NOT change tone, voice, word choice, sentence length, or paragraph structure.
+• Do NOT improve or polish prose that is already grammatical.
+• Preserve the original's sentence count, paragraph breaks, and approximate length.
+• If the original has no errors, return it exactly as it was.
+
+CORRECTIONS YOU MAY MAKE:
+• Spelling mistakes
+• Grammar mistakes
+• Punctuation errors (missing commas, apostrophes, etc.)
+• Obvious typos
+• Convert straight quotes to smart quotes (' → ' and " → ")
+• Convert -- to em-dashes (—)
+
+Your output must be virtually indistinguishable from the input except for these specific corrections.`;
+    if (rulesText) {
+      prompt += '\n\n---\n\nADDITIONAL EDITORIAL NOTES:\n' + rulesText;
+    }
+    prompt += '\n\n---\n\nTEXT TO COPY-EDIT (return the corrected version, nothing else):\n\n' + clip.description;
+    if (extraContext) prompt += '\n\n---\n\nAdditional guidance from the editor: ' + extraContext;
+    return prompt;
+  }
+
+  const rulesText = buildRulesPrompt(rulesTypeKey, !!transcript, isShort, scope);
   let prompt = rulesText || 'You are an editor rewriting Jewish educational video summaries. Rewrite the summary provided concisely.';
 
   if (isShort) {
@@ -4844,8 +4925,12 @@ async function evaluateAndDraft(clip, regenCount = 0, useTranscript = false) {
   // Film overviews also skip the gate: the original overview on the film row is often very
   // short or empty, and the point of generating one is to BUILD a new overview from the
   // aggregated chapter transcripts. The gate is irrelevant here.
+  // Conversations and Short Films also skip — they only do copy-editing (spelling/grammar),
+  // and there's no minimum content threshold for that. Even a one-sentence description gets
+  // spell-checked.
+  const isCopyEditMode = (clip.typeKey === 'conversations' || clip.typeKey === 'short_film');
   let evalResult = { ok: true };
-  if (!isShort && clip.typeKey !== 'films') {
+  if (!isShort && clip.typeKey !== 'films' && !isCopyEditMode) {
     const evalPrompt = `You are evaluating a video description to decide if it has enough content to rewrite as a 90-word summary.
 
 Description: "${clip.description}"
@@ -4873,11 +4958,17 @@ Do not include any other text.`;
   // On subsequent regenerations, add explicit instruction to produce a different variation
   const transcriptActuallyUsed = useTranscript && haveTranscript;
   let prompt = buildAIPrompt(clip, undefined, transcriptActuallyUsed);
-  if (regenCount > 0) {
+  // For copy-edit mode (Conversations / Short Films) we WANT consistency, not variance.
+  // The regen-diff prompt would defeat the purpose since we want the same text back with
+  // corrections — not a "different" version each time.
+  if (regenCount > 0 && !isCopyEditMode) {
     prompt += `\n\n---\n\nThis is regeneration attempt #${regenCount + 1}. Produce a meaningfully DIFFERENT version than what you would produce on the first attempt — different sentence structure, different opening, different emphasis. Do not repeat the same wording from previous attempts.`;
   }
-  console.log('[draft] cohort:', isShort ? 'short' : 'default', '| clip:', clip.clipId || clip._rowNum, '| origWc:', wordCount(clip.description || ''), '| transcript:', transcriptActuallyUsed);
-  const draft = await callAI([{ role: 'user', content: prompt }], { temperature: 1.0 });
+  console.log('[draft] cohort:', isShort ? 'short' : 'default', '| clip:', clip.clipId || clip._rowNum, '| origWc:', wordCount(clip.description || ''), '| transcript:', transcriptActuallyUsed, isCopyEditMode ? '| MODE: copy-edit' : '');
+  // Copy-edit mode uses LOW temperature (0.1) to keep the output deterministic and faithful.
+  // Rewrite mode keeps the existing high temp (1.0) for genuine variance between regens.
+  const draftTemp = isCopyEditMode ? 0.1 : 1.0;
+  const draft = await callAI([{ role: 'user', content: prompt }], { temperature: draftTemp });
   const cleanedDraft = smartenQuotes(draft);
 
   // ── Length enforcement (Addresses / sichos only) ──────────────────────────
