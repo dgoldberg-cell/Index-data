@@ -150,6 +150,14 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-entry-name{font-family:var(--serif);font-size:15px;font-weight:700;color:var(--tx-1);margin-bottom:2px;display:flex;align-items:center;gap:6px}
 .idx-entry-name:hover .idx-entry-rename{opacity:1 !important}
 .idx-entry-rename:hover{color:var(--gold) !important}
+.idx-entry.drag-over-before{border-top:3px solid var(--blue);margin-top:-3px}
+.idx-entry.drag-over-after{border-bottom:3px solid var(--blue);margin-bottom:-3px}
+.idx-entry.dragging{opacity:0.4}
+.idx-drag-handle{cursor:grab;color:var(--tx-4);font-size:14px;padding:0 4px;user-select:none;opacity:0;transition:opacity 0.15s}
+.idx-entry-name:hover .idx-drag-handle{opacity:0.7}
+.idx-drag-handle:hover{opacity:1 !important;color:var(--tx-2)}
+.idx-drag-handle:active{cursor:grabbing}
+.idx-entry-orderbadge{font-size:9px;font-weight:600;background:var(--gold);color:white;padding:1px 5px;border-radius:8px;margin-left:4px;vertical-align:middle}
 .idx-entry-badge{font-size:9px;font-weight:500;font-family:var(--font);padding:1px 6px;border-radius:8px;vertical-align:middle}
 .idx-entry-badge.warn{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(154,122,48,.2)}
 .idx-entry-badge.empty{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
@@ -980,6 +988,10 @@ view:'index',aiOpen:false,
 // Index
 indexData:null,
 idxSearch:'',idxSearchMode:'both',idxNavMode:'tabs',idxLayout:'single',idxActiveSection:'all',idxActiveEntry:null,idxPage:0,
+idxHideDescriptions:false, // Global toggle: when true, hide all clip descriptions (show entry skeletons only)
+idxExpandedEntries:new Set(), // Per-entry expand overrides when global is hidden (current view only, not persisted)
+idxCollapsedEntries:new Set(), // Per-entry collapse overrides when global is shown (current view only, not persisted)
+tagOrder:{}, // {entryName: orderIndex} — absolute slot positions for manually-ordered entries within each section. Built from _TagOrder tab.
 userWorkFilter:'', // Admin only: when set, filter entries to show only those touched by this user (email)
 sidebarWorkspaceOpen:true, // Workspace section dropdown expand/collapse (user-controlled)
 transcriptHighlights:{}, // Cache: {tag|clipId → {loading, phrases:[], noMatch:bool, error}}
@@ -2929,6 +2941,8 @@ async function manualRefresh(){
     try{S.activeRenames=await loadTagRenamesFromTab();}catch(e){console.warn('Could not refresh renames:',e);}
     // Reload section moves from _SectionMoves
     try{S.sectionOverrides=await loadSectionMovesFromTab();}catch(e){console.warn('Could not refresh moves:',e);}
+    // Reload tag order
+    try{S.tagOrder=await loadTagOrderFromTab();}catch(e){console.warn('Could not refresh tag order:',e);}
     buildIndex();render(true);
     toast('All data refreshed','success');
   }catch(e){
@@ -3468,6 +3482,117 @@ async function loadSectionMovesFromTab(){
     return {};
   }
 }
+
+// === TAG ORDER — drag-and-drop ordering within sections (and later, within parent for subtags) ===
+// _TagOrder tab: Timestamp | Entry Name | Parent | Section | OrderIndex | Set By
+// Parent is the parent tag name if this is a subtag; empty for top-level.
+// OrderIndex is the integer slot position (e.g. 0=first, 1=second). Empty = revert to alphabetical.
+async function appendToTagOrderLog(entryName,parent,section,orderIndex,timestamp,user){
+  const TAB='_TagOrder';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:F1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Entry Name','Parent','Section','OrderIndex','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _TagOrder tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:F`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),entryName,parent||'',section||'',orderIndex===''||orderIndex==null?'':String(orderIndex),user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to tag order log:',e)}
+}
+
+// Build the active tag order from _TagOrder tab. Returns:
+//   { "section|parent" → { entryName: orderIndex, ... } }
+// Empty OrderIndex = revert (remove from map).
+async function loadTagOrderFromTab(){
+  const TAB='_TagOrder';
+  if(!S.connected)return {};
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return {};
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:F10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>{
+      const at=Date.parse(a[0]||'')||0;
+      const bt=Date.parse(b[0]||'')||0;
+      return at-bt;
+    });
+    const map={};
+    sorted.forEach(row=>{
+      const entryName=(row[1]||'').trim();
+      const parent=(row[2]||'').trim();
+      const section=(row[3]||'').trim();
+      const orderRaw=(row[4]||'').trim();
+      if(!entryName||!section)return;
+      const groupKey=section+'|'+parent;
+      if(!map[groupKey])map[groupKey]={};
+      if(orderRaw===''){
+        delete map[groupKey][entryName];
+      }else{
+        const ord=parseInt(orderRaw,10);
+        if(!isNaN(ord))map[groupKey][entryName]=ord;
+      }
+    });
+    return map;
+  }catch(e){
+    console.warn('Failed to load tag order:',e);
+    return {};
+  }
+}
+
+// Apply manual ordering to a list of entries. Manually-ordered entries hold absolute slot positions;
+// the rest fill alphabetically around them.
+// entries: array sorted alphabetically by name
+// orderMap: { entryName: orderIndex } for this section/parent
+function applyTagOrder(entries,orderMap){
+  if(!orderMap||!Object.keys(orderMap).length)return entries;
+  const total=entries.length;
+  const result=new Array(total).fill(null);
+  // First, place manually-ordered entries at their slots
+  const placed=new Set();
+  const ordered=Object.entries(orderMap)
+    .filter(([name])=>entries.some(e=>e.name===name))
+    .sort((a,b)=>a[1]-b[1]); // sort by slot index
+  ordered.forEach(([name,slot])=>{
+    const entry=entries.find(e=>e.name===name);
+    if(!entry)return;
+    // Clamp slot to valid range
+    let s=Math.max(0,Math.min(total-1,slot));
+    // If slot already occupied, find next free slot
+    while(s<total&&result[s]!==null)s++;
+    if(s<total){result[s]=entry;placed.add(name)}
+  });
+  // Then fill remaining slots alphabetically with unplaced entries
+  const remaining=entries.filter(e=>!placed.has(e.name));
+  let ri=0;
+  for(let i=0;i<total;i++){
+    if(result[i]===null){
+      result[i]=remaining[ri++]||null;
+    }
+  }
+  return result.filter(Boolean);
+}
+
 
 // Helper: tab title lookup
 function activeTabTitle(){return S.sheetMeta?.tabs?.[S.activeTab]?.title||''}
@@ -4387,8 +4512,18 @@ function buildIndex(){
     });
     sections[sec].push(e);
   });
-  // Sort entries within each section alphabetically
-  Object.keys(sections).forEach(sec=>{sections[sec].sort((a,b)=>a.name.localeCompare(b.name))});
+  // Sort entries within each section alphabetically, then apply manual ordering overrides
+  Object.keys(sections).forEach(sec=>{
+    sections[sec].sort((a,b)=>a.name.localeCompare(b.name));
+    // Apply manual ordering: top-level entries in this section (parent='')
+    if(S.tagOrder){
+      const groupKey=sec+'|';
+      const orderMap=S.tagOrder[groupKey];
+      if(orderMap&&Object.keys(orderMap).length){
+        sections[sec]=applyTagOrder(sections[sec],orderMap);
+      }
+    }
+  });
 
   S.indexData={sections,totalEntries:Object.keys(entries).length,totalResults:Object.values(entries).reduce((s,e)=>s+e.results.length,0)};
 }
@@ -6466,6 +6601,8 @@ function rIndex(){
   h+=`</div></div>`;
   // Spacer
   h+=`<div class="toolbar-spacer"></div>`;
+  // Hide/show descriptions toggle
+  h+=`<button class="btn btn-sm btn-icon" id="idx-toggle-desc" title="${S.idxHideDescriptions?'Show descriptions':'Hide descriptions (show entry skeleton only)'}">${S.idxHideDescriptions?'📖':'📋'}</button>`;
   // Layout toggle — single/double column
   h+=`<div class="tb-layout-toggle">`;
   h+=`<div class="tb-layout-btn ${S.idxLayout==='single'?'active':''}" data-idxlayout="single" title="Single column">☰</div>`;
@@ -6519,8 +6656,12 @@ function rIndex(){
       entryCount++;
 
       let eh='';
-      eh+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''}">`;
+      const orderGroupKey=(e.section||'')+'|'; // top-level for now (no parent yet)
+      const manualOrder=S.tagOrder?.[orderGroupKey]?.[e.name];
+      const hasManualOrder=manualOrder!==undefined;
+      eh+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''}" data-entry-name="${esc(e.name)}" data-entry-section="${esc(e.section||'')}" draggable="true">`;
       eh+=`<div class="idx-entry-name" data-entry="${esc(e.name)}">`;
+      eh+=`<span class="idx-drag-handle" title="Drag to reorder" data-draghandle="${esc(e.name)}">⋮⋮</span>`;
       // Audit checkbox (hidden unless select mode)
       const allSelected=e.results.every(r=>S.auditSelected.has(e.name+'|'+r.segType+'|'+r.rowIdx));
       eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-entry="${esc(e.name)}" ${allSelected?'checked':''} title="Select for AI audit">`;
@@ -6534,6 +6675,10 @@ function rIndex(){
       }else{
         eh+=`${esc(e.name)}`;
         eh+=`<button class="idx-entry-rename" data-rename-start="${esc(e.name)}" title="Rename this tag" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:12px;padding:0 4px;opacity:0;transition:opacity .15s">✎</button>`;
+      }
+      // Manual order badge — only shown if user has dragged this entry
+      if(hasManualOrder){
+        eh+=`<span class="idx-entry-orderbadge" title="Manually positioned (slot ${manualOrder+1}). Click to clear and return to alphabetical.">#${manualOrder+1}<button data-order-clear="${esc(e.name)}|${esc(e.section||'')}" style="background:none;border:none;color:white;cursor:pointer;font-size:10px;padding:0 0 0 4px;margin:0">×</button></span>`;
       }
       if(tooMany)eh+=` <span class="idx-entry-badge warn">${e.results.length} results</span>`;
       if(hasEmpty)eh+=` <span class="idx-entry-badge empty">missing desc</span>`;
@@ -6552,11 +6697,32 @@ function rIndex(){
       const entryNoteKey='entry|'+e.name;
       const entryNote=S.descNotes?.[entryNoteKey];
       const entryHasThread=entryNote&&entryNote.thread&&entryNote.thread.length>0;
-      eh+=`<div class="idx-entry-meta">${e.results.length} result${e.results.length!==1?'s':''} · <span data-bm="${esc(e.name)}" style="cursor:pointer;color:${isBM?'var(--gold)':'var(--tx-4)'}">${IC.bookmark}</span>`;
-      eh+=` · <span data-descnote="${esc(entryNoteKey)}" style="cursor:pointer;color:${entryHasThread?'var(--amber)':'var(--tx-4)'};font-size:11px" title="${entryHasThread?entryNote.thread.length+' comment(s) — click to view':'Add note to entry'}">💬${entryHasThread?entryNote.thread.length:''}</span>`;
-      if(entryHasPending)eh+=` · <button class="btn btn-sm btn-green bulk-accept-btn" data-bulkaccept="${esc(e.name)}">Accept All</button>`;
-      eh+=`</div>`;
+      // Determine if THIS entry's descriptions should be shown:
+      // Default = inverse of global toggle. Per-entry override flips it.
+      const showDescs=S.idxHideDescriptions
+        ? S.idxExpandedEntries.has(e.name)
+        : !S.idxCollapsedEntries.has(e.name);
+      // Per-entry expand/collapse toggle button (always available)
+      const toggleBtnIcon=showDescs?'➖':'➕';
+      const toggleBtnTitle=showDescs?'Hide this entry\u2019s descriptions':'Show this entry\u2019s descriptions';
+      // Meta row: show count visibly when descs are visible; hover-only when hidden
+      if(showDescs){
+        eh+=`<div class="idx-entry-meta">${e.results.length} result${e.results.length!==1?'s':''}`;
+        eh+=` · <button data-toggleentry="${esc(e.name)}" title="${toggleBtnTitle}" style="background:none;border:none;cursor:pointer;color:var(--tx-3);padding:0 4px;font-size:13px">${toggleBtnIcon}</button>`;
+        eh+=` · <span data-bm="${esc(e.name)}" style="cursor:pointer;color:${isBM?'var(--gold)':'var(--tx-4)'}">${IC.bookmark}</span>`;
+        eh+=` · <span data-descnote="${esc(entryNoteKey)}" style="cursor:pointer;color:${entryHasThread?'var(--amber)':'var(--tx-4)'};font-size:11px" title="${entryHasThread?entryNote.thread.length+' comment(s) — click to view':'Add note to entry'}">💬${entryHasThread?entryNote.thread.length:''}</span>`;
+        if(entryHasPending)eh+=` · <button class="btn btn-sm btn-green bulk-accept-btn" data-bulkaccept="${esc(e.name)}">Accept All</button>`;
+        eh+=`</div>`;
+      }else{
+        // Hidden mode — minimal meta row; count only on hover
+        eh+=`<div class="idx-entry-meta" title="${e.results.length} result${e.results.length!==1?'s':''}">`;
+        eh+=`<button data-toggleentry="${esc(e.name)}" title="${toggleBtnTitle}" style="background:none;border:none;cursor:pointer;color:var(--tx-3);padding:0 4px;font-size:13px">${toggleBtnIcon}</button>`;
+        eh+=` · <span data-bm="${esc(e.name)}" style="cursor:pointer;color:${isBM?'var(--gold)':'var(--tx-4)'}">${IC.bookmark}</span>`;
+        eh+=` · <span data-descnote="${esc(entryNoteKey)}" style="cursor:pointer;color:${entryHasThread?'var(--amber)':'var(--tx-4)'};font-size:11px" title="${entryHasThread?entryNote.thread.length+' comment(s) — click to view':'Add note to entry'}">💬${entryHasThread?entryNote.thread.length:''}</span>`;
+        eh+=`</div>`;
+      }
 
+      if(showDescs){
       const byseg={};
       e.results.forEach(r=>{if(!byseg[r.segType])byseg[r.segType]=[];byseg[r.segType].push(r)});
       RULES.segOrder.forEach(seg=>{
@@ -6681,6 +6847,7 @@ function rIndex(){
         });
         eh+='</div>';
       });
+      } // end if(showDescs) — only render result rows when entry is expanded
       eh+='</div>';
       entryHtmls.push(eh);
     });
@@ -7113,6 +7280,8 @@ function rSetup(app){
 try{S.activeRenames=await loadTagRenamesFromTab();console.log(`Loaded ${Object.keys(S.activeRenames).length} active tag renames`);}catch(e){console.warn('Could not load tag renames:',e);S.activeRenames={};}
 // Load section moves the same way — overrides applied during buildIndex
 try{S.sectionOverrides=await loadSectionMovesFromTab();console.log(`Loaded ${Object.keys(S.sectionOverrides).length} active section moves`);}catch(e){console.warn('Could not load section moves:',e);S.sectionOverrides={};}
+// Load tag order
+try{S.tagOrder=await loadTagOrderFromTab();console.log(`Loaded tag order for ${Object.keys(S.tagOrder).length} groups`);}catch(e){console.warn('Could not load tag order:',e);S.tagOrder={};}
 await loadTab(0);
 // CRITICAL: migration runs BEFORE any writes so tabs are populated before anything else touches them
 const migRes=await migrateBlobToPerRow();
@@ -7459,6 +7628,135 @@ function bindAll(){
     S.idxSearchMode=el.dataset.searchmode;
     S.idxPage=0;
     render();
+  });
+  // Global hide/show descriptions toggle
+  on('#idx-toggle-desc','click',()=>{
+    S.idxHideDescriptions=!S.idxHideDescriptions;
+    // Clear per-entry overrides when global toggle changes — start fresh
+    S.idxExpandedEntries=new Set();
+    S.idxCollapsedEntries=new Set();
+    render();
+  });
+  // Per-entry expand/collapse override (when global toggle is in opposite state)
+  $$('[data-toggleentry]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const name=el.dataset.toggleentry;
+    if(S.idxHideDescriptions){
+      // Global hidden — override to SHOW this entry
+      if(S.idxExpandedEntries.has(name))S.idxExpandedEntries.delete(name);
+      else S.idxExpandedEntries.add(name);
+    }else{
+      // Global shown — override to HIDE this entry
+      if(S.idxCollapsedEntries.has(name))S.idxCollapsedEntries.delete(name);
+      else S.idxCollapsedEntries.add(name);
+    }
+    render();
+  });
+
+  // ── Drag-and-drop tag reordering ──
+  $$('.idx-entry[draggable="true"]').forEach(el=>{
+    el.addEventListener('dragstart',ev=>{
+      const name=el.dataset.entryName;
+      const sec=el.dataset.entrySection;
+      ev.dataTransfer.setData('text/plain',JSON.stringify({name,sec}));
+      ev.dataTransfer.effectAllowed='move';
+      el.classList.add('dragging');
+    });
+    el.addEventListener('dragend',()=>{
+      el.classList.remove('dragging');
+      $$('.idx-entry').forEach(x=>x.classList.remove('drag-over-before','drag-over-after'));
+    });
+    el.addEventListener('dragover',ev=>{
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect='move';
+      // Indicator: before or after based on cursor position relative to center
+      const rect=el.getBoundingClientRect();
+      const mid=rect.top+rect.height/2;
+      el.classList.remove('drag-over-before','drag-over-after');
+      if(ev.clientY<mid)el.classList.add('drag-over-before');
+      else el.classList.add('drag-over-after');
+    });
+    el.addEventListener('dragleave',()=>{
+      el.classList.remove('drag-over-before','drag-over-after');
+    });
+    el.addEventListener('drop',async ev=>{
+      ev.preventDefault();
+      el.classList.remove('drag-over-before','drag-over-after');
+      let payload;
+      try{payload=JSON.parse(ev.dataTransfer.getData('text/plain'))}catch{return}
+      const draggedName=payload.name;
+      const draggedSec=payload.sec;
+      const targetName=el.dataset.entryName;
+      const targetSec=el.dataset.entrySection;
+      if(!draggedName||draggedName===targetName)return;
+      if(draggedSec!==targetSec){toast('Cannot reorder across sections — move it first','warn');return}
+      // Determine drop position: before or after target
+      const rect=el.getBoundingClientRect();
+      const dropAfter=ev.clientY>=rect.top+rect.height/2;
+      // Get current section entries in display order
+      const sec=targetSec;
+      const entries=(S.indexData?.sections[sec]||[]).slice();
+      const draggedIdx=entries.findIndex(e=>e.name===draggedName);
+      const targetIdx=entries.findIndex(e=>e.name===targetName);
+      if(draggedIdx<0||targetIdx<0)return;
+      // Compute new index
+      let newIdx=targetIdx;
+      if(dropAfter)newIdx=targetIdx+1;
+      if(draggedIdx<newIdx)newIdx--; // adjust because dragged will be removed first
+      // Reorder in memory
+      const [moved]=entries.splice(draggedIdx,1);
+      entries.splice(newIdx,0,moved);
+      S.indexData.sections[sec]=entries;
+      // Save ORDER for ALL entries in this section
+      // (We do all because applyTagOrder works on absolute slot positions.)
+      // But to keep the tab small, we only write entries whose effective position differs from alphabetical.
+      const alphaSorted=[...entries].sort((a,b)=>a.name.localeCompare(b.name));
+      const groupKey=sec+'|';
+      if(!S.tagOrder[groupKey])S.tagOrder[groupKey]={};
+      const newOrderMap={};
+      // Capture the new position of every entry that's not in its alphabetical slot
+      entries.forEach((e,i)=>{
+        const alphaIdx=alphaSorted.findIndex(a=>a.name===e.name);
+        if(alphaIdx!==i){
+          newOrderMap[e.name]=i;
+        }
+      });
+      // Diff against existing: what's added/changed/removed
+      const oldOrderMap=S.tagOrder[groupKey]||{};
+      const ts=new Date().toISOString();
+      const user=S.user?.name||S.user?.email||'Unknown';
+      const writes=[];
+      // For entries whose order changed or was newly set
+      Object.keys(newOrderMap).forEach(name=>{
+        if(oldOrderMap[name]!==newOrderMap[name]){
+          writes.push(appendToTagOrderLog(name,'',sec,newOrderMap[name],ts,user));
+        }
+      });
+      // For entries that USED TO have a manual order but don't anymore (back to alphabetical)
+      Object.keys(oldOrderMap).forEach(name=>{
+        if(!(name in newOrderMap)){
+          writes.push(appendToTagOrderLog(name,'',sec,'',ts,user)); // empty = revert
+        }
+      });
+      S.tagOrder[groupKey]=newOrderMap;
+      Promise.all(writes).then(()=>console.log(`Saved ${writes.length} order changes in "${sec}"`)).catch(e=>console.warn('Order writes failed:',e));
+      logActivity(`Reordered: "${draggedName}" → position ${newIdx+1} in ${sec}`);
+      toast('Reordered','success');
+      render();
+    });
+  });
+
+  // Clear manual order for an entry (return to alphabetical)
+  $$('[data-order-clear]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const [name,sec]=el.dataset.orderClear.split('|');
+    const groupKey=sec+'|';
+    if(!S.tagOrder[groupKey]||!(name in S.tagOrder[groupKey]))return;
+    delete S.tagOrder[groupKey][name];
+    appendToTagOrderLog(name,'',sec,'',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown').catch(()=>{});
+    logActivity(`Cleared manual order for "${name}" — back to alphabetical`);
+    buildIndex();render();
+    toast('Returned to alphabetical','success');
   });
   // Admin: user work filter dropdown
   on('#user-work-filter','change',()=>{
@@ -9314,6 +9612,8 @@ window.addEventListener('resize',fixIdxScroll);
       try{S.activeRenames=await loadTagRenamesFromTab();console.log(`Loaded ${Object.keys(S.activeRenames).length} active tag renames`);}catch(e){console.warn('Could not load tag renames:',e);S.activeRenames={};}
       // Load section moves the same way
       try{S.sectionOverrides=await loadSectionMovesFromTab();console.log(`Loaded ${Object.keys(S.sectionOverrides).length} active section moves`);}catch(e){console.warn('Could not load section moves:',e);S.sectionOverrides={};}
+      // Load tag order
+      try{S.tagOrder=await loadTagOrderFromTab();console.log(`Loaded tag order for ${Object.keys(S.tagOrder).length} groups`);}catch(e){console.warn('Could not load tag order:',e);S.tagOrder={};}
       await loadTab(0);
       registerTeamMember();
       startAutoRefresh();
