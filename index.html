@@ -5478,9 +5478,25 @@ async function generateIndexTab(sectionName){
     });
     
     const entries=S.indexData.sections[sectionName]||[];
-    // Column layout: A=Entry, B=Segment, C=Original Desc, D=Description, E=Relationship, F=Reference, G=Chapter, H=Relevancy, I=Review, J=AI Suggestion, K=spacer, L=Clip Link, M=Clip Title, N=Transcript, O=spacer, P=Notes, Q=Bookmarked, R=Original Tag Name, S=See Also, T=Parent
-    var EC=21; // total columns (added Parent)
-    var headers=['Entry Name','Segment Type','Original Description','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked','Original Tag Name','See Also','Parent'];
+    // Helper: prefix the reference number based on clip type. Films keep their existing format.
+    function refForClip(r){
+      if(!r)return '';
+      if(r.clipType==='Film Chapter')return r.pvName||''; // Film title (chapter goes in next col)
+      if(r.clipType==='Film')return r.clipName||''; // Film name
+      if(!r.progNum)return '';
+      var pref={
+        'LT Sicha':'A',
+        'LT Timeless Moment':'TM',
+        'LT Eye to Eye':'C',
+        'LT My Encounter':'ME',
+        'Short Film':'SF',
+      }[r.clipType];
+      if(pref===undefined)pref=r.clipType||''; // unknown type → use the clipType verbatim
+      return pref+r.progNum;
+    }
+    // Column layout: A=Entry, B=Subtag, C=Sub-subtag, D=Segment, E=Original Desc, F=Description, G=Relationship, H=Reference, I=Chapter, J=Relevancy, K=Review, L=AI Suggestion, M=spacer, N=Clip Link, O=Clip Title, P=Transcript, Q=spacer, R=Notes, S=Bookmarked, T=Original Tag Name, U=See Also
+    var EC=21; // total columns (3 entry-depth cols replace 1; Parent removed)
+    var headers=['Entry','Subtag','Sub-subtag','Segment Type','Original Description','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked','Original Tag Name','See Also'];
     
     // Step 2: Build rows in indented format
     const dataRows=[headers];
@@ -5489,34 +5505,33 @@ async function generateIndexTab(sectionName){
     const relDefaults=(RULES.relDefaults&&RULES.relDefaults[sectionName])?RULES.relDefaults[sectionName]:(RULES.relDefaults&&RULES.relDefaults.Topics?RULES.relDefaults.Topics:{});
     
     entries.forEach(function(entry){
+      // Determine which column to put the entry name in based on hierarchy depth
+      var depth=entry.depth||0;
+      var nameCol=depth>=2?2:(depth===1?1:0); // 0=A, 1=B, 2=C; cap at 2 (3-level max)
       // === Alias stub entry: single row, just shows "See: target" ===
       if(entry.isAlias){
         var aliasRow=[];for(var z=0;z<EC;z++)aliasRow.push('');
-        aliasRow[0]=entry.name||'';
-        aliasRow[3]='See: '+entry.aliasTargetResolved; // Description column shows the pointer
-        aliasRow[8]='Alias';
+        aliasRow[nameCol]=entry.name||'';
+        aliasRow[5]='See: '+entry.aliasTargetResolved; // Description column (F=index 5)
+        aliasRow[10]='Alias'; // Review Status column (K=index 10)
         dataRows.push(aliasRow);
         return;
       }
       var entryRow=[];for(var z=0;z<EC;z++)entryRow.push('');
-      entryRow[0]=entry.name||'';
-      // R (col 17): Original Tag Name — populated if entry was renamed
+      entryRow[nameCol]=entry.name||'';
+      // T (col 19): Original Tag Name — populated if entry was renamed
       if(entry.originalNames&&entry.originalNames.size){
-        entryRow[17]=Array.from(entry.originalNames).join('; ');
+        entryRow[19]=Array.from(entry.originalNames).join('; ');
       }else if(entry.originalName&&entry.originalName!==entry.name){
-        entryRow[17]=entry.originalName;
+        entryRow[19]=entry.originalName;
       }
-      // S (col 18): See Also — list tag refs (resolved current names) and free-text refs
+      // U (col 20): See Also — list tag refs (resolved current names) and free-text refs
       var seeAlsoList=S.seeAlsoRefs?.[entry.name]||[];
       if(seeAlsoList.length){
-        entryRow[18]=seeAlsoList.map(function(s){
+        entryRow[20]=seeAlsoList.map(function(s){
           if(s.type==='tag')return resolveTagName(s.target);
           return '"'+s.target+'"';
         }).join('; ');
-      }
-      // T (col 19): Parent — immediate parent tag name (per user spec)
-      if(entry.parent){
-        entryRow[19]=entry.parent;
       }
       dataRows.push(entryRow);
       
@@ -5531,57 +5546,51 @@ async function generateIndexTab(sectionName){
         if(!bySeg[seg])return;
         
         var segRow=[];for(var z=0;z<EC;z++)segRow.push('');
-        segRow[1]=seg;
+        segRow[3]=seg; // D: Segment Type (index 3)
         dataRows.push(segRow);
         
         bySeg[seg].sort(function(a,b){return(a.desc||'').localeCompare(b.desc||'')});
         
         bySeg[seg].forEach(function(r){
           var row=[];for(var z=0;z<EC;z++)row.push('');
-          // C: Original Description — from reviewData if available
+          // E: Original Description (index 4) — from reviewData if available
           var rvk=rvKey(entry.name,seg,r.rowIdx);
           var rvd=getRV(rvk);
-          row[2]=(rvd&&rvd.originalDesc)?rvd.originalDesc:'';
-          // D: Description (current)
-          row[3]=r.desc||'';
-          // E: Relationship (only if non-default)
+          row[4]=(rvd&&rvd.originalDesc)?rvd.originalDesc:'';
+          // F: Description (index 5)
+          row[5]=r.desc||'';
+          // G: Relationship (index 6) — only if non-default
           var defRel=relDefaults[seg]||'spoken_about';
           if(r.rel&&r.rel!==defRel){
-            if(sectionName==='Nigunim'){if(r.rel==='spoken_about')row[4]=r.rel}
-            else row[4]=r.rel;
+            if(sectionName==='Nigunim'){if(r.rel==='spoken_about')row[6]=r.rel}
+            else row[6]=r.rel;
           }
-          // F: Reference — for films show film title, for others show program number
+          // H: Reference (index 7) — prefix by clip type; films keep their format
+          row[7]=refForClip(r);
+          // I: Chapter Name For Film (index 8) — only for Film Chapters
           if(r.clipType==='Film Chapter'){
-            row[5]=r.pvName||''; // Film title
-          }else if(r.clipType==='Film'){
-            row[5]=r.clipName||''; // Film name
-          }else{
-            row[5]=r.progNum?('#'+r.progNum):'';
+            row[8]=r.clipName||''; // Chapter title
           }
-          // G: Chapter Name For Film (only for Film Chapters)
-          if(r.clipType==='Film Chapter'){
-            row[6]=r.clipName||''; // Chapter title
-          }
-          // H: Relevancy
-          row[7]=(r.relevancy||'').toString();
-          // I: Review Status — fill from existing reviewData if available
+          // J: Relevancy (index 9)
+          row[9]=(r.relevancy||'').toString();
+          // K: Review Status (index 10) — fill from existing reviewData if available
           if(rvd){
             var statusLabels={pending:'⏳ Pending',accepted:'✅ Accepted',denied:'❌ Denied',custom:'✏️ Custom',ok:'✓ OK'};
-            row[8]=statusLabels[rvd.status]||(rvd.reviewed?'✓ Reviewed':'');
-            // J: AI Suggestion
-            row[9]=rvd.suggestion||'';
+            row[10]=statusLabels[rvd.status]||(rvd.reviewed?'✓ Reviewed':'');
+            // L: AI Suggestion (index 11)
+            row[11]=rvd.suggestion||'';
           }else{
-            row[8]='';
-            row[9]='';
+            row[10]='';
+            row[11]='';
           }
-          // K: spacer (row[10])
-          // L: Clip link
+          // M: spacer (index 12)
+          // N: Clip link (index 13)
           var cid=r.clipId||(r.objId?(r.objId.replace('video_clip-','')):'');
-          row[11]=cid?('https://videos.jem.tv/video-player?clip='+cid):'';
-          // M: Clip title
-          row[12]=r.clipName||'';
-          // N: Transcript excerpt
-          row[13]=(r.transcript||'').substring(0,500);
+          row[13]=cid?('https://videos.jem.tv/video-player?clip='+cid):'';
+          // O: Clip title (index 14)
+          row[14]=r.clipName||'';
+          // P: Transcript excerpt (index 15)
+          row[15]=(r.transcript||'').substring(0,500);
           dataRows.push(row);
         });
       });
@@ -5629,7 +5638,7 @@ async function generateIndexTab(sectionName){
     S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(function(s){return{title:s.properties.title,sid:s.properties.sheetId}})};
     invalidateTabMapCache(tabName);
     
-    // Auto-hide Original Description (col C, index 2), Review columns (I-J, index 8-9), and Original Tag Name (col R, index 17)
+    // Auto-hide Original Description (col E, index 4), Review columns (K-L, index 10-11), and Original Tag Name (col T, index 19)
     try{
       var newSheet=meta.result.sheets.find(function(s){return s.properties.title===tabName});
       if(newSheet){
@@ -5637,9 +5646,9 @@ async function generateIndexTab(sectionName){
         await gapi.client.sheets.spreadsheets.batchUpdate({
           spreadsheetId:S.sheetId,
           resource:{requests:[
-            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:2,endIndex:3},properties:{hiddenByUser:true},fields:'hiddenByUser'}},
-            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:8,endIndex:10},properties:{hiddenByUser:true},fields:'hiddenByUser'}},
-            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:17,endIndex:18},properties:{hiddenByUser:true},fields:'hiddenByUser'}}
+            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:4,endIndex:5},properties:{hiddenByUser:true},fields:'hiddenByUser'}},
+            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:10,endIndex:12},properties:{hiddenByUser:true},fields:'hiddenByUser'}},
+            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:19,endIndex:20},properties:{hiddenByUser:true},fields:'hiddenByUser'}}
           ]}
         });
       }
