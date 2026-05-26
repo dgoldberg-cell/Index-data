@@ -992,6 +992,10 @@ idxHideDescriptions:false, // Global toggle: when true, hide all clip descriptio
 idxExpandedEntries:new Set(), // Per-entry expand overrides when global is hidden (current view only, not persisted)
 idxCollapsedEntries:new Set(), // Per-entry collapse overrides when global is shown (current view only, not persisted)
 tagOrder:{}, // {entryName: orderIndex} — absolute slot positions for manually-ordered entries within each section. Built from _TagOrder tab.
+seeAlsoRefs:{}, // {entryName: [{target, type:'tag'|'freetext'}]} — built from _SeeAlsoRefs tab. Targets use ORIGINAL names; resolve via S.activeRenames at render.
+aliases:[], // [{alias, targetOriginal, addedBy, ts}] — built from _Aliases tab. Aliases appear as entries with "See: target".
+seeAlsoPicker:null, // {entryName, query} — open typeahead picker for adding See Also
+aliasPicker:null, // {entryName, query} — open typeahead picker for adding alias
 userWorkFilter:'', // Admin only: when set, filter entries to show only those touched by this user (email)
 sidebarWorkspaceOpen:true, // Workspace section dropdown expand/collapse (user-controlled)
 transcriptHighlights:{}, // Cache: {tag|clipId → {loading, phrases:[], noMatch:bool, error}}
@@ -2943,6 +2947,10 @@ async function manualRefresh(){
     try{S.sectionOverrides=await loadSectionMovesFromTab();}catch(e){console.warn('Could not refresh moves:',e);}
     // Reload tag order
     try{S.tagOrder=await loadTagOrderFromTab();}catch(e){console.warn('Could not refresh tag order:',e);}
+    // Reload see also refs
+    try{S.seeAlsoRefs=await loadSeeAlsoFromTab();}catch(e){console.warn('Could not refresh see also:',e);}
+    // Reload aliases
+    try{S.aliases=await loadAliasesFromTab();}catch(e){console.warn('Could not refresh aliases:',e);}
     buildIndex();render(true);
     toast('All data refreshed','success');
   }catch(e){
@@ -3592,6 +3600,228 @@ function applyTagOrder(entries,orderMap){
   }
   return result.filter(Boolean);
 }
+
+// === SEE ALSO REFERENCES ===
+// _SeeAlsoRefs tab: Timestamp | Entry Name | Target | Type (tag/freetext) | Action (add/remove) | Set By
+// Targets are stored using ORIGINAL names so renames don't break references.
+// Latest action per (entryName, target) wins. Action 'remove' = unlink.
+async function appendToSeeAlsoLog(entryName,target,type,action,timestamp,user){
+  const TAB='_SeeAlsoRefs';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:F1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Entry Name','Target','Type','Action','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _SeeAlsoRefs tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:F`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),entryName,target,type||'tag',action||'add',user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to see also log:',e)}
+}
+
+async function loadSeeAlsoFromTab(){
+  const TAB='_SeeAlsoRefs';
+  if(!S.connected)return {};
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return {};
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:F10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>{
+      const at=Date.parse(a[0]||'')||0;
+      const bt=Date.parse(b[0]||'')||0;
+      return at-bt;
+    });
+    const map={};
+    sorted.forEach(row=>{
+      const entryName=(row[1]||'').trim();
+      const target=(row[2]||'').trim();
+      const type=(row[3]||'tag').trim();
+      const action=(row[4]||'add').trim();
+      if(!entryName||!target)return;
+      if(!map[entryName])map[entryName]=[];
+      // Find existing entry with same target
+      const idx=map[entryName].findIndex(x=>x.target===target&&x.type===type);
+      if(action==='remove'){
+        if(idx>=0)map[entryName].splice(idx,1);
+      }else{
+        if(idx<0)map[entryName].push({target,type});
+        // If exists, latest add wins (no-op since unchanged)
+      }
+    });
+    // Remove empty arrays
+    Object.keys(map).forEach(k=>{if(!map[k].length)delete map[k]});
+    return map;
+  }catch(e){
+    console.warn('Failed to load see also refs:',e);
+    return {};
+  }
+}
+
+// === ALIASES ===
+// _Aliases tab: Timestamp | Alias Name | Target Entry | Action (add/remove) | Set By
+// Target uses ORIGINAL name (survives renames; resolves via S.activeRenames at display).
+async function appendToAliasLog(aliasName,targetOriginal,action,timestamp,user){
+  const TAB='_Aliases';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:E1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Alias Name','Target Entry','Action','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _Aliases tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:E`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),aliasName,targetOriginal,action||'add',user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to alias log:',e)}
+}
+
+async function loadAliasesFromTab(){
+  const TAB='_Aliases';
+  if(!S.connected)return [];
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return [];
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:E10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>{
+      const at=Date.parse(a[0]||'')||0;
+      const bt=Date.parse(b[0]||'')||0;
+      return at-bt;
+    });
+    const map={}; // alias → {targetOriginal, addedBy, ts}
+    sorted.forEach(row=>{
+      const alias=(row[1]||'').trim();
+      const target=(row[2]||'').trim();
+      const action=(row[3]||'add').trim();
+      const setBy=(row[4]||'').trim();
+      const ts=row[0];
+      if(!alias||!target)return;
+      if(action==='remove'){
+        delete map[alias];
+      }else{
+        map[alias]={alias,targetOriginal:target,addedBy:setBy,ts};
+      }
+    });
+    return Object.values(map);
+  }catch(e){
+    console.warn('Failed to load aliases:',e);
+    return [];
+  }
+}
+
+// Add a See Also reference to an entry. Target is stored using ORIGINAL name if it's a tag,
+// or as free text if not.
+async function addSeeAlsoRef(entryName,target,type){
+  // For tag refs: target is the current display name — convert back to its ORIGINAL for storage
+  // so renames don't break it.
+  let storedTarget=target;
+  if(type==='tag'&&S.activeRenames){
+    // If target is a CURRENT name (renamed), find its original
+    for(const orig of Object.keys(S.activeRenames)){
+      if(S.activeRenames[orig]===target){storedTarget=orig;break}
+    }
+  }
+  // Update memory
+  if(!S.seeAlsoRefs[entryName])S.seeAlsoRefs[entryName]=[];
+  // Don't duplicate
+  if(S.seeAlsoRefs[entryName].some(s=>s.target===storedTarget&&s.type===type)){
+    toast('That reference already exists','warn');
+    return;
+  }
+  S.seeAlsoRefs[entryName].push({target:storedTarget,type});
+  S.seeAlsoPicker=null;
+  // Persist
+  await appendToSeeAlsoLog(entryName,storedTarget,type,'add',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  logActivity(`Added See Also: "${entryName}" → ${type==='tag'?'['+target+']':'"'+target+'"'}`);
+  toast(`See Also added`,'success');
+  render();
+}
+
+async function removeSeeAlsoRef(entryName,target,type){
+  if(!S.seeAlsoRefs[entryName])return;
+  S.seeAlsoRefs[entryName]=S.seeAlsoRefs[entryName].filter(s=>!(s.target===target&&s.type===type));
+  if(!S.seeAlsoRefs[entryName].length)delete S.seeAlsoRefs[entryName];
+  await appendToSeeAlsoLog(entryName,target,type,'remove',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  logActivity(`Removed See Also: "${entryName}" → ${type==='tag'?'['+target+']':'"'+target+'"'}`);
+  toast(`See Also removed`,'success');
+  render();
+}
+
+async function addAlias(aliasName,targetCurrentName){
+  const trimmed=aliasName.trim();
+  if(!trimmed){toast('Enter an alias name','error');return}
+  // Check collision with existing entry names and other aliases
+  const allEntryNames=new Set();
+  Object.values(S.indexData?.sections||{}).forEach(arr=>arr.forEach(en=>allEntryNames.add(en.name)));
+  if(allEntryNames.has(trimmed)){
+    toast(`"${trimmed}" already exists as an entry or alias`,'error');
+    return;
+  }
+  // Store target by ORIGINAL name (resolves through renames at display)
+  let targetOriginal=targetCurrentName;
+  if(S.activeRenames){
+    for(const orig of Object.keys(S.activeRenames)){
+      if(S.activeRenames[orig]===targetCurrentName){targetOriginal=orig;break}
+    }
+  }
+  S.aliases.push({alias:trimmed,targetOriginal,addedBy:S.user?.name||S.user?.email||'Unknown',ts:new Date().toISOString()});
+  S.aliasPicker=null;
+  await appendToAliasLog(trimmed,targetOriginal,'add',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  logActivity(`Added alias: "${trimmed}" → ${targetCurrentName}`);
+  toast(`Alias added`,'success');
+  buildIndex();render();
+}
+
+async function removeAlias(aliasName){
+  const al=S.aliases.find(a=>a.alias===aliasName);
+  if(!al)return;
+  S.aliases=S.aliases.filter(a=>a.alias!==aliasName);
+  await appendToAliasLog(aliasName,al.targetOriginal,'remove',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  logActivity(`Removed alias: "${aliasName}"`);
+  toast(`Alias removed`,'success');
+  buildIndex();render();
+}
+
 
 
 // Helper: tab title lookup
@@ -4512,6 +4742,42 @@ function buildIndex(){
     });
     sections[sec].push(e);
   });
+
+  // Inject aliases as stub entries (no results, just a "See: target" pointer).
+  // Each alias lives in the same section as its target.
+  if(Array.isArray(S.aliases)&&S.aliases.length){
+    S.aliases.forEach(al=>{
+      // Resolve target via S.activeRenames (handles chain)
+      const resolvedTarget=resolveTagName(al.targetOriginal);
+      // Find target entry to determine section
+      const targetEntry=entries[resolvedTarget];
+      if(!targetEntry){
+        console.warn(`Alias "${al.alias}" → "${al.targetOriginal}" target not found (resolved to "${resolvedTarget}")`);
+        return;
+      }
+      // Skip if an alias collides with a real entry name
+      if(entries[al.alias]){
+        console.warn(`Alias "${al.alias}" collides with existing entry — skipping`);
+        return;
+      }
+      const sec=targetEntry.section;
+      const stub={
+        name:al.alias,
+        path:targetEntry.path,
+        section:sec,
+        results:[], // No clip results
+        seealso:[],
+        bestbet:null,
+        isAlias:true,
+        aliasTargetOriginal:al.targetOriginal,
+        aliasTargetResolved:resolvedTarget,
+        aliasAddedBy:al.addedBy,
+      };
+      if(!sections[sec])sections[sec]=[];
+      sections[sec].push(stub);
+    });
+  }
+
   // Sort entries within each section alphabetically, then apply manual ordering overrides
   Object.keys(sections).forEach(sec=>{
     sections[sec].sort((a,b)=>a.name.localeCompare(b.name));
@@ -4525,7 +4791,7 @@ function buildIndex(){
     }
   });
 
-  S.indexData={sections,totalEntries:Object.keys(entries).length,totalResults:Object.values(entries).reduce((s,e)=>s+e.results.length,0)};
+  S.indexData={sections,totalEntries:Object.keys(entries).length+(S.aliases?.length||0),totalResults:Object.values(entries).reduce((s,e)=>s+e.results.length,0)};
 }
 
 // ── Google Sheets API ─────────────────────────────────────
@@ -4854,9 +5120,9 @@ async function generateIndexTab(sectionName){
     });
     
     const entries=S.indexData.sections[sectionName]||[];
-    // Column layout: A=Entry, B=Segment, C=Original Desc, D=Description, E=Relationship, F=Reference, G=Chapter, H=Relevancy, I=Review, J=AI Suggestion, K=spacer, L=Clip Link, M=Clip Title, N=Transcript, O=spacer, P=Notes, Q=Bookmarked, R=Original Tag Name (only populated when entry was renamed)
-    var EC=19; // total columns
-    var headers=['Entry Name','Segment Type','Original Description','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked','Original Tag Name'];
+    // Column layout: A=Entry, B=Segment, C=Original Desc, D=Description, E=Relationship, F=Reference, G=Chapter, H=Relevancy, I=Review, J=AI Suggestion, K=spacer, L=Clip Link, M=Clip Title, N=Transcript, O=spacer, P=Notes, Q=Bookmarked, R=Original Tag Name, S=See Also
+    var EC=20; // total columns (added See Also)
+    var headers=['Entry Name','Segment Type','Original Description','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked','Original Tag Name','See Also'];
     
     // Step 2: Build rows in indented format
     const dataRows=[headers];
@@ -4865,6 +5131,15 @@ async function generateIndexTab(sectionName){
     const relDefaults=(RULES.relDefaults&&RULES.relDefaults[sectionName])?RULES.relDefaults[sectionName]:(RULES.relDefaults&&RULES.relDefaults.Topics?RULES.relDefaults.Topics:{});
     
     entries.forEach(function(entry){
+      // === Alias stub entry: single row, just shows "See: target" ===
+      if(entry.isAlias){
+        var aliasRow=[];for(var z=0;z<EC;z++)aliasRow.push('');
+        aliasRow[0]=entry.name||'';
+        aliasRow[3]='See: '+entry.aliasTargetResolved; // Description column shows the pointer
+        aliasRow[8]='Alias';
+        dataRows.push(aliasRow);
+        return;
+      }
       var entryRow=[];for(var z=0;z<EC;z++)entryRow.push('');
       entryRow[0]=entry.name||'';
       // R (col 17): Original Tag Name — populated if entry was renamed
@@ -4872,6 +5147,14 @@ async function generateIndexTab(sectionName){
         entryRow[17]=Array.from(entry.originalNames).join('; ');
       }else if(entry.originalName&&entry.originalName!==entry.name){
         entryRow[17]=entry.originalName;
+      }
+      // S (col 18): See Also — list tag refs (resolved current names) and free-text refs
+      var seeAlsoList=S.seeAlsoRefs?.[entry.name]||[];
+      if(seeAlsoList.length){
+        entryRow[18]=seeAlsoList.map(function(s){
+          if(s.type==='tag')return resolveTagName(s.target);
+          return '"'+s.target+'"';
+        }).join('; ');
       }
       dataRows.push(entryRow);
       
@@ -6633,9 +6916,19 @@ function rIndex(){
         }
         return false;
       };
-      if(mode==='name')entries=entries.filter(matchEntryName);
-      else if(mode==='desc')entries=entries.filter(e=>e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
-      else entries=entries.filter(e=>matchEntryName(e)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+      // First-pass filter
+      let filtered;
+      if(mode==='name')filtered=entries.filter(matchEntryName);
+      else if(mode==='desc')filtered=entries.filter(e=>e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+      else filtered=entries.filter(e=>matchEntryName(e)||e.results.some(r=>(r.desc||'').toLowerCase().includes(q)));
+      // If an alias matches, also include its target (when target is in this same section)
+      const includeNames=new Set(filtered.map(e=>e.name));
+      filtered.forEach(e=>{
+        if(e.isAlias&&e.aliasTargetResolved){
+          includeNames.add(e.aliasTargetResolved);
+        }
+      });
+      entries=entries.filter(e=>includeNames.has(e.name));
     }
     if(!entries.length)return;
     // Apply review filter
@@ -6648,6 +6941,28 @@ function rIndex(){
     }
 
     entries.forEach(e=>{
+      // === Alias stub entry — minimal render ===
+      if(e.isAlias){
+        let eh='';
+        const orderGroupKey=(e.section||'')+'|';
+        const manualOrder=S.tagOrder?.[orderGroupKey]?.[e.name];
+        const hasManualOrder=manualOrder!==undefined;
+        eh+=`<div class="idx-entry idx-entry-alias" data-entry-name="${esc(e.name)}" data-entry-section="${esc(e.section||'')}" draggable="true" style="opacity:0.85">`;
+        eh+=`<div class="idx-entry-name" data-entry="${esc(e.name)}" style="font-style:italic">`;
+        eh+=`<span class="idx-drag-handle" title="Drag to reorder" data-draghandle="${esc(e.name)}">⋮⋮</span>`;
+        eh+=`<span>${esc(e.name)}</span>`;
+        if(hasManualOrder){
+          eh+=`<span class="idx-entry-orderbadge" title="Manually positioned (slot ${manualOrder+1})">#${manualOrder+1}<button data-order-clear="${esc(e.name)}|${esc(e.section||'')}" style="background:none;border:none;color:white;cursor:pointer;font-size:10px;padding:0 0 0 4px;margin:0">×</button></span>`;
+        }
+        eh+=`<button data-alias-delete="${esc(e.name)}" title="Remove alias" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:11px;padding:0 4px;margin-left:4px">×</button>`;
+        eh+=`</div>`;
+        eh+=`<div class="idx-entry-meta" style="font-style:italic;color:var(--tx-3)">See: <a href="#" data-jumpentry="${esc(e.aliasTargetResolved)}" style="color:var(--blue);text-decoration:none;font-weight:600">${esc(e.aliasTargetResolved)}</a> →</div>`;
+        eh+=`</div>`;
+        entryHtmls.push(eh);
+        entryCount++;
+        return;
+      }
+      // === Normal entry render ===
       const isBM=S.idxBookmarks[e.name];
       const hasEmpty=e.results.some(r=>!r.desc?.trim());
       const tooMany=e.results.length>=12;
@@ -6697,6 +7012,73 @@ function rIndex(){
       const entryNoteKey='entry|'+e.name;
       const entryNote=S.descNotes?.[entryNoteKey];
       const entryHasThread=entryNote&&entryNote.thread&&entryNote.thread.length>0;
+
+      // === See Also references ===
+      // The data is stored by entry CURRENT name. We render targets resolving via S.activeRenames.
+      const seeAlsoList=S.seeAlsoRefs?.[e.name]||[];
+      // Aliases that point AT this entry (so user can see/manage them inline)
+      const aliasesPointingHere=(S.aliases||[]).filter(al=>resolveTagName(al.targetOriginal)===e.name);
+      if(seeAlsoList.length||aliasesPointingHere.length||S.seeAlsoPicker?.entryName===e.name||S.aliasPicker?.entryName===e.name){
+        eh+=`<div class="idx-seealso" style="font-size:11px;color:var(--tx-3);margin:2px 0 4px 2px;line-height:1.6">`;
+        if(seeAlsoList.length){
+          eh+=`<span style="font-style:italic;color:var(--tx-4)">See also:</span> `;
+          const parts=seeAlsoList.map(s=>{
+            if(s.type==='tag'){
+              const resolved=resolveTagName(s.target);
+              return `<a href="#" data-jumpentry="${esc(resolved)}" style="color:var(--blue);text-decoration:none;font-weight:500">${esc(resolved)}</a><button data-seealso-rm="${esc(e.name)}|${esc(s.target)}|tag" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:10px;padding:0 2px">×</button>`;
+            }else{
+              return `<em style="color:var(--tx-2)">"${esc(s.target)}"</em><button data-seealso-rm="${esc(e.name)}|${esc(s.target)}|freetext" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:10px;padding:0 2px">×</button>`;
+            }
+          });
+          eh+=parts.join(', ');
+          eh+=` `;
+        }
+        // Inline typeahead picker for See Also
+        if(S.seeAlsoPicker?.entryName===e.name){
+          const q=(S.seeAlsoPicker.query||'').toLowerCase();
+          eh+=`<div style="display:inline-flex;align-items:center;gap:4px;margin-left:6px;position:relative">`;
+          eh+=`<input id="seealso-input" type="text" placeholder="Type tag name or free text…" value="${esc(S.seeAlsoPicker.query||'')}" style="font-size:11px;padding:2px 6px;border:1px solid var(--gold);border-radius:4px;width:200px" autofocus>`;
+          eh+=`<button data-seealso-save="${esc(e.name)}" class="btn btn-sm btn-gold" style="font-size:10px;padding:1px 6px">Add</button>`;
+          eh+=`<button data-seealso-cancel="1" class="btn btn-sm" style="font-size:10px;padding:1px 6px">×</button>`;
+          // Show matching entries dropdown
+          if(q&&q.length>=1){
+            const allEntries=[];
+            Object.values(S.indexData.sections||{}).forEach(arr=>arr.forEach(en=>{if(!en.isAlias)allEntries.push(en.name)}));
+            const matches=allEntries.filter(n=>n.toLowerCase().includes(q)&&n!==e.name).slice(0,8);
+            if(matches.length){
+              eh+=`<div style="position:absolute;top:100%;left:0;margin-top:2px;background:white;border:1px solid var(--line);border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.1);min-width:240px;max-height:220px;overflow-y:auto;z-index:50">`;
+              matches.forEach(name=>{
+                eh+=`<div data-seealso-pick="${esc(e.name)}|${esc(name)}" style="padding:4px 8px;cursor:pointer;font-size:11px;border-bottom:1px solid var(--line)" onmouseover="this.style.background='#f5f0e0'" onmouseout="this.style.background=''">${esc(name)}</div>`;
+              });
+              eh+=`</div>`;
+            }
+          }
+          eh+=`</div>`;
+        }else{
+          eh+=`<button data-seealso-add="${esc(e.name)}" title="Add See Also reference" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-3);font-size:10px;padding:1px 8px;margin-left:4px">+ See also</button>`;
+        }
+        // Aliases pointing here
+        if(aliasesPointingHere.length){
+          eh+=`<div style="margin-top:3px;font-size:10px;color:var(--tx-4)">Also indexed as: ${aliasesPointingHere.map(al=>`<em style="color:var(--tx-2)">${esc(al.alias)}</em><button data-alias-delete="${esc(al.alias)}" title="Remove alias" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:10px;padding:0 2px">×</button>`).join(', ')}</div>`;
+        }
+        // Inline alias picker
+        if(S.aliasPicker?.entryName===e.name){
+          eh+=`<div style="display:inline-flex;align-items:center;gap:4px;margin-top:3px;position:relative">`;
+          eh+=`<input id="alias-input" type="text" placeholder="New alias name (e.g. Kennedy Airport)" value="${esc(S.aliasPicker.query||'')}" style="font-size:11px;padding:2px 6px;border:1px solid var(--gold);border-radius:4px;width:220px" autofocus>`;
+          eh+=`<button data-alias-save="${esc(e.name)}" class="btn btn-sm btn-gold" style="font-size:10px;padding:1px 6px">Add</button>`;
+          eh+=`<button data-alias-cancel="1" class="btn btn-sm" style="font-size:10px;padding:1px 6px">×</button>`;
+          eh+=`</div>`;
+        }else{
+          eh+=` <button data-alias-add="${esc(e.name)}" title="Add an alias — a separate entry that points here" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-3);font-size:10px;padding:1px 8px;margin-left:4px">+ Alias</button>`;
+        }
+        eh+=`</div>`;
+      }else{
+        // Even when no See Alsos/Aliases, show the add buttons (small, subtle)
+        eh+=`<div class="idx-seealso" style="font-size:11px;color:var(--tx-3);margin:2px 0 4px 2px;line-height:1.6">`;
+        eh+=`<button data-seealso-add="${esc(e.name)}" title="Add See Also reference" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-4);font-size:10px;padding:1px 8px">+ See also</button>`;
+        eh+=` <button data-alias-add="${esc(e.name)}" title="Add an alias — a separate entry that points here" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-4);font-size:10px;padding:1px 8px">+ Alias</button>`;
+        eh+=`</div>`;
+      }
       // Determine if THIS entry's descriptions should be shown:
       // Default = inverse of global toggle. Per-entry override flips it.
       const showDescs=S.idxHideDescriptions
@@ -7282,6 +7664,8 @@ try{S.activeRenames=await loadTagRenamesFromTab();console.log(`Loaded ${Object.k
 try{S.sectionOverrides=await loadSectionMovesFromTab();console.log(`Loaded ${Object.keys(S.sectionOverrides).length} active section moves`);}catch(e){console.warn('Could not load section moves:',e);S.sectionOverrides={};}
 // Load tag order
 try{S.tagOrder=await loadTagOrderFromTab();console.log(`Loaded tag order for ${Object.keys(S.tagOrder).length} groups`);}catch(e){console.warn('Could not load tag order:',e);S.tagOrder={};}
+try{S.seeAlsoRefs=await loadSeeAlsoFromTab();console.log(`Loaded See Also refs for ${Object.keys(S.seeAlsoRefs).length} entries`);}catch(e){console.warn('Could not load see also:',e);S.seeAlsoRefs={};}
+try{S.aliases=await loadAliasesFromTab();console.log(`Loaded ${S.aliases.length} aliases`);}catch(e){console.warn('Could not load aliases:',e);S.aliases=[];}
 await loadTab(0);
 // CRITICAL: migration runs BEFORE any writes so tabs are populated before anything else touches them
 const migRes=await migrateBlobToPerRow();
@@ -7757,6 +8141,112 @@ function bindAll(){
     logActivity(`Cleared manual order for "${name}" — back to alphabetical`);
     buildIndex();render();
     toast('Returned to alphabetical','success');
+  });
+
+  // ── See Also handlers ──
+  $$('[data-seealso-add]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    S.seeAlsoPicker={entryName:el.dataset.seealsoAdd,query:''};
+    S.aliasPicker=null;
+    render();
+    setTimeout(()=>{const i=$('#seealso-input');if(i)i.focus()},50);
+  });
+  on('#seealso-input','input',()=>{
+    if(S.seeAlsoPicker){
+      S.seeAlsoPicker.query=$('#seealso-input').value;
+      render();
+      setTimeout(()=>{const i=$('#seealso-input');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},10);
+    }
+  });
+  on('#seealso-input','keydown',ev=>{
+    if(ev.key==='Enter'){
+      ev.preventDefault();
+      const btn=$(`[data-seealso-save]`);
+      if(btn)btn.click();
+    }else if(ev.key==='Escape'){
+      S.seeAlsoPicker=null;render();
+    }
+  });
+  $$('[data-seealso-pick]').forEach(el=>el.onmousedown=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const [entryName,pickedName]=el.dataset.seealsoPick.split('|');
+    await addSeeAlsoRef(entryName,pickedName,'tag');
+  });
+  $$('[data-seealso-save]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const entryName=el.dataset.seealsoSave;
+    const val=($('#seealso-input')?.value||'').trim();
+    if(!val){toast('Enter a target','error');return}
+    // If val matches an existing entry name exactly → tag type; else freetext
+    const allNames=new Set();
+    Object.values(S.indexData.sections||{}).forEach(arr=>arr.forEach(en=>{if(!en.isAlias)allNames.add(en.name)}));
+    const type=allNames.has(val)?'tag':'freetext';
+    await addSeeAlsoRef(entryName,val,type);
+  });
+  $$('[data-seealso-cancel]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    S.seeAlsoPicker=null;render();
+  });
+  $$('[data-seealso-rm]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const [entryName,target,type]=el.dataset.seealsoRm.split('|');
+    await removeSeeAlsoRef(entryName,target,type);
+  });
+
+  // ── Alias handlers ──
+  $$('[data-alias-add]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    S.aliasPicker={entryName:el.dataset.aliasAdd,query:''};
+    S.seeAlsoPicker=null;
+    render();
+    setTimeout(()=>{const i=$('#alias-input');if(i)i.focus()},50);
+  });
+  on('#alias-input','keydown',ev=>{
+    if(ev.key==='Enter'){
+      ev.preventDefault();
+      const btn=$(`[data-alias-save]`);
+      if(btn)btn.click();
+    }else if(ev.key==='Escape'){
+      S.aliasPicker=null;render();
+    }
+  });
+  $$('[data-alias-save]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const entryName=el.dataset.aliasSave;
+    const val=($('#alias-input')?.value||'').trim();
+    if(!val){toast('Enter an alias name','error');return}
+    await addAlias(val,entryName);
+  });
+  $$('[data-alias-cancel]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    S.aliasPicker=null;render();
+  });
+  $$('[data-alias-delete]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const alias=el.dataset.aliasDelete;
+    if(!await customConfirm(`Remove alias "${alias}"?`))return;
+    await removeAlias(alias);
+  });
+  // Click on alias-target link → jump to that entry
+  $$('[data-jumpentry]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const name=el.dataset.jumpentry;
+    // Find the entry's section
+    let foundSection=null;
+    for(const sec of Object.keys(S.indexData.sections||{})){
+      if(S.indexData.sections[sec].some(en=>en.name===name)){foundSection=sec;break}
+    }
+    if(foundSection){
+      S.idxActiveSection=foundSection;
+      S.idxSearch=name;
+      S.idxPage=0;
+      render();
+      // Scroll into view after render
+      setTimeout(()=>{
+        const target=document.querySelector(`[data-entry-name="${CSS.escape(name)}"]`);
+        if(target)target.scrollIntoView({behavior:'smooth',block:'center'});
+      },100);
+    }
   });
   // Admin: user work filter dropdown
   on('#user-work-filter','change',()=>{
@@ -9614,6 +10104,10 @@ window.addEventListener('resize',fixIdxScroll);
       try{S.sectionOverrides=await loadSectionMovesFromTab();console.log(`Loaded ${Object.keys(S.sectionOverrides).length} active section moves`);}catch(e){console.warn('Could not load section moves:',e);S.sectionOverrides={};}
       // Load tag order
       try{S.tagOrder=await loadTagOrderFromTab();console.log(`Loaded tag order for ${Object.keys(S.tagOrder).length} groups`);}catch(e){console.warn('Could not load tag order:',e);S.tagOrder={};}
+      // Load see also refs
+      try{S.seeAlsoRefs=await loadSeeAlsoFromTab();console.log(`Loaded See Also refs for ${Object.keys(S.seeAlsoRefs).length} entries`);}catch(e){console.warn('Could not load see also:',e);S.seeAlsoRefs={};}
+      // Load aliases
+      try{S.aliases=await loadAliasesFromTab();console.log(`Loaded ${S.aliases.length} aliases`);}catch(e){console.warn('Could not load aliases:',e);S.aliases=[];}
       await loadTab(0);
       registerTeamMember();
       startAutoRefresh();
