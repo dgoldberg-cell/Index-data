@@ -158,6 +158,13 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-drag-handle:hover{opacity:1 !important;color:var(--tx-2)}
 .idx-drag-handle:active{cursor:grabbing}
 .idx-entry-orderbadge{font-size:9px;font-weight:600;background:var(--gold);color:white;padding:1px 5px;border-radius:8px;margin-left:4px;vertical-align:middle}
+.idx-entry.depth-1{margin-left:24px;padding-left:12px;border-left:2px solid var(--line)}
+.idx-entry.depth-2{margin-left:48px;padding-left:12px;border-left:2px solid var(--line)}
+.idx-entry.has-children .idx-entry-name{font-weight:800}
+.idx-entry-synth-badge{font-size:9px;font-weight:600;background:#a08055;color:white;padding:1px 5px;border-radius:8px;margin-left:4px}
+.idx-entry-parent-badge{font-size:10px;color:var(--tx-4);font-style:italic;margin-left:6px}
+.idx-children-toggle{background:none;border:none;cursor:pointer;color:var(--tx-3);font-size:13px;padding:0 4px;margin-right:4px}
+.idx-children-toggle:hover{color:var(--tx-1)}
 .idx-entry-badge{font-size:9px;font-weight:500;font-family:var(--font);padding:1px 6px;border-radius:8px;vertical-align:middle}
 .idx-entry-badge.warn{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(154,122,48,.2)}
 .idx-entry-badge.empty{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
@@ -994,6 +1001,10 @@ idxCollapsedEntries:new Set(), // Per-entry collapse overrides when global is sh
 tagOrder:{}, // {entryName: orderIndex} — absolute slot positions for manually-ordered entries within each section. Built from _TagOrder tab.
 seeAlsoRefs:{}, // {entryName: [{target, type:'tag'|'freetext'}]} — built from _SeeAlsoRefs tab. Targets use ORIGINAL names; resolve via S.activeRenames at render.
 aliases:[], // [{alias, targetOriginal, addedBy, ts}] — built from _Aliases tab. Aliases appear as entries with "See: target".
+tagHierarchy:{}, // {childName: parentName} — built from _TagHierarchy. Empty parent = top-level.
+syntheticTags:[], // [{name, section, addedBy, ts}] — built from _SyntheticTags tab. Parent tags created by user.
+collapsedParents:new Set(), // Per-session — parents whose children are collapsed in workstation
+parentPicker:null, // {entryName, query} — open typeahead for setting parent
 seeAlsoPicker:null, // {entryName, query} — open typeahead picker for adding See Also
 aliasPicker:null, // {entryName, query} — open typeahead picker for adding alias
 userWorkFilter:'', // Admin only: when set, filter entries to show only those touched by this user (email)
@@ -2951,6 +2962,9 @@ async function manualRefresh(){
     try{S.seeAlsoRefs=await loadSeeAlsoFromTab();}catch(e){console.warn('Could not refresh see also:',e);}
     // Reload aliases
     try{S.aliases=await loadAliasesFromTab();}catch(e){console.warn('Could not refresh aliases:',e);}
+    // Reload hierarchy
+    try{S.tagHierarchy=await loadHierarchyFromTab();}catch(e){console.warn('Could not refresh hierarchy:',e);}
+    try{S.syntheticTags=await loadSyntheticTagsFromTab();}catch(e){console.warn('Could not refresh synthetic tags:',e);}
     buildIndex();render(true);
     toast('All data refreshed','success');
   }catch(e){
@@ -3820,6 +3834,244 @@ async function removeAlias(aliasName){
   logActivity(`Removed alias: "${aliasName}"`);
   toast(`Alias removed`,'success');
   buildIndex();render();
+}
+
+// === TAG HIERARCHY ===
+// _TagHierarchy tab: Timestamp | Child Entry | Parent Entry | Action | Set By
+// childName → parentName. Empty parent OR action='remove' = top-level (no parent).
+// Children are stored by CURRENT name; rename refactor will update if needed.
+async function appendToHierarchyLog(child,parent,action,timestamp,user){
+  const TAB='_TagHierarchy';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:E1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Child Entry','Parent Entry','Action','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _TagHierarchy tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:E`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),child,parent||'',action||'add',user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to hierarchy log:',e)}
+}
+
+async function loadHierarchyFromTab(){
+  const TAB='_TagHierarchy';
+  if(!S.connected)return {};
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return {};
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:E10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>{
+      const at=Date.parse(a[0]||'')||0;
+      const bt=Date.parse(b[0]||'')||0;
+      return at-bt;
+    });
+    const map={};
+    sorted.forEach(row=>{
+      const child=(row[1]||'').trim();
+      const parent=(row[2]||'').trim();
+      const action=(row[3]||'add').trim();
+      if(!child)return;
+      if(action==='remove'||!parent){
+        delete map[child];
+      }else{
+        map[child]=parent;
+      }
+    });
+    return map;
+  }catch(e){
+    console.warn('Failed to load hierarchy:',e);
+    return {};
+  }
+}
+
+// === SYNTHETIC TAGS — parent tags created by the user that don't exist in the main sheet ===
+// _SyntheticTags tab: Timestamp | Name | Section | Action | Set By
+async function appendToSyntheticTagsLog(name,section,action,timestamp,user){
+  const TAB='_SyntheticTags';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:E1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Name','Section','Action','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _SyntheticTags tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:E`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),name,section||'',action||'add',user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to synthetic tags log:',e)}
+}
+
+async function loadSyntheticTagsFromTab(){
+  const TAB='_SyntheticTags';
+  if(!S.connected)return [];
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return [];
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:E10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>{
+      const at=Date.parse(a[0]||'')||0;
+      const bt=Date.parse(b[0]||'')||0;
+      return at-bt;
+    });
+    const map={};
+    sorted.forEach(row=>{
+      const name=(row[1]||'').trim();
+      const section=(row[2]||'').trim();
+      const action=(row[3]||'add').trim();
+      const setBy=(row[4]||'').trim();
+      const ts=row[0];
+      if(!name)return;
+      if(action==='remove'){
+        delete map[name];
+      }else{
+        map[name]={name,section,addedBy:setBy,ts};
+      }
+    });
+    return Object.values(map);
+  }catch(e){
+    console.warn('Failed to load synthetic tags:',e);
+    return [];
+  }
+}
+
+// Compute the depth of an entry in the hierarchy (0=top-level).
+// Used to enforce max 3 levels.
+function hierarchyDepth(entryName,visited){
+  if(!S.tagHierarchy||!S.tagHierarchy[entryName])return 0;
+  visited=visited||new Set();
+  if(visited.has(entryName))return 99; // cycle guard
+  visited.add(entryName);
+  return 1+hierarchyDepth(S.tagHierarchy[entryName],visited);
+}
+
+// Find all descendants of an entry (recursive)
+function getDescendants(parentName){
+  const out=[];
+  if(!S.tagHierarchy)return out;
+  Object.keys(S.tagHierarchy).forEach(child=>{
+    if(S.tagHierarchy[child]===parentName){
+      out.push(child);
+      out.push(...getDescendants(child));
+    }
+  });
+  return out;
+}
+
+// Set a tag's parent. Validates depth and cycles. Returns {ok, reason}
+async function setParent(childName,parentName){
+  if(childName===parentName)return{ok:false,reason:'Cannot be its own parent'};
+  // Cycle check: parent cannot be a descendant of child
+  const descendants=getDescendants(childName);
+  if(descendants.includes(parentName))return{ok:false,reason:'Would create a cycle'};
+  // Depth check: parent's depth + 1 (for child) + max depth in child's subtree must be ≤ 3
+  const parentDepth=hierarchyDepth(parentName);
+  // child becomes parentDepth+1; child's subtree must fit
+  // longest descendant chain from child:
+  let maxChildSubtreeDepth=0;
+  const stack=[{name:childName,d:0}];
+  while(stack.length){
+    const {name,d}=stack.pop();
+    if(d>maxChildSubtreeDepth)maxChildSubtreeDepth=d;
+    Object.keys(S.tagHierarchy||{}).forEach(c=>{
+      if(S.tagHierarchy[c]===name)stack.push({name:c,d:d+1});
+    });
+  }
+  const finalDepth=parentDepth+1+maxChildSubtreeDepth;
+  if(finalDepth>2){ // 0-indexed: 0,1,2 = three levels
+    return{ok:false,reason:`Would exceed 3-level max (final depth ${finalDepth+1})`};
+  }
+  S.tagHierarchy[childName]=parentName;
+  await appendToHierarchyLog(childName,parentName,'add',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  logActivity(`Set parent: "${childName}" under "${parentName}"`);
+  return{ok:true};
+}
+
+// Clear a tag's parent (back to top-level)
+async function clearParent(childName){
+  if(!S.tagHierarchy[childName])return{ok:false,reason:'No parent set'};
+  const oldParent=S.tagHierarchy[childName];
+  delete S.tagHierarchy[childName];
+  await appendToHierarchyLog(childName,oldParent,'remove',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  logActivity(`Removed parent: "${childName}" back to top-level`);
+  return{ok:true};
+}
+
+// Create a synthetic parent tag (a parent that has no clips of its own)
+async function createSyntheticParent(name,section){
+  const trimmed=name.trim();
+  if(!trimmed)return{ok:false,reason:'Empty name'};
+  // Check collision
+  const allNames=new Set();
+  Object.values(S.indexData?.sections||{}).forEach(arr=>arr.forEach(en=>allNames.add(en.name)));
+  if(allNames.has(trimmed))return{ok:false,reason:`"${trimmed}" already exists`};
+  S.syntheticTags.push({name:trimmed,section,addedBy:S.user?.name||S.user?.email||'Unknown',ts:new Date().toISOString()});
+  await appendToSyntheticTagsLog(trimmed,section,'add',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  logActivity(`Created synthetic parent tag: "${trimmed}" in ${section}`);
+  return{ok:true};
+}
+
+async function deleteSyntheticParent(name){
+  // Remove from list
+  S.syntheticTags=S.syntheticTags.filter(s=>s.name!==name);
+  // Clear any children pointing to it
+  const orphaned=[];
+  Object.keys(S.tagHierarchy||{}).forEach(child=>{
+    if(S.tagHierarchy[child]===name){
+      delete S.tagHierarchy[child];
+      orphaned.push(child);
+    }
+  });
+  await appendToSyntheticTagsLog(name,'','remove',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  // Log orphan reverts
+  const ts=new Date().toISOString();
+  const user=S.user?.name||S.user?.email||'Unknown';
+  for(const child of orphaned){
+    await appendToHierarchyLog(child,name,'remove',ts,user);
+  }
+  logActivity(`Deleted synthetic parent: "${name}" (${orphaned.length} children released)`);
+  return{ok:true,orphaned};
 }
 
 
@@ -4778,17 +5030,123 @@ function buildIndex(){
     });
   }
 
-  // Sort entries within each section alphabetically, then apply manual ordering overrides
+  // Inject synthetic parent tags as entries (no clip results)
+  if(Array.isArray(S.syntheticTags)&&S.syntheticTags.length){
+    S.syntheticTags.forEach(st=>{
+      if(entries[st.name]){
+        console.warn(`Synthetic tag "${st.name}" collides with existing entry — skipping`);
+        return;
+      }
+      // Apply rename if any
+      const resolvedName=resolveTagName(st.name);
+      if(entries[resolvedName]){
+        console.warn(`Synthetic tag "${st.name}" resolves to existing entry "${resolvedName}" — skipping`);
+        return;
+      }
+      // Apply section override if any
+      let sec=st.section||'Topics';
+      if(S.sectionOverrides&&S.sectionOverrides[st.name])sec=S.sectionOverrides[st.name];
+      const stub={
+        name:resolvedName,
+        originalName:st.name!==resolvedName?st.name:null,
+        path:'',
+        section:sec,
+        results:[],
+        seealso:[],
+        bestbet:null,
+        isSynthetic:true,
+        syntheticAddedBy:st.addedBy,
+      };
+      if(!sections[sec])sections[sec]=[];
+      sections[sec].push(stub);
+      entries[resolvedName]=stub; // also register so things like seeAlso find it
+    });
+  }
+
+  // === HIERARCHY: assign parent/depth/children to each entry ===
+  // S.tagHierarchy: {childName: parentName} using CURRENT display names
+  // Apply rename map first to handle stored historical names
+  const liveHierarchy={};
+  if(S.tagHierarchy){
+    Object.keys(S.tagHierarchy).forEach(child=>{
+      const resolvedChild=resolveTagName(child);
+      const resolvedParent=resolveTagName(S.tagHierarchy[child]);
+      liveHierarchy[resolvedChild]=resolvedParent;
+    });
+  }
+  // Annotate every entry with parent & depth
+  Object.values(sections).forEach(arr=>{
+    arr.forEach(e=>{
+      e.parent=liveHierarchy[e.name]||null;
+      e.children=[];
+    });
+  });
+  // Walk and set depth (with cycle protection)
+  function _depth(name,seen){
+    if(seen.has(name))return 0;
+    seen.add(name);
+    const p=liveHierarchy[name];
+    if(!p)return 0;
+    return 1+_depth(p,seen);
+  }
+  Object.values(sections).forEach(arr=>{
+    arr.forEach(e=>{e.depth=_depth(e.name,new Set())});
+  });
+  // Populate children lists
+  Object.values(sections).forEach(arr=>{
+    arr.forEach(e=>{
+      if(e.parent){
+        // Find parent entry in same section
+        const parentEntry=arr.find(x=>x.name===e.parent);
+        if(parentEntry)parentEntry.children.push(e);
+      }
+    });
+  });
+
+  // Sort entries within each section: top-level alphabetically, then nest children under parents in display order
   Object.keys(sections).forEach(sec=>{
-    sections[sec].sort((a,b)=>a.name.localeCompare(b.name));
-    // Apply manual ordering: top-level entries in this section (parent='')
+    let arr=sections[sec];
+    // Build a map name → entry for fast lookup
+    const byName={};
+    arr.forEach(e=>byName[e.name]=e);
+    // Separate top-level entries (no parent OR parent not in this section)
+    const topLevel=arr.filter(e=>!e.parent||!byName[e.parent]);
+    // Sort top-level alphabetically
+    topLevel.sort((a,b)=>a.name.localeCompare(b.name));
+    // Apply manual ordering for top-level
     if(S.tagOrder){
       const groupKey=sec+'|';
       const orderMap=S.tagOrder[groupKey];
       if(orderMap&&Object.keys(orderMap).length){
-        sections[sec]=applyTagOrder(sections[sec],orderMap);
+        const ordered=applyTagOrder(topLevel,orderMap);
+        topLevel.length=0;topLevel.push(...ordered);
       }
     }
+    // Sort children of each parent alphabetically + apply manual order
+    arr.forEach(e=>{
+      if(e.children&&e.children.length){
+        e.children.sort((a,b)=>a.name.localeCompare(b.name));
+        if(S.tagOrder){
+          const groupKey=sec+'|'+e.name;
+          const orderMap=S.tagOrder[groupKey];
+          if(orderMap&&Object.keys(orderMap).length){
+            e.children=applyTagOrder(e.children,orderMap);
+          }
+        }
+      }
+    });
+    // Now flatten: each parent followed by its descendants (DFS)
+    const flat=[];
+    function pushSubtree(entry){
+      flat.push(entry);
+      if(entry.children&&entry.children.length){
+        entry.children.forEach(c=>pushSubtree(c));
+      }
+    }
+    topLevel.forEach(t=>pushSubtree(t));
+    // Include any orphans (entries whose parent isn't in section — shouldn't happen but safety)
+    arr.forEach(e=>{if(!flat.includes(e))flat.push(e)});
+    sections[sec]=flat;
   });
 
   S.indexData={sections,totalEntries:Object.keys(entries).length+(S.aliases?.length||0),totalResults:Object.values(entries).reduce((s,e)=>s+e.results.length,0)};
@@ -5120,9 +5478,9 @@ async function generateIndexTab(sectionName){
     });
     
     const entries=S.indexData.sections[sectionName]||[];
-    // Column layout: A=Entry, B=Segment, C=Original Desc, D=Description, E=Relationship, F=Reference, G=Chapter, H=Relevancy, I=Review, J=AI Suggestion, K=spacer, L=Clip Link, M=Clip Title, N=Transcript, O=spacer, P=Notes, Q=Bookmarked, R=Original Tag Name, S=See Also
-    var EC=20; // total columns (added See Also)
-    var headers=['Entry Name','Segment Type','Original Description','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked','Original Tag Name','See Also'];
+    // Column layout: A=Entry, B=Segment, C=Original Desc, D=Description, E=Relationship, F=Reference, G=Chapter, H=Relevancy, I=Review, J=AI Suggestion, K=spacer, L=Clip Link, M=Clip Title, N=Transcript, O=spacer, P=Notes, Q=Bookmarked, R=Original Tag Name, S=See Also, T=Parent
+    var EC=21; // total columns (added Parent)
+    var headers=['Entry Name','Segment Type','Original Description','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked','Original Tag Name','See Also','Parent'];
     
     // Step 2: Build rows in indented format
     const dataRows=[headers];
@@ -5155,6 +5513,10 @@ async function generateIndexTab(sectionName){
           if(s.type==='tag')return resolveTagName(s.target);
           return '"'+s.target+'"';
         }).join('; ');
+      }
+      // T (col 19): Parent — immediate parent tag name (per user spec)
+      if(entry.parent){
+        entryRow[19]=entry.parent;
       }
       dataRows.push(entryRow);
       
@@ -6970,13 +7332,37 @@ function rIndex(){
       const entryHasPending=e.results.some(r=>hasPendingSuggestion(e.name,r.segType,r.rowIdx));
       entryCount++;
 
+      // === Hierarchy: if this entry has a parent that's collapsed, skip rendering ===
+      if(e.parent){
+        // Walk up to check if any ancestor is collapsed
+        let anc=e.parent;
+        let isHidden=false;
+        const seen=new Set();
+        while(anc&&!seen.has(anc)){
+          seen.add(anc);
+          if(S.collapsedParents.has(anc)){isHidden=true;break}
+          const parentEntry=entries.find(x=>x.name===anc);
+          if(!parentEntry)break;
+          anc=parentEntry.parent||null;
+        }
+        if(isHidden)return;
+      }
+
       let eh='';
-      const orderGroupKey=(e.section||'')+'|'; // top-level for now (no parent yet)
+      // For top-level entries, group is section|''. For children, group is section|parentName.
+      const orderGroupKey=(e.section||'')+'|'+(e.parent||'');
       const manualOrder=S.tagOrder?.[orderGroupKey]?.[e.name];
       const hasManualOrder=manualOrder!==undefined;
-      eh+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''}" data-entry-name="${esc(e.name)}" data-entry-section="${esc(e.section||'')}" draggable="true">`;
+      const hasChildren=e.children&&e.children.length>0;
+      const depthClass=e.depth?`depth-${Math.min(e.depth,2)}`:'';
+      eh+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''} ${depthClass} ${hasChildren?'has-children':''}" data-entry-name="${esc(e.name)}" data-entry-section="${esc(e.section||'')}" data-entry-parent="${esc(e.parent||'')}" draggable="true">`;
       eh+=`<div class="idx-entry-name" data-entry="${esc(e.name)}">`;
       eh+=`<span class="idx-drag-handle" title="Drag to reorder" data-draghandle="${esc(e.name)}">⋮⋮</span>`;
+      // Children collapse toggle
+      if(hasChildren){
+        const isCollapsed=S.collapsedParents.has(e.name);
+        eh+=`<button class="idx-children-toggle" data-collapseparent="${esc(e.name)}" title="${isCollapsed?'Show':'Hide'} ${e.children.length} subtag${e.children.length!==1?'s':''}">${isCollapsed?'▶':'▼'}</button>`;
+      }
       // Audit checkbox (hidden unless select mode)
       const allSelected=e.results.every(r=>S.auditSelected.has(e.name+'|'+r.segType+'|'+r.rowIdx));
       eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-entry="${esc(e.name)}" ${allSelected?'checked':''} title="Select for AI audit">`;
@@ -6991,14 +7377,24 @@ function rIndex(){
         eh+=`${esc(e.name)}`;
         eh+=`<button class="idx-entry-rename" data-rename-start="${esc(e.name)}" title="Rename this tag" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:12px;padding:0 4px;opacity:0;transition:opacity .15s">✎</button>`;
       }
+      // Synthetic badge
+      if(e.isSynthetic){
+        eh+=`<span class="idx-entry-synth-badge" title="Synthetic parent tag — no clips of its own. Click × to delete.">parent<button data-synth-delete="${esc(e.name)}" style="background:none;border:none;color:white;cursor:pointer;font-size:10px;padding:0 0 0 4px;margin:0">×</button></span>`;
+      }
+      // Parent indicator (immediate parent name)
+      if(e.parent){
+        eh+=`<span class="idx-entry-parent-badge" title="Parent tag">↳ under <a href="#" data-jumpentry="${esc(e.parent)}" style="color:var(--blue);text-decoration:none">${esc(e.parent)}</a> <button data-clear-parent="${esc(e.name)}" title="Remove parent (back to top-level)" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:10px;padding:0 2px">×</button></span>`;
+      }
       // Manual order badge — only shown if user has dragged this entry
       if(hasManualOrder){
-        eh+=`<span class="idx-entry-orderbadge" title="Manually positioned (slot ${manualOrder+1}). Click to clear and return to alphabetical.">#${manualOrder+1}<button data-order-clear="${esc(e.name)}|${esc(e.section||'')}" style="background:none;border:none;color:white;cursor:pointer;font-size:10px;padding:0 0 0 4px;margin:0">×</button></span>`;
+        eh+=`<span class="idx-entry-orderbadge" title="Manually positioned (slot ${manualOrder+1}). Click to clear and return to alphabetical.">#${manualOrder+1}<button data-order-clear="${esc(e.name)}|${esc(e.section||'')}|${esc(e.parent||'')}" style="background:none;border:none;color:white;cursor:pointer;font-size:10px;padding:0 0 0 4px;margin:0">×</button></span>`;
       }
       if(tooMany)eh+=` <span class="idx-entry-badge warn">${e.results.length} results</span>`;
       if(hasEmpty)eh+=` <span class="idx-entry-badge empty">missing desc</span>`;
-      // Status toggle — Pending/Reviewed
-      eh+=`<button class="idx-entry-status ${entryDone?'reviewed':''}" data-entry-rv="${esc(e.name)}">${entryDone?'✓ Reviewed':'Pending'}</button>`;
+      // Status toggle — Pending/Reviewed (skip for synthetic since no clips)
+      if(!e.isSynthetic){
+        eh+=`<button class="idx-entry-status ${entryDone?'reviewed':''}" data-entry-rv="${esc(e.name)}">${entryDone?'✓ Reviewed':'Pending'}</button>`;
+      }
       eh+=`</div>`;
       // Show "was: X ↺" if this entry has been renamed (uses S.activeRenames via buildIndex)
       // e.originalName is set in buildIndex when one original maps to this current name.
@@ -7018,7 +7414,8 @@ function rIndex(){
       const seeAlsoList=S.seeAlsoRefs?.[e.name]||[];
       // Aliases that point AT this entry (so user can see/manage them inline)
       const aliasesPointingHere=(S.aliases||[]).filter(al=>resolveTagName(al.targetOriginal)===e.name);
-      if(seeAlsoList.length||aliasesPointingHere.length||S.seeAlsoPicker?.entryName===e.name||S.aliasPicker?.entryName===e.name){
+      const showParentPicker=S.parentPicker?.entryName===e.name;
+      if(seeAlsoList.length||aliasesPointingHere.length||S.seeAlsoPicker?.entryName===e.name||S.aliasPicker?.entryName===e.name||showParentPicker){
         eh+=`<div class="idx-seealso" style="font-size:11px;color:var(--tx-3);margin:2px 0 4px 2px;line-height:1.6">`;
         if(seeAlsoList.length){
           eh+=`<span style="font-style:italic;color:var(--tx-4)">See also:</span> `;
@@ -7071,12 +7468,39 @@ function rIndex(){
         }else{
           eh+=` <button data-alias-add="${esc(e.name)}" title="Add an alias — a separate entry that points here" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-3);font-size:10px;padding:1px 8px;margin-left:4px">+ Alias</button>`;
         }
+        // Parent picker
+        if(showParentPicker){
+          const pq=(S.parentPicker.query||'').toLowerCase();
+          eh+=`<div style="display:inline-flex;align-items:center;gap:4px;margin-top:3px;position:relative">`;
+          eh+=`<input id="parent-input" type="text" placeholder="Pick existing parent OR type new (creates synthetic)" value="${esc(S.parentPicker.query||'')}" style="font-size:11px;padding:2px 6px;border:1px solid var(--gold);border-radius:4px;width:280px" autofocus>`;
+          eh+=`<button data-parent-save="${esc(e.name)}" class="btn btn-sm btn-gold" style="font-size:10px;padding:1px 6px">Set</button>`;
+          eh+=`<button data-parent-cancel="1" class="btn btn-sm" style="font-size:10px;padding:1px 6px">×</button>`;
+          if(pq&&pq.length>=1){
+            // Show matches from same section (so we don't allow cross-section parents)
+            const sameSecEntries=(S.indexData?.sections?.[e.section]||[]).filter(en=>!en.isAlias&&en.name!==e.name&&en.name.toLowerCase().includes(pq)).slice(0,8);
+            if(sameSecEntries.length){
+              eh+=`<div style="position:absolute;top:100%;left:0;margin-top:2px;background:white;border:1px solid var(--line);border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.1);min-width:280px;max-height:220px;overflow-y:auto;z-index:50">`;
+              sameSecEntries.forEach(parent=>{
+                const lbl=parent.isSynthetic?`${parent.name} <span style="color:#a08055;font-size:9px">[parent]</span>`:parent.name;
+                eh+=`<div data-parent-pick="${esc(e.name)}|${esc(parent.name)}" style="padding:4px 8px;cursor:pointer;font-size:11px;border-bottom:1px solid var(--line)" onmouseover="this.style.background='#f5f0e0'" onmouseout="this.style.background=''">${lbl}</div>`;
+              });
+              eh+=`</div>`;
+            }
+          }
+          eh+=`</div>`;
+        }else if(!e.parent&&!e.isAlias){
+          // Only show "Make subtag" if entry doesn't already have a parent
+          eh+=` <button data-parent-add="${esc(e.name)}" title="Make this entry a subtag (child) of another tag in this section" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-3);font-size:10px;padding:1px 8px;margin-left:4px">↳ Subtag of…</button>`;
+        }
         eh+=`</div>`;
       }else{
         // Even when no See Alsos/Aliases, show the add buttons (small, subtle)
         eh+=`<div class="idx-seealso" style="font-size:11px;color:var(--tx-3);margin:2px 0 4px 2px;line-height:1.6">`;
         eh+=`<button data-seealso-add="${esc(e.name)}" title="Add See Also reference" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-4);font-size:10px;padding:1px 8px">+ See also</button>`;
         eh+=` <button data-alias-add="${esc(e.name)}" title="Add an alias — a separate entry that points here" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-4);font-size:10px;padding:1px 8px">+ Alias</button>`;
+        if(!e.parent){
+          eh+=` <button data-parent-add="${esc(e.name)}" title="Make this entry a subtag of another tag in this section" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-4);font-size:10px;padding:1px 8px">↳ Subtag of…</button>`;
+        }
         eh+=`</div>`;
       }
       // Determine if THIS entry's descriptions should be shown:
@@ -7666,6 +8090,8 @@ try{S.sectionOverrides=await loadSectionMovesFromTab();console.log(`Loaded ${Obj
 try{S.tagOrder=await loadTagOrderFromTab();console.log(`Loaded tag order for ${Object.keys(S.tagOrder).length} groups`);}catch(e){console.warn('Could not load tag order:',e);S.tagOrder={};}
 try{S.seeAlsoRefs=await loadSeeAlsoFromTab();console.log(`Loaded See Also refs for ${Object.keys(S.seeAlsoRefs).length} entries`);}catch(e){console.warn('Could not load see also:',e);S.seeAlsoRefs={};}
 try{S.aliases=await loadAliasesFromTab();console.log(`Loaded ${S.aliases.length} aliases`);}catch(e){console.warn('Could not load aliases:',e);S.aliases=[];}
+try{S.tagHierarchy=await loadHierarchyFromTab();console.log(`Loaded hierarchy for ${Object.keys(S.tagHierarchy).length} entries`);}catch(e){console.warn('Could not load hierarchy:',e);S.tagHierarchy={};}
+try{S.syntheticTags=await loadSyntheticTagsFromTab();console.log(`Loaded ${S.syntheticTags.length} synthetic parent tags`);}catch(e){console.warn('Could not load synthetic tags:',e);S.syntheticTags=[];}
 await loadTab(0);
 // CRITICAL: migration runs BEFORE any writes so tabs are populated before anything else touches them
 const migRes=await migrateBlobToPerRow();
@@ -8042,7 +8468,8 @@ function bindAll(){
     el.addEventListener('dragstart',ev=>{
       const name=el.dataset.entryName;
       const sec=el.dataset.entrySection;
-      ev.dataTransfer.setData('text/plain',JSON.stringify({name,sec}));
+      const parent=el.dataset.entryParent||'';
+      ev.dataTransfer.setData('text/plain',JSON.stringify({name,sec,parent}));
       ev.dataTransfer.effectAllowed='move';
       el.classList.add('dragging');
     });
@@ -8070,62 +8497,61 @@ function bindAll(){
       try{payload=JSON.parse(ev.dataTransfer.getData('text/plain'))}catch{return}
       const draggedName=payload.name;
       const draggedSec=payload.sec;
+      const draggedParent=payload.parent||'';
       const targetName=el.dataset.entryName;
       const targetSec=el.dataset.entrySection;
+      const targetParent=el.dataset.entryParent||'';
       if(!draggedName||draggedName===targetName)return;
       if(draggedSec!==targetSec){toast('Cannot reorder across sections — move it first','warn');return}
+      if(draggedParent!==targetParent){toast(`Cannot reorder across different parents — drag within the same group`,'warn');return}
       // Determine drop position: before or after target
       const rect=el.getBoundingClientRect();
       const dropAfter=ev.clientY>=rect.top+rect.height/2;
-      // Get current section entries in display order
+      // Get peer entries in this parent group (same section, same parent)
       const sec=targetSec;
-      const entries=(S.indexData?.sections[sec]||[]).slice();
-      const draggedIdx=entries.findIndex(e=>e.name===draggedName);
-      const targetIdx=entries.findIndex(e=>e.name===targetName);
+      const parent=targetParent;
+      const allInSec=(S.indexData?.sections[sec]||[]);
+      const peers=allInSec.filter(e=>(e.parent||'')===parent);
+      const draggedIdx=peers.findIndex(e=>e.name===draggedName);
+      const targetIdx=peers.findIndex(e=>e.name===targetName);
       if(draggedIdx<0||targetIdx<0)return;
       // Compute new index
       let newIdx=targetIdx;
       if(dropAfter)newIdx=targetIdx+1;
-      if(draggedIdx<newIdx)newIdx--; // adjust because dragged will be removed first
-      // Reorder in memory
-      const [moved]=entries.splice(draggedIdx,1);
-      entries.splice(newIdx,0,moved);
-      S.indexData.sections[sec]=entries;
-      // Save ORDER for ALL entries in this section
-      // (We do all because applyTagOrder works on absolute slot positions.)
-      // But to keep the tab small, we only write entries whose effective position differs from alphabetical.
-      const alphaSorted=[...entries].sort((a,b)=>a.name.localeCompare(b.name));
-      const groupKey=sec+'|';
+      if(draggedIdx<newIdx)newIdx--;
+      // Reorder peers in memory (full reorder will happen at next buildIndex; here we mainly persist)
+      const [moved]=peers.splice(draggedIdx,1);
+      peers.splice(newIdx,0,moved);
+      // Save ORDER: each peer's position vs alphabetical
+      const alphaSorted=[...peers].sort((a,b)=>a.name.localeCompare(b.name));
+      const groupKey=sec+'|'+parent;
       if(!S.tagOrder[groupKey])S.tagOrder[groupKey]={};
       const newOrderMap={};
-      // Capture the new position of every entry that's not in its alphabetical slot
-      entries.forEach((e,i)=>{
+      peers.forEach((e,i)=>{
         const alphaIdx=alphaSorted.findIndex(a=>a.name===e.name);
         if(alphaIdx!==i){
           newOrderMap[e.name]=i;
         }
       });
-      // Diff against existing: what's added/changed/removed
       const oldOrderMap=S.tagOrder[groupKey]||{};
       const ts=new Date().toISOString();
       const user=S.user?.name||S.user?.email||'Unknown';
       const writes=[];
-      // For entries whose order changed or was newly set
       Object.keys(newOrderMap).forEach(name=>{
         if(oldOrderMap[name]!==newOrderMap[name]){
-          writes.push(appendToTagOrderLog(name,'',sec,newOrderMap[name],ts,user));
+          writes.push(appendToTagOrderLog(name,parent,sec,newOrderMap[name],ts,user));
         }
       });
-      // For entries that USED TO have a manual order but don't anymore (back to alphabetical)
       Object.keys(oldOrderMap).forEach(name=>{
         if(!(name in newOrderMap)){
-          writes.push(appendToTagOrderLog(name,'',sec,'',ts,user)); // empty = revert
+          writes.push(appendToTagOrderLog(name,parent,sec,'',ts,user));
         }
       });
       S.tagOrder[groupKey]=newOrderMap;
-      Promise.all(writes).then(()=>console.log(`Saved ${writes.length} order changes in "${sec}"`)).catch(e=>console.warn('Order writes failed:',e));
-      logActivity(`Reordered: "${draggedName}" → position ${newIdx+1} in ${sec}`);
+      Promise.all(writes).then(()=>console.log(`Saved ${writes.length} order changes in "${sec}" / parent "${parent||'(top)'}"`)).catch(e=>console.warn('Order writes failed:',e));
+      logActivity(`Reordered: "${draggedName}" → position ${newIdx+1} ${parent?`under "${parent}"`:`in ${sec}`}`);
       toast('Reordered','success');
+      buildIndex();
       render();
     });
   });
@@ -8133,11 +8559,14 @@ function bindAll(){
   // Clear manual order for an entry (return to alphabetical)
   $$('[data-order-clear]').forEach(el=>el.onclick=async ev=>{
     ev.preventDefault();ev.stopPropagation();
-    const [name,sec]=el.dataset.orderClear.split('|');
-    const groupKey=sec+'|';
+    const parts=el.dataset.orderClear.split('|');
+    const name=parts[0];
+    const sec=parts[1];
+    const parent=parts[2]||'';
+    const groupKey=sec+'|'+parent;
     if(!S.tagOrder[groupKey]||!(name in S.tagOrder[groupKey]))return;
     delete S.tagOrder[groupKey][name];
-    appendToTagOrderLog(name,'',sec,'',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown').catch(()=>{});
+    appendToTagOrderLog(name,parent,sec,'',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown').catch(()=>{});
     logActivity(`Cleared manual order for "${name}" — back to alphabetical`);
     buildIndex();render();
     toast('Returned to alphabetical','success');
@@ -8247,6 +8676,110 @@ function bindAll(){
         if(target)target.scrollIntoView({behavior:'smooth',block:'center'});
       },100);
     }
+  });
+
+  // ── Parent picker (Make subtag of...) ──
+  $$('[data-parent-add]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    S.parentPicker={entryName:el.dataset.parentAdd,query:''};
+    S.seeAlsoPicker=null;S.aliasPicker=null;
+    render();
+    setTimeout(()=>{const i=$('#parent-input');if(i)i.focus()},50);
+  });
+  on('#parent-input','input',()=>{
+    if(S.parentPicker){
+      S.parentPicker.query=$('#parent-input').value;
+      render();
+      setTimeout(()=>{const i=$('#parent-input');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},10);
+    }
+  });
+  on('#parent-input','keydown',ev=>{
+    if(ev.key==='Enter'){
+      ev.preventDefault();
+      const btn=$('[data-parent-save]');
+      if(btn)btn.click();
+    }else if(ev.key==='Escape'){
+      S.parentPicker=null;render();
+    }
+  });
+  $$('[data-parent-pick]').forEach(el=>el.onmousedown=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const [childName,parentName]=el.dataset.parentPick.split('|');
+    const res=await setParent(childName,parentName);
+    if(res.ok){
+      S.parentPicker=null;
+      toast(`"${childName}" is now under "${parentName}"`,'success');
+      buildIndex();render();
+    }else{
+      toast(`Cannot set parent: ${res.reason}`,'error');
+    }
+  });
+  $$('[data-parent-save]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const childName=el.dataset.parentSave;
+    const val=($('#parent-input')?.value||'').trim();
+    if(!val){toast('Enter a parent name','error');return}
+    // Find child's section
+    const childEntry=Object.values(S.indexData.sections||{}).flat().find(en=>en.name===childName);
+    if(!childEntry){toast('Child entry not found','error');return}
+    const sec=childEntry.section;
+    // Check if val matches existing entry in same section
+    const sameSecNames=new Set();
+    (S.indexData?.sections?.[sec]||[]).forEach(en=>{if(!en.isAlias)sameSecNames.add(en.name)});
+    if(!sameSecNames.has(val)){
+      // Create synthetic parent
+      const ok=await customConfirm(`No entry "${val}" exists in ${sec}.\n\nCreate it as a synthetic parent tag (a parent with no clips of its own)?`);
+      if(!ok)return;
+      const cr=await createSyntheticParent(val,sec);
+      if(!cr.ok){toast(`Cannot create: ${cr.reason}`,'error');return}
+      // Now set as parent
+      buildIndex(); // refresh so val exists as entry
+    }
+    const res=await setParent(childName,val);
+    if(res.ok){
+      S.parentPicker=null;
+      toast(`"${childName}" is now under "${val}"`,'success');
+      buildIndex();render();
+    }else{
+      toast(`Cannot set parent: ${res.reason}`,'error');
+    }
+  });
+  $$('[data-parent-cancel]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    S.parentPicker=null;render();
+  });
+  $$('[data-clear-parent]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const child=el.dataset.clearParent;
+    const cur=S.tagHierarchy?.[child];
+    if(!cur)return;
+    if(!await customConfirm(`Remove "${child}" from being a subtag of "${cur}"? It will return to top-level.`))return;
+    await clearParent(child);
+    toast(`"${child}" returned to top-level`,'success');
+    buildIndex();render();
+  });
+  // Collapse / expand parent's children
+  $$('[data-collapseparent]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const name=el.dataset.collapseparent;
+    if(S.collapsedParents.has(name))S.collapsedParents.delete(name);
+    else S.collapsedParents.add(name);
+    render();
+  });
+  // Delete synthetic parent tag
+  $$('[data-synth-delete]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const name=el.dataset.synthDelete;
+    const synth=S.syntheticTags.find(s=>s.name===name);
+    if(!synth){toast('Synthetic tag not found','error');return}
+    const childCount=Object.values(S.tagHierarchy||{}).filter(p=>p===name).length;
+    const msg=childCount>0
+      ?`Delete synthetic parent "${name}"?\n\n${childCount} child entr${childCount===1?'y':'ies'} will return to top-level.`
+      :`Delete synthetic parent "${name}"?`;
+    if(!await customConfirm(msg))return;
+    await deleteSyntheticParent(name);
+    toast(`Deleted "${name}"`,'success');
+    buildIndex();render();
   });
   // Admin: user work filter dropdown
   on('#user-work-filter','change',()=>{
@@ -10108,6 +10641,9 @@ window.addEventListener('resize',fixIdxScroll);
       try{S.seeAlsoRefs=await loadSeeAlsoFromTab();console.log(`Loaded See Also refs for ${Object.keys(S.seeAlsoRefs).length} entries`);}catch(e){console.warn('Could not load see also:',e);S.seeAlsoRefs={};}
       // Load aliases
       try{S.aliases=await loadAliasesFromTab();console.log(`Loaded ${S.aliases.length} aliases`);}catch(e){console.warn('Could not load aliases:',e);S.aliases=[];}
+      // Load hierarchy and synthetic tags
+      try{S.tagHierarchy=await loadHierarchyFromTab();console.log(`Loaded hierarchy for ${Object.keys(S.tagHierarchy).length} entries`);}catch(e){console.warn('Could not load hierarchy:',e);S.tagHierarchy={};}
+      try{S.syntheticTags=await loadSyntheticTagsFromTab();console.log(`Loaded ${S.syntheticTags.length} synthetic parent tags`);}catch(e){console.warn('Could not load synthetic tags:',e);S.syntheticTags=[];}
       await loadTab(0);
       registerTeamMember();
       startAutoRefresh();
