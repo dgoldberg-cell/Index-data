@@ -3547,6 +3547,50 @@ async function appendToTagOrderLog(entryName,parent,section,orderIndex,timestamp
   }catch(e){console.warn('Could not append to tag order log:',e)}
 }
 
+// Batch writer for tag order — accepts an array of {entryName, parent, section, orderIndex} and writes all in ONE API call.
+// This avoids the rate-limit problem of doing N writes per drag.
+async function batchAppendToTagOrderLog(entries,timestamp,user){
+  if(!entries||!entries.length)return;
+  const TAB='_TagOrder';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:F1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Entry Name','Parent','Section','OrderIndex','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _TagOrder tab:',e)}
+  }
+  const ts=timestamp||new Date().toISOString();
+  const u=user||S.user?.name||S.user?.email||'Unknown';
+  const values=entries.map(en=>[
+    ts,
+    en.entryName||'',
+    en.parent||'',
+    en.section||'',
+    en.orderIndex===''||en.orderIndex==null?'':String(en.orderIndex),
+    u,
+  ]);
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:F`,
+      valueInputOption:'RAW',
+      resource:{values:values}
+    });
+  }catch(e){console.warn('Could not batch-append to tag order log:',e)}
+}
+
 // Build the active tag order from _TagOrder tab. Returns:
 //   { "section|parent" → { entryName: orderIndex, ... } }
 // Empty OrderIndex = revert (remove from map).
@@ -6957,9 +7001,12 @@ function rBook(){
         if(!rs||!rs.length)return;
         h+=`<div class="book-seg"><div class="book-seg-label">${esc(seg)}</div>`;
         rs.forEach(r=>{
+          // Skip non-first members of a group — refs get merged onto the first
+          if(r.groupKey && !r.groupFirst) return;
+          const members=(r.groupKey && r.groupMembers && r.groupMembers.length) ? r.groupMembers : [r];
           const relRaw=parseInt(r.relevancy)||0;
           const relScore=(relRaw>=1&&relRaw<=4)?relRaw:4;
-          h+=`<div class="book-row" data-rel="${relScore}">`;
+          h+=`<div class="book-row${members.length>1?' book-row-grouped':''}" data-rel="${relScore}">`;
           // Description (People-exception: only "spoken about" gets description)
           const showDesc=shouldShowDesc(r,section);
           if(showDesc){
@@ -6974,20 +7021,23 @@ function rBook(){
           if(shouldShowRel(r,section)){
             h+=`<span class="book-rel">[${esc(r.rel)}]</span>`;
           }
-          // Reference code — hyperlinked to the clip
-          const vidUrl=clipLinkForResult(r);
-          let refText='';
-          if(r.clipType==='Film Chapter'||r.clipType==='Film'){
-            refText=filmRefForResult(r);
-          }else{
-            refText=refCodeForResult(r)||'';
-          }
-          if(refText){
-            h+=`<a class="book-ref" href="${vidUrl}" target="_blank" title="${esc(r.clipName||'')}">${esc(refText)}</a>`;
-          }
-          // Edit description — jump to editor and open inline editor
+          // Reference codes — one per member, each linked to its own clip
+          members.forEach((m,idx)=>{
+            const vidUrl=clipLinkForResult(m);
+            let refText='';
+            if(m.clipType==='Film Chapter'||m.clipType==='Film'){
+              refText=filmRefForResult(m);
+            }else{
+              refText=refCodeForResult(m)||'';
+            }
+            if(refText){
+              if(idx>0)h+=`<span style="color:var(--tx-4)">,</span>`;
+              h+=`<a class="book-ref" href="${vidUrl}" target="_blank" title="${esc(m.clipName||'')}">${esc(refText)}</a>`;
+            }
+          });
+          // Edit description — jumps to editor for the FIRST member
           h+=`<button class="book-comment book-edit-desc" data-bookdescedit="${esc(e.name)}|${esc(r.segType)}|${r.rowIdx}" title="Edit this description">✎</button>`;
-          // Comment bounce — click to jump to editor and open note popup
+          // Comment bounce — jumps for first member
           h+=`<button class="book-comment" data-bookjump="${esc(e.name)}|${esc(r.segType)}|${r.rowIdx}" title="Jump to editor to add a note">💬</button>`;
           h+=`</div>`;
         });
@@ -8631,19 +8681,25 @@ function bindAll(){
       const oldOrderMap=S.tagOrder[groupKey]||{};
       const ts=new Date().toISOString();
       const user=S.user?.name||S.user?.email||'Unknown';
-      const writes=[];
+      // Collect ALL changes into one batch instead of one API call per row
+      const batchEntries=[];
       Object.keys(newOrderMap).forEach(name=>{
         if(oldOrderMap[name]!==newOrderMap[name]){
-          writes.push(appendToTagOrderLog(name,parent,sec,newOrderMap[name],ts,user));
+          batchEntries.push({entryName:name,parent:parent,section:sec,orderIndex:newOrderMap[name]});
         }
       });
       Object.keys(oldOrderMap).forEach(name=>{
         if(!(name in newOrderMap)){
-          writes.push(appendToTagOrderLog(name,parent,sec,'',ts,user));
+          batchEntries.push({entryName:name,parent:parent,section:sec,orderIndex:''});
         }
       });
       S.tagOrder[groupKey]=newOrderMap;
-      Promise.all(writes).then(()=>console.log(`Saved ${writes.length} order changes in "${sec}" / parent "${parent||'(top)'}"`)).catch(e=>console.warn('Order writes failed:',e));
+      // Single batched API call — counts as 1 quota hit regardless of N entries
+      if(batchEntries.length){
+        batchAppendToTagOrderLog(batchEntries,ts,user)
+          .then(()=>console.log(`Saved ${batchEntries.length} order changes in "${sec}" / parent "${parent||'(top)'}" (1 API call)`))
+          .catch(e=>console.warn('Order batch write failed:',e));
+      }
       logActivity(`Reordered: "${draggedName}" → position ${newIdx+1} ${parent?`under "${parent}"`:`in ${sec}`}`);
       toast('Reordered','success');
       buildIndex();
