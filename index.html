@@ -165,6 +165,12 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-entry-parent-badge{font-size:10px;color:var(--tx-4);font-style:italic;margin-left:6px}
 .idx-children-toggle{background:none;border:none;cursor:pointer;color:var(--tx-3);font-size:13px;padding:0 4px;margin-right:4px}
 .idx-children-toggle:hover{color:var(--tx-1)}
+.idx-result.grouped-first{border-top:2px solid var(--gold);background:#fbf8ec;border-top-left-radius:6px;border-top-right-radius:6px;padding-top:4px}
+.idx-result.grouped-mid{background:#fbf8ec;border-left:2px solid var(--gold);padding-left:8px}
+.idx-result.grouped-last{border-bottom:2px solid var(--gold);background:#fbf8ec;border-bottom-left-radius:6px;border-bottom-right-radius:6px;padding-bottom:4px;border-left:2px solid var(--gold);padding-left:8px}
+.idx-result.grouped-only{border:2px solid var(--gold);background:#fbf8ec;border-radius:6px;padding:4px 8px}
+.idx-group-badge{display:inline-block;font-size:9px;font-weight:600;background:var(--gold);color:white;padding:1px 6px;border-radius:8px;margin-right:6px;vertical-align:middle}
+.idx-group-split-btn{background:none;border:1px dashed var(--gold);border-radius:8px;font-size:9px;color:var(--gold);cursor:pointer;padding:1px 5px;margin-left:6px}
 .idx-entry-badge{font-size:9px;font-weight:500;font-family:var(--font);padding:1px 6px;border-radius:8px;vertical-align:middle}
 .idx-entry-badge.warn{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(154,122,48,.2)}
 .idx-entry-badge.empty{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
@@ -1002,6 +1008,7 @@ tagOrder:{}, // {entryName: orderIndex} — absolute slot positions for manually
 seeAlsoRefs:{}, // {entryName: [{target, type:'tag'|'freetext'}]} — built from _SeeAlsoRefs tab. Targets use ORIGINAL names; resolve via S.activeRenames at render.
 aliases:[], // [{alias, targetOriginal, addedBy, ts}] — built from _Aliases tab. Aliases appear as entries with "See: target".
 tagHierarchy:{}, // {childName: parentName} — built from _TagHierarchy. Empty parent = top-level.
+groupsFilter:'', // Description Groups page filter
 syntheticTags:[], // [{name, section, addedBy, ts}] — built from _SyntheticTags tab. Parent tags created by user.
 collapsedParents:new Set(), // Per-session — parents whose children are collapsed in workstation
 parentPicker:null, // {entryName, query} — open typeahead for setting parent
@@ -5149,6 +5156,43 @@ function buildIndex(){
     sections[sec]=flat;
   });
 
+  // === DESCRIPTION GROUPING ===
+  // For each entry's results, group clips that have IDENTICAL (case-insensitive, whitespace-normalized)
+  // description AND same segType. Each result gets:
+  //   r.groupKey   = normalized "description|segType" (or null if it's a singleton in its group)
+  //   r.groupSize  = how many clips are in its group (1 if singleton)
+  //   r.groupFirst = true if this is the first clip in the group (the "leader" of the group)
+  //   r.groupMembers = array of all r objects in this group (set on the leader only)
+  function normalizeDesc(s){
+    return (s||'').toLowerCase().replace(/\s+/g,' ').trim();
+  }
+  Object.values(sections).forEach(arr=>{
+    arr.forEach(e=>{
+      if(e.isAlias||e.isSynthetic)return;
+      const buckets={};
+      (e.results||[]).forEach(r=>{
+        const norm=normalizeDesc(r.desc);
+        if(!norm){
+          // No description → no grouping. Singleton.
+          r.groupKey=null;r.groupSize=1;r.groupFirst=true;r.groupMembers=[r];
+          return;
+        }
+        const key=(r.segType||'')+'|'+norm;
+        if(!buckets[key])buckets[key]=[];
+        buckets[key].push(r);
+      });
+      Object.entries(buckets).forEach(([key,members])=>{
+        members.forEach((m,i)=>{
+          m.groupKey=members.length>1?key:null;
+          m.groupSize=members.length;
+          m.groupFirst=(i===0);
+          if(i===0)m.groupMembers=members;
+          else m.groupMembers=null;
+        });
+      });
+    });
+  });
+
   S.indexData={sections,totalEntries:Object.keys(entries).length+(S.aliases?.length||0),totalResults:Object.values(entries).reduce((s,e)=>s+e.results.length,0)};
 }
 
@@ -5552,44 +5596,47 @@ async function generateIndexTab(sectionName){
         bySeg[seg].sort(function(a,b){return(a.desc||'').localeCompare(b.desc||'')});
         
         bySeg[seg].forEach(function(r){
+          // Skip non-first members of a group — they get merged into the first member's row
+          if(r.groupKey && !r.groupFirst) return;
+          var members=(r.groupKey && r.groupMembers && r.groupMembers.length) ? r.groupMembers : [r];
           var row=[];for(var z=0;z<EC;z++)row.push('');
-          // E: Original Description (index 4) — from reviewData if available
           var rvk=rvKey(entry.name,seg,r.rowIdx);
           var rvd=getRV(rvk);
           row[4]=(rvd&&rvd.originalDesc)?rvd.originalDesc:'';
-          // F: Description (index 5)
           row[5]=r.desc||'';
-          // G: Relationship (index 6) — only if non-default
           var defRel=relDefaults[seg]||'spoken_about';
           if(r.rel&&r.rel!==defRel){
             if(sectionName==='Nigunim'){if(r.rel==='spoken_about')row[6]=r.rel}
             else row[6]=r.rel;
           }
-          // H: Reference (index 7) — prefix by clip type; films keep their format
-          row[7]=refForClip(r);
-          // I: Chapter Name For Film (index 8) — only for Film Chapters
+          // H: Reference — join refs across all members (films keep their format individually)
+          row[7]=members.map(function(m){return refForClip(m)}).filter(function(s){return s}).join(', ');
+          // I: Chapter — only for Film Chapters; join across members
           if(r.clipType==='Film Chapter'){
-            row[8]=r.clipName||''; // Chapter title
+            row[8]=members.map(function(m){return m.clipName||''}).filter(function(s){return s}).join(', ');
           }
-          // J: Relevancy (index 9)
           row[9]=(r.relevancy||'').toString();
-          // K: Review Status (index 10) — fill from existing reviewData if available
-          if(rvd){
+          // K: Review Status — for groups, only "Reviewed" if ALL members are reviewed
+          if(members.length>1){
+            var allReviewed=members.every(function(m){
+              var rv2=getRV(rvKey(entry.name,seg,m.rowIdx));
+              return rv2 && rv2.reviewed;
+            });
+            row[10]=allReviewed ? '✓ Reviewed' : '';
+            row[11]='';
+          }else if(rvd){
             var statusLabels={pending:'⏳ Pending',accepted:'✅ Accepted',denied:'❌ Denied',custom:'✏️ Custom',ok:'✓ OK'};
             row[10]=statusLabels[rvd.status]||(rvd.reviewed?'✓ Reviewed':'');
-            // L: AI Suggestion (index 11)
             row[11]=rvd.suggestion||'';
           }else{
             row[10]='';
             row[11]='';
           }
-          // M: spacer (index 12)
-          // N: Clip link (index 13)
+          // N: Clip link — first member only
           var cid=r.clipId||(r.objId?(r.objId.replace('video_clip-','')):'');
           row[13]=cid?('https://videos.jem.tv/video-player?clip='+cid):'';
-          // O: Clip title (index 14)
-          row[14]=r.clipName||'';
-          // P: Transcript excerpt (index 15)
+          // O: Clip title — join across members
+          row[14]=members.map(function(m){return m.clipName||''}).filter(function(s){return s}).join(' | ');
           row[15]=(r.transcript||'').substring(0,500);
           dataRows.push(row);
         });
@@ -6354,6 +6401,7 @@ function render(force=true){
     }
   }
   else if(S.view==='team')h+=rTeam();
+  else if(S.view==='groups')h+=rGroups();
   h+='</div>';
   if(S.aiOpen)h+=rAI();
   h+='</div></div>';
@@ -6749,6 +6797,26 @@ function rSidebar(){
   }else{
     h+=`<div class="nav-item ${S.view==='notes'?'active':''}" data-nav="notes"><span style="color:var(--tx-4)">💬</span><span>Notes</span></div>`;
   }
+
+  // ── Description Groups ──
+  // Count grouped sets across all sections (for badge)
+  let groupCount=0;
+  if(S.indexData?.sections){
+    Object.values(S.indexData.sections).forEach(arr=>{
+      arr.forEach(e=>{
+        if(e.isAlias||e.isSynthetic)return;
+        const seen=new Set();
+        (e.results||[]).forEach(r=>{
+          if(r.groupKey&&r.groupSize>1&&!seen.has(r.groupKey)){
+            seen.add(r.groupKey);
+            groupCount++;
+          }
+        });
+      });
+    });
+  }
+  const groupBadge=groupCount?`<span class="badge" style="background:var(--gold);color:#fff">${groupCount}</span>`:'';
+  h+=`<div class="nav-item ${S.view==='groups'?'active':''}" data-nav="groups"><span style="font-size:14px">🔗</span><span>Description Groups</span>${groupBadge}</div>`;
 
   // ── Team (admin only) ──
   if(isAdminUser){
@@ -7556,7 +7624,25 @@ function rIndex(){
           // Bucket relevance 1-4. Default 4 (full opacity) if unknown so text never disappears.
           const relRaw=parseInt(r.relevancy)||0;
           const relScore=(relRaw>=1&&relRaw<=4)?relRaw:4;
-          eh+=`<div class="idx-result${isPanelSrc?' panel-source':''}" data-rel="${relScore}">`;
+          // Description-group visual class: grouped-first/mid/last/only based on this row's position in its group
+          let groupCls='';
+          if(r.groupKey){
+            // Find this row's index within the per-segment sorted list (byseg[seg])
+            const segList=byseg[seg]||[];
+            // Find adjacent rows in same group
+            const myIdx=segList.indexOf(r);
+            const prevSame=myIdx>0 && segList[myIdx-1] && segList[myIdx-1].groupKey===r.groupKey;
+            const nextSame=myIdx<segList.length-1 && segList[myIdx+1] && segList[myIdx+1].groupKey===r.groupKey;
+            if(!prevSame && !nextSame)groupCls=' grouped-only';
+            else if(!prevSame && nextSame)groupCls=' grouped-first';
+            else if(prevSame && nextSame)groupCls=' grouped-mid';
+            else groupCls=' grouped-last';
+          }
+          eh+=`<div class="idx-result${isPanelSrc?' panel-source':''}${groupCls}" data-rel="${relScore}">`;
+          // Group badge: only on the FIRST row of a group, shows count + ungroup hint
+          if(r.groupKey && r.groupFirst && r.groupSize>1){
+            eh+=`<span class="idx-group-badge" title="${r.groupSize} clips with same description — grouped together. Edit one description differently to ungroup.">grouped ×${r.groupSize}</span>`;
+          }
           // Audit checkbox (hidden unless select mode)
           const selKey=esc(e.name)+'|'+seg+'|'+r.rowIdx;
           eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-sel="${selKey}" ${S.auditSelected.has(selKey)?'checked':''} title="Select for AI audit">`;
@@ -8675,6 +8761,7 @@ function bindAll(){
       if(S.indexData.sections[sec].some(en=>en.name===name)){foundSection=sec;break}
     }
     if(foundSection){
+      S.view='index';
       S.idxActiveSection=foundSection;
       S.idxSearch=name;
       S.idxPage=0;
@@ -8685,6 +8772,18 @@ function bindAll(){
         if(target)target.scrollIntoView({behavior:'smooth',block:'center'});
       },100);
     }
+  });
+
+  // Groups page filter
+  on('#groups-filter','input',()=>{
+    const v=$('#groups-filter').value;
+    S.groupsFilter=v;
+    // Re-render but preserve focus and cursor position
+    render();
+    setTimeout(()=>{
+      const i=$('#groups-filter');
+      if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}
+    },10);
   });
 
   // ── Parent picker (Make subtag of...) ──
@@ -10566,6 +10665,78 @@ function rNotes(){
     h+=`</div>`;
   }
   
+  return h+'</div>';
+}
+
+function rGroups(){
+  let h='<div class="page-hd">'+rBackBtn()+'<h1>🔗 Description Groups</h1><p>Clips with identical descriptions are auto-grouped. Edit any description differently to split a group.</p>';
+  h+='</div><div class="pad">';
+
+  if(!S.indexData){
+    return h+'<div style="text-align:center;padding:40px;color:var(--tx-3)">Index not loaded yet.</div></div>';
+  }
+
+  // Collect all groups across all sections
+  const groups=[];
+  Object.entries(S.indexData.sections).forEach(([sec,entries])=>{
+    entries.forEach(e=>{
+      if(e.isAlias||e.isSynthetic)return;
+      const byKey={};
+      (e.results||[]).forEach(r=>{
+        if(!r.groupKey||r.groupSize<=1)return;
+        if(!byKey[r.groupKey])byKey[r.groupKey]={key:r.groupKey,entry:e.name,section:sec,segType:r.segType,desc:r.desc,members:[]};
+        byKey[r.groupKey].members.push(r);
+      });
+      Object.values(byKey).forEach(g=>{if(g.members.length>1)groups.push(g)});
+    });
+  });
+
+  if(!groups.length){
+    h+='<div style="text-align:center;padding:40px;color:var(--tx-3)">No description groups yet. When two or more clips under the same tag have identical descriptions, they\'ll appear here.</div>';
+    return h+'</div>';
+  }
+
+  groups.sort((a,b)=>{
+    const sa=RULES.sectionOrder.indexOf(a.section);
+    const sb=RULES.sectionOrder.indexOf(b.section);
+    if(sa!==sb)return sa-sb;
+    return a.entry.localeCompare(b.entry);
+  });
+
+  h+=`<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">`;
+  h+=`<input id="groups-filter" type="text" placeholder="Filter by tag or description…" value="${esc(S.groupsFilter||'')}" style="font-size:12px;padding:4px 8px;border:1px solid var(--line);border-radius:4px;flex:1;min-width:240px">`;
+  h+=`<span style="color:var(--tx-3);font-size:12px">${groups.length} groups · ${groups.reduce((s,g)=>s+g.members.length,0)} clips affected</span>`;
+  h+=`</div>`;
+
+  const f=(S.groupsFilter||'').toLowerCase().trim();
+  const filtered=f?groups.filter(g=>g.entry.toLowerCase().includes(f)||g.desc.toLowerCase().includes(f)):groups;
+
+  filtered.forEach(g=>{
+    h+=`<div class="card" style="margin-bottom:10px;border:1px solid var(--gold);background:#fbf8ec">`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">`;
+    h+=`<div style="flex:1">`;
+    h+=`<div style="font-size:11px;color:var(--tx-4)">${esc(g.section)} → <a href="#" data-jumpentry="${esc(g.entry)}" style="color:var(--blue);font-weight:600">${esc(g.entry)}</a> → ${esc(g.segType)}</div>`;
+    h+=`<div style="font-size:14px;color:var(--tx-1);margin-top:3px"><b>${esc(g.desc)}</b></div>`;
+    h+=`</div>`;
+    h+=`<span class="idx-group-badge">×${g.members.length}</span>`;
+    h+=`</div>`;
+    h+=`<div style="font-size:11px;color:var(--tx-3);margin-top:6px;padding-top:6px;border-top:1px solid var(--line)">`;
+    h+=`References: `;
+    h+=g.members.map(m=>{
+      const ref=(function(r){
+        if(r.clipType==='Film Chapter')return r.pvName||r.clipName||'';
+        if(r.clipType==='Film')return r.clipName||'';
+        if(!r.progNum)return '';
+        var pref={'LT Sicha':'A','LT Timeless Moment':'TM','LT Eye to Eye':'C','LT My Encounter':'ME','Short Film':'SF'}[r.clipType];
+        if(pref===undefined)pref=r.clipType||'';
+        return pref+r.progNum;
+      })(m);
+      return `<span title="${esc(m.clipName||'')}" style="background:white;border:1px solid var(--line);border-radius:4px;padding:1px 6px;margin:2px;display:inline-block">${esc(ref||'?')} <span style="color:var(--tx-4);font-size:9px">${esc(m.clipName||'').substring(0,40)}</span></span>`;
+    }).join(' ');
+    h+=`</div>`;
+    h+=`</div>`;
+  });
+
   return h+'</div>';
 }
 
