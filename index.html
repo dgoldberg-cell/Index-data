@@ -4400,7 +4400,42 @@ async function attachClipToNewTag(tagName,rowIdx,desc,segType,rel,relevancy){
   return{ok:true};
 }
 
-
+// === HARD DELETE NEW TAG (workspace-only, no soft state) ===
+// Removes the new tag entry AND all its bindings AND any hierarchy entries referencing it
+async function hardDeleteNewTag(name){
+  // Find the entry — must be a new tag
+  if(!S.newTags.some(nt=>nt.name===name))return{ok:false,reason:'Not a new tag'};
+  const ts=new Date().toISOString();
+  const user=S.user?.name||S.user?.email||'Unknown';
+  // 1) Remove all bindings for this tag
+  const bindings=S.newTagBindings.filter(b=>b.tagName===name);
+  for(const b of bindings){
+    await appendToNewTagBindingsLog(b.tagName,b.rowIdx,b.desc,b.segType,b.rel,b.relevancy,'remove',ts,user);
+  }
+  S.newTagBindings=S.newTagBindings.filter(b=>b.tagName!==name);
+  // 2) Release any children whose parent is this tag — write hierarchy 'remove' rows
+  const orphaned=[];
+  Object.keys(S.tagHierarchy||{}).forEach(child=>{
+    if(S.tagHierarchy[child]===name){
+      delete S.tagHierarchy[child];
+      orphaned.push(child);
+    }
+  });
+  for(const c of orphaned){
+    await appendToHierarchyLog(c,name,'remove',ts,user);
+  }
+  // 3) If this tag had its own parent in S.tagHierarchy, clear that too
+  if(S.tagHierarchy[name]){
+    const oldParent=S.tagHierarchy[name];
+    delete S.tagHierarchy[name];
+    await appendToHierarchyLog(name,oldParent,'remove',ts,user);
+  }
+  // 4) Remove from new tags list
+  S.newTags=S.newTags.filter(nt=>nt.name!==name);
+  await appendToNewTagsLog(name,'','remove',ts,user);
+  logActivity(`Hard-deleted new tag "${name}" (${bindings.length} bindings, ${orphaned.length} children released)`);
+  return{ok:true,bindings:bindings.length,orphaned};
+}
 
 // Helper: tab title lookup
 function activeTabTitle(){return S.sheetMeta?.tabs?.[S.activeTab]?.title||''}
@@ -8120,8 +8155,8 @@ function rIndex(){
           eh+=` <button data-parent-add="${esc(e.name)}" title="Make this entry a subtag (child) of another tag in this section" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-3);font-size:10px;padding:1px 8px;margin-left:4px">↳ Subtag of…</button>`;
         }
         // For new-tag entries: always offer attach
-        if(e.isNewTag && !e.isDeleted){
-          eh+=` <button data-attach-clip="${esc(e.name)}" title="Attach a clip to this new tag" style="background:none;border:1px dashed #3a8a3a;border-radius:10px;cursor:pointer;color:#3a8a3a;font-size:10px;padding:1px 8px;margin-left:4px">+ Attach clip</button>`;
+        if(!e.isDeleted && !e.isAlias){
+          eh+=` <button data-attach-clip="${esc(e.name)}" title="Attach a clip to this tag" style="background:none;border:1px dashed #3a8a3a;border-radius:10px;cursor:pointer;color:#3a8a3a;font-size:10px;padding:1px 8px;margin-left:4px">+ Attach clip</button>`;
         }
         eh+=`</div>`;
       }else{
@@ -8133,8 +8168,8 @@ function rIndex(){
           eh+=` <button data-parent-add="${esc(e.name)}" title="Make this entry a subtag of another tag in this section" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-4);font-size:10px;padding:1px 8px">↳ Subtag of…</button>`;
         }
         // For new-tag entries: button to attach more clips
-        if(e.isNewTag && !e.isDeleted){
-          eh+=` <button data-attach-clip="${esc(e.name)}" title="Attach a clip to this new tag" style="background:none;border:1px dashed #3a8a3a;border-radius:10px;cursor:pointer;color:#3a8a3a;font-size:10px;padding:1px 8px">+ Attach clip</button>`;
+        if(!e.isDeleted && !e.isAlias){
+          eh+=` <button data-attach-clip="${esc(e.name)}" title="Attach a clip to this tag" style="background:none;border:1px dashed #3a8a3a;border-radius:10px;cursor:pointer;color:#3a8a3a;font-size:10px;padding:1px 8px">+ Attach clip</button>`;
         }
         eh+=`</div>`;
       }
@@ -9470,6 +9505,23 @@ function bindAll(){
     Object.values(S.indexData?.sections||{}).forEach(arr=>{const f=arr.find(e=>e.name===name);if(f)entry=f});
     if(!entry){toast('Entry not found','error');return}
     const childCount=entry.children?entry.children.length:0;
+
+    // ── NEW TAG: hard delete (no soft state since it only exists in workspace anyway) ──
+    if(entry.isNewTag){
+      const bindingCount=(S.newTagBindings||[]).filter(b=>b.tagName===name).length;
+      const parts=[`Permanently delete new tag "${name}"?`];
+      if(bindingCount)parts.push(`${bindingCount} attached clip${bindingCount===1?'':'s'} will be removed.`);
+      if(childCount)parts.push(`${childCount} subtag${childCount===1?'':'s'} will become top-level.`);
+      parts.push(`This cannot be undone.`);
+      if(!await customConfirm(parts.join('\n\n')))return;
+      const res=await hardDeleteNewTag(name);
+      if(!res.ok){toast(res.reason,'error');return}
+      toast(`Deleted "${name}"`,'success');
+      buildIndex();render();
+      return;
+    }
+
+    // ── REAL TAG (from main sheet): soft delete ──
     let alsoDeleteChildren=false;
     if(childCount>0){
       const choice=await customConfirm(`Delete "${name}"?\n\nThis tag has ${childCount} subtag${childCount===1?'':'s'}. Click OK to ALSO DELETE the subtags. Click Cancel to delete only "${name}" — subtags will become top-level entries.`);
