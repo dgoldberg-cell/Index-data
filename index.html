@@ -171,6 +171,17 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-result.grouped-only{border:2px solid var(--gold);background:#fbf8ec;border-radius:6px;padding:4px 8px}
 .idx-group-badge{display:inline-block;font-size:9px;font-weight:600;background:var(--gold);color:white;padding:1px 6px;border-radius:8px;margin-right:6px;vertical-align:middle}
 .idx-group-split-btn{background:none;border:1px dashed var(--gold);border-radius:8px;font-size:9px;color:var(--gold);cursor:pointer;padding:1px 5px;margin-left:6px}
+.idx-entry.is-deleted{opacity:0.55;background:#fef5f5}
+.idx-entry.is-deleted .idx-entry-name{text-decoration:line-through;color:var(--tx-3)}
+.idx-entry.is-deleted .idx-result-desc,.idx-entry.is-deleted .idx-result-ref{text-decoration:line-through;color:var(--tx-3)}
+.idx-entry-reinstate-bar{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:#fbe9e9;border:1px dashed #c66;border-radius:4px;margin:4px 0;font-size:11px;color:#933}
+.idx-entry-newtag-badge{font-size:9px;font-weight:600;background:#3a8a3a;color:white;padding:1px 5px;border-radius:8px;margin-left:4px}
+.modal-backdrop{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:60px 20px}
+.modal-box{background:white;border-radius:6px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-width:560px;width:100%;max-height:80vh;display:flex;flex-direction:column}
+.modal-hd{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.modal-hd h3{margin:0;font-size:15px}
+.modal-body{padding:14px 18px;overflow-y:auto;flex:1}
+.modal-ft{padding:10px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
 .idx-entry-badge{font-size:9px;font-weight:500;font-family:var(--font);padding:1px 6px;border-radius:8px;vertical-align:middle}
 .idx-entry-badge.warn{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(154,122,48,.2)}
 .idx-entry-badge.empty{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
@@ -1008,6 +1019,11 @@ tagOrder:{}, // {entryName: orderIndex} — absolute slot positions for manually
 seeAlsoRefs:{}, // {entryName: [{target, type:'tag'|'freetext'}]} — built from _SeeAlsoRefs tab. Targets use ORIGINAL names; resolve via S.activeRenames at render.
 aliases:[], // [{alias, targetOriginal, addedBy, ts}] — built from _Aliases tab. Aliases appear as entries with "See: target".
 tagHierarchy:{}, // {childName: parentName} — built from _TagHierarchy. Empty parent = top-level.
+deletedEntries:new Set(), // Names of entries soft-deleted from workspace (excluded from export, crossed out in workspace)
+newTags:[], // [{name, section, addedBy, ts}] — user-created tags that don't exist in main sheet
+newTagBindings:[], // [{tagName, rowIdx, desc, segType, rel, relevancy, addedBy, ts}] — each binding connects a new tag to a clip
+clipSearchModal:null, // {newTagName, query, segType?, etc} — open clip search modal for attaching to a new tag
+newTagModal:null, // {section} — open "create new tag" modal
 groupsFilter:'', // Description Groups page filter
 syntheticTags:[], // [{name, section, addedBy, ts}] — built from _SyntheticTags tab. Parent tags created by user.
 collapsedParents:new Set(), // Per-session — parents whose children are collapsed in workstation
@@ -2972,6 +2988,9 @@ async function manualRefresh(){
     // Reload hierarchy
     try{S.tagHierarchy=await loadHierarchyFromTab();}catch(e){console.warn('Could not refresh hierarchy:',e);}
     try{S.syntheticTags=await loadSyntheticTagsFromTab();}catch(e){console.warn('Could not refresh synthetic tags:',e);}
+    try{S.deletedEntries=await loadDeletedEntriesFromTab();}catch(e){console.warn('Could not refresh deleted entries:',e);}
+    try{S.newTags=await loadNewTagsFromTab();}catch(e){console.warn('Could not refresh new tags:',e);}
+    try{S.newTagBindings=await loadNewTagBindingsFromTab();}catch(e){console.warn('Could not refresh new tag bindings:',e);}
     buildIndex();render(true);
     toast('All data refreshed','success');
   }catch(e){
@@ -4027,6 +4046,197 @@ async function loadSyntheticTagsFromTab(){
   }
 }
 
+// === SOFT-DELETED ENTRIES ===
+// _DeletedEntries tab: Timestamp | Entry Name | Action | Set By
+// action='delete' adds, action='restore' removes
+async function appendToDeletedEntriesLog(name,action,timestamp,user){
+  const TAB='_DeletedEntries';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:D1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Entry Name','Action','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _DeletedEntries tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:D`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),name,action||'delete',user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to deleted entries log:',e)}
+}
+
+async function loadDeletedEntriesFromTab(){
+  const TAB='_DeletedEntries';
+  if(!S.connected)return new Set();
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return new Set();
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:D10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>(Date.parse(a[0]||'')||0)-(Date.parse(b[0]||'')||0));
+    const set=new Set();
+    sorted.forEach(row=>{
+      const name=(row[1]||'').trim();
+      const action=(row[2]||'delete').trim();
+      if(!name)return;
+      if(action==='restore')set.delete(name);
+      else set.add(name);
+    });
+    return set;
+  }catch(e){
+    console.warn('Failed to load deleted entries:',e);
+    return new Set();
+  }
+}
+
+// === NEW TAGS (workspace-created) ===
+// _NewTags tab: Timestamp | Name | Section | Action | Set By
+async function appendToNewTagsLog(name,section,action,timestamp,user){
+  const TAB='_NewTags';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:E1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Name','Section','Action','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _NewTags tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:E`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),name,section||'',action||'add',user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to new tags log:',e)}
+}
+
+async function loadNewTagsFromTab(){
+  const TAB='_NewTags';
+  if(!S.connected)return [];
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return [];
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:E10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>(Date.parse(a[0]||'')||0)-(Date.parse(b[0]||'')||0));
+    const map={};
+    sorted.forEach(row=>{
+      const name=(row[1]||'').trim();
+      const section=(row[2]||'').trim();
+      const action=(row[3]||'add').trim();
+      const setBy=(row[4]||'').trim();
+      if(!name)return;
+      if(action==='remove')delete map[name];
+      else map[name]={name,section,addedBy:setBy,ts:row[0]};
+    });
+    return Object.values(map);
+  }catch(e){
+    console.warn('Failed to load new tags:',e);
+    return [];
+  }
+}
+
+// === NEW TAG BINDINGS — connects a new tag to a specific clip with description/segType/relationship/relevancy ===
+// _NewTagBindings tab: Timestamp | Tag Name | Row Index | Description | SegType | Relationship | Relevancy | Action | Set By
+async function appendToNewTagBindingsLog(tagName,rowIdx,desc,segType,rel,relevancy,action,timestamp,user){
+  const TAB='_NewTagBindings';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:I1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Tag Name','Row Index','Description','SegType','Relationship','Relevancy','Action','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _NewTagBindings tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:I`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),tagName,String(rowIdx),desc||'',segType||'',rel||'',String(relevancy||''),action||'add',user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to new tag bindings log:',e)}
+}
+
+async function loadNewTagBindingsFromTab(){
+  const TAB='_NewTagBindings';
+  if(!S.connected)return [];
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return [];
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:I10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>(Date.parse(a[0]||'')||0)-(Date.parse(b[0]||'')||0));
+    // Key by tagName + rowIdx — latest wins
+    const map={};
+    sorted.forEach(row=>{
+      const tagName=(row[1]||'').trim();
+      const rowIdx=parseInt(row[2]||'-1');
+      const desc=(row[3]||'').trim();
+      const segType=(row[4]||'').trim();
+      const rel=(row[5]||'').trim();
+      const relevancy=parseInt(row[6]||'0')||0;
+      const action=(row[7]||'add').trim();
+      const setBy=(row[8]||'').trim();
+      if(!tagName||rowIdx<0)return;
+      const key=tagName+'|'+rowIdx;
+      if(action==='remove')delete map[key];
+      else map[key]={tagName,rowIdx,desc,segType,rel,relevancy,addedBy:setBy,ts:row[0]};
+    });
+    return Object.values(map);
+  }catch(e){
+    console.warn('Failed to load new tag bindings:',e);
+    return [];
+  }
+}
+
 // Compute the depth of an entry in the hierarchy (0=top-level).
 // Used to enforce max 3 levels.
 function hierarchyDepth(entryName,visited){
@@ -4123,6 +4333,71 @@ async function deleteSyntheticParent(name){
   }
   logActivity(`Deleted synthetic parent: "${name}" (${orphaned.length} children released)`);
   return{ok:true,orphaned};
+}
+
+// === SOFT DELETE / REINSTATE ENTRY ===
+async function softDeleteEntry(name,alsoDeleteChildren){
+  if(!S.deletedEntries)S.deletedEntries=new Set();
+  S.deletedEntries.add(name);
+  await appendToDeletedEntriesLog(name,'delete',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  let deletedChildren=[];
+  if(alsoDeleteChildren){
+    // Find direct children and soft-delete them too (recursive — they'll cascade if needed)
+    const directChildren=Object.keys(S.tagHierarchy||{}).filter(c=>S.tagHierarchy[c]===name);
+    for(const ch of directChildren){
+      S.deletedEntries.add(ch);
+      await appendToDeletedEntriesLog(ch,'delete',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+      deletedChildren.push(ch);
+      // Recursive: grandchildren too
+      const grand=Object.keys(S.tagHierarchy||{}).filter(c=>S.tagHierarchy[c]===ch);
+      for(const g of grand){
+        S.deletedEntries.add(g);
+        await appendToDeletedEntriesLog(g,'delete',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+        deletedChildren.push(g);
+      }
+    }
+  }
+  logActivity(`Soft-deleted "${name}"${deletedChildren.length?` (+${deletedChildren.length} descendants)`:''}`);
+  return{ok:true,deletedChildren};
+}
+
+async function reinstateEntry(name){
+  if(!S.deletedEntries||!S.deletedEntries.has(name))return{ok:false,reason:'Not deleted'};
+  S.deletedEntries.delete(name);
+  await appendToDeletedEntriesLog(name,'restore',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  logActivity(`Reinstated "${name}"`);
+  return{ok:true};
+}
+
+// === CREATE NEW TAG (workspace) ===
+async function createNewTag(name,section){
+  const trimmed=name.trim();
+  if(!trimmed)return{ok:false,reason:'Empty name'};
+  // Collision check across all existing entries
+  const allNames=new Set();
+  Object.values(S.indexData?.sections||{}).forEach(arr=>arr.forEach(en=>allNames.add(en.name)));
+  if(allNames.has(trimmed))return{ok:false,reason:`"${trimmed}" already exists`};
+  if(S.newTags.some(nt=>nt.name===trimmed))return{ok:false,reason:`"${trimmed}" already created as a new tag`};
+  const entry={name:trimmed,section,addedBy:S.user?.name||S.user?.email||'Unknown',ts:new Date().toISOString()};
+  S.newTags.push(entry);
+  await appendToNewTagsLog(trimmed,section,'add',entry.ts,entry.addedBy);
+  logActivity(`Created new tag: "${trimmed}" in ${section}`);
+  return{ok:true};
+}
+
+// === ATTACH CLIP TO NEW TAG ===
+async function attachClipToNewTag(tagName,rowIdx,desc,segType,rel,relevancy){
+  if(!desc||!desc.trim())return{ok:false,reason:'Description required'};
+  if(!rel)return{ok:false,reason:'Relationship required'};
+  if(!relevancy)return{ok:false,reason:'Relevancy required'};
+  // Check duplicate binding
+  const existing=S.newTagBindings.find(b=>b.tagName===tagName&&b.rowIdx===rowIdx);
+  if(existing)return{ok:false,reason:'This clip is already attached to this tag'};
+  const binding={tagName,rowIdx,desc:desc.trim(),segType,rel,relevancy:parseInt(relevancy)||4,addedBy:S.user?.name||S.user?.email||'Unknown',ts:new Date().toISOString()};
+  S.newTagBindings.push(binding);
+  await appendToNewTagBindingsLog(tagName,rowIdx,desc,segType,rel,relevancy,'add',binding.ts,binding.addedBy);
+  logActivity(`Attached clip ${rowIdx} to new tag "${tagName}"`);
+  return{ok:true};
 }
 
 
@@ -5114,6 +5389,85 @@ function buildIndex(){
     });
   }
 
+  // Inject NEW TAGS (workspace-created) as entries, with their bindings as results
+  if(Array.isArray(S.newTags)&&S.newTags.length){
+    S.newTags.forEach(nt=>{
+      const resolvedName=resolveTagName(nt.name);
+      if(entries[resolvedName]){
+        console.warn(`New tag "${nt.name}" collides with existing entry "${resolvedName}" — skipping`);
+        return;
+      }
+      // Apply section override
+      let sec=nt.section||'Topics';
+      if(S.sectionOverrides&&S.sectionOverrides[nt.name])sec=S.sectionOverrides[nt.name];
+      const stub={
+        name:resolvedName,
+        originalName:nt.name!==resolvedName?nt.name:null,
+        path:'',
+        section:sec,
+        results:[],
+        seealso:[],
+        bestbet:null,
+        isNewTag:true,
+        newTagAddedBy:nt.addedBy,
+      };
+      if(!sections[sec])sections[sec]=[];
+      sections[sec].push(stub);
+      entries[resolvedName]=stub;
+    });
+    // Now attach bindings to each new-tag entry
+    if(Array.isArray(S.newTagBindings)){
+      S.newTagBindings.forEach(b=>{
+        const resolvedName=resolveTagName(b.tagName);
+        const tagEntry=entries[resolvedName];
+        if(!tagEntry||!tagEntry.isNewTag)return; // tag not loaded or not a new tag
+        const row=S.rows[b.rowIdx];
+        if(!row){
+          console.warn(`Binding references row ${b.rowIdx} which doesn't exist`);
+          return;
+        }
+        // Pull clip info from the main sheet row
+        const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
+        const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
+        const progCol=S.headers.findIndex(h=>h.toLowerCase()==='program_number');
+        const idCol=S.headers.findIndex(h=>h.toLowerCase()==='id');
+        const objIdCol=S.headers.findIndex(h=>h.toLowerCase()==='objectid');
+        const pvNameCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_name');
+        const pvTypeCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_type');
+        const transCol=S.headers.findIndex(h=>h.toLowerCase()==='transcript');
+        const clipType=typeCol>=0?(row[typeCol]||''):'';
+        const result={
+          rowIdx:b.rowIdx,
+          segType:b.segType,
+          desc:b.desc,
+          rel:b.rel,
+          relevancy:b.relevancy,
+          clipType,
+          clipName:nameCol>=0?(row[nameCol]||''):'',
+          progNum:progCol>=0?(row[progCol]||''):'',
+          clipId:idCol>=0?(row[idCol]||''):'',
+          objId:objIdCol>=0?(row[objIdCol]||''):'',
+          pvName:pvNameCol>=0?(row[pvNameCol]||''):'',
+          pvType:pvTypeCol>=0?(row[pvTypeCol]||''):'',
+          transcript:transCol>=0?(row[transCol]||''):'',
+          isNewBinding:true,
+        };
+        tagEntry.results.push(result);
+      });
+    }
+  }
+
+  // === SOFT-DELETED ENTRIES: mark isDeleted flag (display still happens, export skips) ===
+  if(S.deletedEntries&&S.deletedEntries.size){
+    Object.values(sections).forEach(arr=>{
+      arr.forEach(e=>{
+        if(S.deletedEntries.has(e.name)){
+          e.isDeleted=true;
+        }
+      });
+    });
+  }
+
   // === HIERARCHY: assign parent/depth/children to each entry ===
   // S.tagHierarchy: {childName: parentName} using CURRENT display names
   // Apply rename map first to handle stored historical names
@@ -5126,17 +5480,23 @@ function buildIndex(){
     });
   }
   // Annotate every entry with parent & depth
+  // Release children whose parent is soft-deleted (back to top-level)
   Object.values(sections).forEach(arr=>{
     arr.forEach(e=>{
-      e.parent=liveHierarchy[e.name]||null;
+      let parent=liveHierarchy[e.name]||null;
+      if(parent && S.deletedEntries && S.deletedEntries.has(parent)){
+        parent=null; // released — parent is deleted
+      }
+      e.parent=parent;
       e.children=[];
     });
   });
-  // Walk and set depth (with cycle protection)
+  // Walk and set depth (with cycle protection); skip deleted parents
   function _depth(name,seen){
     if(seen.has(name))return 0;
     seen.add(name);
-    const p=liveHierarchy[name];
+    let p=liveHierarchy[name];
+    if(p && S.deletedEntries && S.deletedEntries.has(p))p=null;
     if(!p)return 0;
     return 1+_depth(p,seen);
   }
@@ -5593,11 +5953,15 @@ async function generateIndexTab(sectionName){
     const relDefaults=(RULES.relDefaults&&RULES.relDefaults[sectionName])?RULES.relDefaults[sectionName]:(RULES.relDefaults&&RULES.relDefaults.Topics?RULES.relDefaults.Topics:{});
     
     entries.forEach(function(entry){
+      // Skip soft-deleted entries entirely in export
+      if(entry.isDeleted)return;
       // Determine which column to put the entry name in based on hierarchy depth
       var depth=entry.depth||0;
       var nameCol=depth>=2?2:(depth===1?1:0); // 0=A, 1=B, 2=C; cap at 2 (3-level max)
       // === Alias stub entry: single row, just shows "See: target" ===
       if(entry.isAlias){
+        // Skip alias if its target is deleted
+        if(entry.aliasTargetResolved && S.deletedEntries && S.deletedEntries.has(entry.aliasTargetResolved))return;
         var aliasRow=[];for(var z=0;z<EC;z++)aliasRow.push('');
         aliasRow[nameCol]=entry.name||'';
         aliasRow[5]='See: '+entry.aliasTargetResolved; // Description column (F=index 5)
@@ -5614,12 +5978,22 @@ async function generateIndexTab(sectionName){
         entryRow[19]=entry.originalName;
       }
       // U (col 20): See Also — list tag refs (resolved current names) and free-text refs
+      // Skip tag references whose target is soft-deleted
       var seeAlsoList=S.seeAlsoRefs?.[entry.name]||[];
       if(seeAlsoList.length){
-        entryRow[20]=seeAlsoList.map(function(s){
-          if(s.type==='tag')return resolveTagName(s.target);
-          return '"'+s.target+'"';
-        }).join('; ');
+        var visibleRefs=seeAlsoList.filter(function(s){
+          if(s.type==='tag'){
+            var resolved=resolveTagName(s.target);
+            if(S.deletedEntries && S.deletedEntries.has(resolved))return false;
+          }
+          return true;
+        });
+        if(visibleRefs.length){
+          entryRow[20]=visibleRefs.map(function(s){
+            if(s.type==='tag')return resolveTagName(s.target);
+            return '"'+s.target+'"';
+          }).join('; ');
+        }
       }
       dataRows.push(entryRow);
       
@@ -6721,6 +7095,14 @@ function render(force=true){
   if(S.recoveryView==='preview'){
     h+=renderRecoveryPreview();
   }
+  // New-tag creation modal
+  if(S.newTagModal){
+    h+=rNewTagModal();
+  }
+  // Clip search modal (for attaching clips to a new tag)
+  if(S.clipSearchModal){
+    h+=rClipSearchModal();
+  }
   // Save scroll positions before DOM replacement — catch all known scroll containers AND window
   const scrollSave={};
   scrollSave.win=window.scrollY||document.documentElement.scrollTop||0;
@@ -7271,6 +7653,114 @@ function rTools(){
 // ═══════════════════════════════════════════════════════════════
 // TEAM — admin-only: user-work filter, team list, invitations
 // ═══════════════════════════════════════════════════════════════
+function rNewTagModal(){
+  const m=S.newTagModal;
+  if(!m)return '';
+  const sections=RULES.sectionOrder;
+  let h=`<div class="modal-backdrop" id="newtag-modal-backdrop"><div class="modal-box">`;
+  h+=`<div class="modal-hd"><h3>+ Add New Tag</h3><button class="btn btn-sm" data-newtag-cancel="1">×</button></div>`;
+  h+=`<div class="modal-body">`;
+  h+=`<p style="margin-top:0;color:var(--tx-3);font-size:12px">This creates a new tag in the workspace only. It does not affect the main sheet. You can then attach clips to it.</p>`;
+  h+=`<div style="margin-bottom:10px"><label style="display:block;font-size:12px;color:var(--tx-3);margin-bottom:3px">Tag name</label>`;
+  h+=`<input id="newtag-name" type="text" placeholder="e.g. Mivtza Tzedoke" value="${esc(m.name||'')}" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px"></div>`;
+  h+=`<div style="margin-bottom:10px"><label style="display:block;font-size:12px;color:var(--tx-3);margin-bottom:3px">Section</label>`;
+  h+=`<select id="newtag-section" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px">`;
+  sections.forEach(s=>{
+    h+=`<option value="${esc(s)}" ${m.section===s?'selected':''}>${esc(s)}</option>`;
+  });
+  h+=`</select></div>`;
+  h+=`</div>`;
+  h+=`<div class="modal-ft"><button class="btn btn-sm" data-newtag-cancel="1">Cancel</button><button class="btn btn-sm btn-gold" id="newtag-save">Create Tag</button></div>`;
+  h+=`</div></div>`;
+  return h;
+}
+
+function rClipSearchModal(){
+  const m=S.clipSearchModal;
+  if(!m)return '';
+  let h=`<div class="modal-backdrop" id="clipsearch-modal-backdrop"><div class="modal-box" style="max-width:720px">`;
+  h+=`<div class="modal-hd"><h3>Attach a clip to "${esc(m.newTagName)}"</h3><button class="btn btn-sm" data-clipsearch-cancel="1">×</button></div>`;
+  h+=`<div class="modal-body">`;
+  if(!m.selectedRowIdx){
+    // Search phase: user types a query, we search clip names and program numbers
+    h+=`<p style="margin-top:0;color:var(--tx-3);font-size:12px">Find a clip by title or program number.</p>`;
+    h+=`<input id="clipsearch-query" type="text" placeholder="Search clip title or program number…" value="${esc(m.query||'')}" autocomplete="off" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;margin-bottom:10px">`;
+    // Compute results
+    const q=(m.query||'').trim().toLowerCase();
+    if(q&&q.length>=2){
+      const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
+      const progCol=S.headers.findIndex(h=>h.toLowerCase()==='program_number');
+      const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
+      const pvNameCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_name');
+      const results=[];
+      for(let i=0;i<S.rows.length&&results.length<30;i++){
+        const r=S.rows[i];
+        const name=(r[nameCol]||'').toLowerCase();
+        const prog=String(r[progCol]||'').toLowerCase();
+        const pvName=(r[pvNameCol]||'').toLowerCase();
+        if(name.includes(q)||prog.includes(q)||pvName.includes(q)){
+          results.push({rowIdx:i,name:r[nameCol]||'',prog:r[progCol]||'',type:r[typeCol]||'',pvName:r[pvNameCol]||''});
+        }
+      }
+      if(!results.length){
+        h+=`<div style="padding:20px;text-align:center;color:var(--tx-3);font-size:12px">No matches found.</div>`;
+      }else{
+        h+=`<div style="max-height:400px;overflow-y:auto;border:1px solid var(--line);border-radius:4px">`;
+        results.forEach(r=>{
+          h+=`<div data-clip-pick="${r.rowIdx}" style="padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12px" onmouseover="this.style.background='#f5f0e0'" onmouseout="this.style.background=''">`;
+          h+=`<div><b>${esc(r.name)}</b> <span style="color:var(--tx-4);font-size:10px">${esc(r.type)}${r.prog?' · #'+esc(r.prog):''}</span></div>`;
+          if(r.pvName)h+=`<div style="color:var(--tx-4);font-size:10px;margin-top:2px">from: ${esc(r.pvName)}</div>`;
+          h+=`</div>`;
+        });
+        h+=`</div>`;
+      }
+    }else{
+      h+=`<div style="padding:20px;text-align:center;color:var(--tx-4);font-size:11px">Type at least 2 characters to search.</div>`;
+    }
+  }else{
+    // Detail phase: user picked a clip, now fill in description/segType/rel/relevancy
+    const r=S.rows[m.selectedRowIdx];
+    if(!r){h+='<div>Row not found.</div>';h+='</div></div></div>';return h}
+    const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
+    const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
+    const progCol=S.headers.findIndex(h=>h.toLowerCase()==='program_number');
+    const clipName=r[nameCol]||'';
+    const clipType=r[typeCol]||'';
+    const prog=r[progCol]||'';
+    const segType=RULES.typeMap[clipType]||clipType||'Other';
+    h+=`<div style="margin-bottom:10px;padding:8px;background:#f5f5f0;border-radius:4px;font-size:12px">`;
+    h+=`<div><b>${esc(clipName)}</b></div>`;
+    h+=`<div style="color:var(--tx-3);font-size:11px;margin-top:3px">Type: ${esc(clipType)} → SegType: <b>${esc(segType)}</b>${prog?' · Program #'+esc(prog):''}</div>`;
+    h+=`</div>`;
+    h+=`<div style="margin-bottom:10px"><label style="display:block;font-size:12px;color:var(--tx-3);margin-bottom:3px">Description (required)</label>`;
+    h+=`<textarea id="clipsearch-desc" placeholder="Describe how this clip relates to the tag…" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;min-height:60px;font-family:var(--font);resize:vertical">${esc(m.desc||'')}</textarea></div>`;
+    // Relationship dropdown — common options
+    h+=`<div style="margin-bottom:10px"><label style="display:block;font-size:12px;color:var(--tx-3);margin-bottom:3px">Relationship (required) <span style="color:#c00">*</span></label>`;
+    h+=`<select id="clipsearch-rel" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px">`;
+    h+=`<option value="" ${!m.rel?'selected':''}>— select —</option>`;
+    ['spoken_about','spoken_to','spoken_by','recorded_at','sung_by','sung','about','related'].forEach(opt=>{
+      h+=`<option value="${opt}" ${m.rel===opt?'selected':''}>${opt}</option>`;
+    });
+    h+=`</select></div>`;
+    h+=`<div style="margin-bottom:10px"><label style="display:block;font-size:12px;color:var(--tx-3);margin-bottom:3px">Relevancy (required) <span style="color:#c00">*</span></label>`;
+    h+=`<select id="clipsearch-relev" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px">`;
+    h+=`<option value="" ${!m.relevancy?'selected':''}>— select —</option>`;
+    [1,2,3,4].forEach(n=>{
+      h+=`<option value="${n}" ${m.relevancy==n?'selected':''}>${n} ${n===4?'(highest)':n===1?'(lowest)':''}</option>`;
+    });
+    h+=`</select></div>`;
+    h+=`<button class="btn btn-sm" data-clipsearch-back="1" style="font-size:11px">← Back to search</button>`;
+  }
+  h+=`</div>`;
+  if(m.selectedRowIdx){
+    h+=`<div class="modal-ft"><button class="btn btn-sm" data-clipsearch-cancel="1">Cancel</button><button class="btn btn-sm btn-gold" id="clipsearch-save">Attach Clip</button></div>`;
+  }else{
+    h+=`<div class="modal-ft"><button class="btn btn-sm" data-clipsearch-cancel="1">Cancel</button></div>`;
+  }
+  h+=`</div></div>`;
+  return h;
+}
+
 function rTeam(){
   const isAdminUser=ADMIN_EMAILS.includes(S.user?.email?.toLowerCase());
   if(!isAdminUser){
@@ -7375,6 +7865,8 @@ function rIndex(){
   h+=`<div class="toolbar-spacer"></div>`;
   // Hide/show descriptions toggle
   h+=`<button class="btn btn-sm btn-icon" id="idx-toggle-desc" title="${S.idxHideDescriptions?'Show descriptions':'Hide descriptions (show entry skeleton only)'}">${S.idxHideDescriptions?'📖':'📋'}</button>`;
+  // New tag button
+  h+=`<button class="btn btn-sm" id="idx-new-tag" title="Add a new tag (workspace only)" style="font-size:11px;color:#3a8a3a;border-color:#3a8a3a">+ New Tag</button>`;
   // Layout toggle — single/double column
   h+=`<div class="tb-layout-toggle">`;
   h+=`<div class="tb-layout-btn ${S.idxLayout==='single'?'active':''}" data-idxlayout="single" title="Single column">☰</div>`;
@@ -7482,7 +7974,8 @@ function rIndex(){
       const hasManualOrder=manualOrder!==undefined;
       const hasChildren=e.children&&e.children.length>0;
       const depthClass=e.depth?`depth-${Math.min(e.depth,2)}`:'';
-      eh+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''} ${depthClass} ${hasChildren?'has-children':''}" data-entry-name="${esc(e.name)}" data-entry-section="${esc(e.section||'')}" data-entry-parent="${esc(e.parent||'')}" draggable="true">`;
+      const deletedCls=e.isDeleted?' is-deleted':'';
+      eh+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''} ${depthClass} ${hasChildren?'has-children':''}${deletedCls}" data-entry-name="${esc(e.name)}" data-entry-section="${esc(e.section||'')}" data-entry-parent="${esc(e.parent||'')}" draggable="true">`;
       eh+=`<div class="idx-entry-name" data-entry="${esc(e.name)}">`;
       eh+=`<span class="idx-drag-handle" title="Drag to reorder" data-draghandle="${esc(e.name)}">⋮⋮</span>`;
       // Children collapse toggle
@@ -7495,14 +7988,21 @@ function rIndex(){
       eh+=`<input type="checkbox" class="idx-audit-chk" data-audit-entry="${esc(e.name)}" ${allSelected?'checked':''} title="Select for AI audit">`;
       // Move checkbox (hidden unless move mode)
       eh+=`<input type="checkbox" class="idx-move-chk" data-move-entry="${esc(e.name)}" ${S.moveSelected.has(e.name)?'checked':''} title="Select to move">`;
-      // Inline rename input if renaming this entry, otherwise name + pencil
+      // Inline rename input if renaming this entry, otherwise name + pencil + delete
       if(S.renamingEntry&&S.renamingEntry.name===e.name){
         eh+=`<input type="text" class="idx-rename-input" id="rename-input" value="${esc(S.renamingEntry.inputValue)}" data-rename-for="${esc(e.name)}" style="font-family:var(--serif);font-size:inherit;font-weight:700;padding:2px 6px;border:1px solid var(--gold);border-radius:4px;min-width:240px" autofocus>`;
         eh+=`<button class="btn btn-sm btn-gold" data-rename-save="${esc(e.name)}" style="font-size:11px;padding:2px 8px">Save</button>`;
         eh+=`<button class="btn btn-sm" data-rename-cancel="1" style="font-size:11px;padding:2px 8px">Cancel</button>`;
       }else{
         eh+=`${esc(e.name)}`;
-        eh+=`<button class="idx-entry-rename" data-rename-start="${esc(e.name)}" title="Rename this tag" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:12px;padding:0 4px;opacity:0;transition:opacity .15s">✎</button>`;
+        if(!e.isDeleted){
+          eh+=`<button class="idx-entry-rename" data-rename-start="${esc(e.name)}" title="Rename this tag" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:12px;padding:0 4px;opacity:0;transition:opacity .15s">✎</button>`;
+          eh+=`<button class="idx-entry-rename" data-delete-entry="${esc(e.name)}" title="Delete this tag (workspace only — does not affect main sheet)" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:12px;padding:0 4px;opacity:0;transition:opacity .15s">🗑</button>`;
+        }
+      }
+      // New-tag badge (workspace-created tag)
+      if(e.isNewTag){
+        eh+=`<span class="idx-entry-newtag-badge" title="New tag added in workspace — not in main sheet">new</span>`;
       }
       // Synthetic badge
       if(e.isSynthetic){
@@ -7619,6 +8119,10 @@ function rIndex(){
           // Only show "Make subtag" if entry doesn't already have a parent
           eh+=` <button data-parent-add="${esc(e.name)}" title="Make this entry a subtag (child) of another tag in this section" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-3);font-size:10px;padding:1px 8px;margin-left:4px">↳ Subtag of…</button>`;
         }
+        // For new-tag entries: always offer attach
+        if(e.isNewTag && !e.isDeleted){
+          eh+=` <button data-attach-clip="${esc(e.name)}" title="Attach a clip to this new tag" style="background:none;border:1px dashed #3a8a3a;border-radius:10px;cursor:pointer;color:#3a8a3a;font-size:10px;padding:1px 8px;margin-left:4px">+ Attach clip</button>`;
+        }
         eh+=`</div>`;
       }else{
         // Even when no See Alsos/Aliases, show the add buttons (small, subtle)
@@ -7627,6 +8131,10 @@ function rIndex(){
         eh+=` <button data-alias-add="${esc(e.name)}" title="Add an alias — a separate entry that points here" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-4);font-size:10px;padding:1px 8px">+ Alias</button>`;
         if(!e.parent){
           eh+=` <button data-parent-add="${esc(e.name)}" title="Make this entry a subtag of another tag in this section" style="background:none;border:1px dashed var(--tx-4);border-radius:10px;cursor:pointer;color:var(--tx-4);font-size:10px;padding:1px 8px">↳ Subtag of…</button>`;
+        }
+        // For new-tag entries: button to attach more clips
+        if(e.isNewTag && !e.isDeleted){
+          eh+=` <button data-attach-clip="${esc(e.name)}" title="Attach a clip to this new tag" style="background:none;border:1px dashed #3a8a3a;border-radius:10px;cursor:pointer;color:#3a8a3a;font-size:10px;padding:1px 8px">+ Attach clip</button>`;
         }
         eh+=`</div>`;
       }
@@ -7800,6 +8308,10 @@ function rIndex(){
       });
       } // end if(showDescs) — only render result rows when entry is expanded
       eh+='</div>';
+      // Reinstate bar for deleted entries — shown right under the entry, gives a way to undo the delete
+      if(e.isDeleted){
+        eh+=`<div class="idx-entry-reinstate-bar"><span>🗑 Deleted — excluded from export and crossed out here.</span><button class="btn btn-sm" data-reinstate-entry="${esc(e.name)}" style="font-size:11px;padding:2px 8px;border-color:#933;color:#933">↺ Reinstate</button></div>`;
+      }
       entryHtmls.push(eh);
     });
   });
@@ -8237,6 +8749,9 @@ try{S.seeAlsoRefs=await loadSeeAlsoFromTab();console.log(`Loaded See Also refs f
 try{S.aliases=await loadAliasesFromTab();console.log(`Loaded ${S.aliases.length} aliases`);}catch(e){console.warn('Could not load aliases:',e);S.aliases=[];}
 try{S.tagHierarchy=await loadHierarchyFromTab();console.log(`Loaded hierarchy for ${Object.keys(S.tagHierarchy).length} entries`);}catch(e){console.warn('Could not load hierarchy:',e);S.tagHierarchy={};}
 try{S.syntheticTags=await loadSyntheticTagsFromTab();console.log(`Loaded ${S.syntheticTags.length} synthetic parent tags`);}catch(e){console.warn('Could not load synthetic tags:',e);S.syntheticTags=[];}
+try{S.deletedEntries=await loadDeletedEntriesFromTab();console.log(`Loaded ${S.deletedEntries.size} deleted entries`);}catch(e){console.warn('Could not load deleted entries:',e);S.deletedEntries=new Set();}
+try{S.newTags=await loadNewTagsFromTab();console.log(`Loaded ${S.newTags.length} new tags`);}catch(e){console.warn('Could not load new tags:',e);S.newTags=[];}
+try{S.newTagBindings=await loadNewTagBindingsFromTab();console.log(`Loaded ${S.newTagBindings.length} new tag bindings`);}catch(e){console.warn('Could not load new tag bindings:',e);S.newTagBindings=[];}
 await loadTab(0);
 // CRITICAL: migration runs BEFORE any writes so tabs are populated before anything else touches them
 const migRes=await migrateBlobToPerRow();
@@ -8943,6 +9458,133 @@ function bindAll(){
     if(!await customConfirm(msg))return;
     await deleteSyntheticParent(name);
     toast(`Deleted "${name}"`,'success');
+    buildIndex();render();
+  });
+
+  // ── Soft-delete entry (workspace-only) ──
+  $$('[data-delete-entry]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const name=el.dataset.deleteEntry;
+    // Find the entry to see if it has children
+    let entry=null;
+    Object.values(S.indexData?.sections||{}).forEach(arr=>{const f=arr.find(e=>e.name===name);if(f)entry=f});
+    if(!entry){toast('Entry not found','error');return}
+    const childCount=entry.children?entry.children.length:0;
+    let alsoDeleteChildren=false;
+    if(childCount>0){
+      const choice=await customConfirm(`Delete "${name}"?\n\nThis tag has ${childCount} subtag${childCount===1?'':'s'}. Click OK to ALSO DELETE the subtags. Click Cancel to delete only "${name}" — subtags will become top-level entries.`);
+      if(choice===null||choice===undefined){return} // user closed dialog
+      alsoDeleteChildren=choice;
+      if(!alsoDeleteChildren){
+        // user clicked Cancel — but maybe they meant "abort entirely"? Show second confirm
+        const proceed=await customConfirm(`Delete only "${name}"? Subtags will become top-level entries.`);
+        if(!proceed)return;
+      }
+    }else{
+      if(!await customConfirm(`Delete "${name}"?\n\nIt will be crossed out in the workspace and excluded from the export. You can reinstate it any time.`))return;
+    }
+    await softDeleteEntry(name,alsoDeleteChildren);
+    toast(`Deleted "${name}"${alsoDeleteChildren&&childCount?` and ${childCount} subtag${childCount===1?'':'s'}`:''}`,'success');
+    buildIndex();render();
+  });
+
+  // ── Reinstate entry ──
+  $$('[data-reinstate-entry]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const name=el.dataset.reinstateEntry;
+    await reinstateEntry(name);
+    toast(`Reinstated "${name}"`,'success');
+    buildIndex();render();
+  });
+
+  // ── New Tag button (toolbar) ──
+  on('#idx-new-tag','click',()=>{
+    S.newTagModal={name:'',section:S.idxActiveSection==='all'?'Topics':(S.idxActiveSection||'Topics')};
+    render();
+    setTimeout(()=>{const i=$('#newtag-name');if(i)i.focus()},50);
+  });
+  // New tag modal handlers
+  $$('[data-newtag-cancel]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    S.newTagModal=null;render();
+  });
+  on('#newtag-name','input',()=>{
+    if(S.newTagModal)S.newTagModal.name=$('#newtag-name').value;
+  });
+  on('#newtag-section','change',()=>{
+    if(S.newTagModal)S.newTagModal.section=$('#newtag-section').value;
+  });
+  on('#newtag-name','keydown',ev=>{
+    if(ev.key==='Enter'){ev.preventDefault();$('#newtag-save')?.click()}
+    else if(ev.key==='Escape'){S.newTagModal=null;render()}
+  });
+  on('#newtag-save','click',async()=>{
+    const m=S.newTagModal;if(!m)return;
+    const name=($('#newtag-name')?.value||'').trim();
+    const section=$('#newtag-section')?.value||'Topics';
+    if(!name){toast('Tag name required','error');return}
+    const res=await createNewTag(name,section);
+    if(!res.ok){toast(res.reason,'error');return}
+    S.newTagModal=null;
+    toast(`Created "${name}" in ${section}`,'success');
+    buildIndex();render();
+  });
+
+  // ── Attach clip button (per new-tag entry) ──
+  $$('[data-attach-clip]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const tagName=el.dataset.attachClip;
+    S.clipSearchModal={newTagName:tagName,query:'',selectedRowIdx:null,desc:'',rel:'',relevancy:''};
+    render();
+    setTimeout(()=>{const i=$('#clipsearch-query');if(i)i.focus()},50);
+  });
+  $$('[data-clipsearch-cancel]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    S.clipSearchModal=null;render();
+  });
+  // Clip search input — re-render to filter (preserve cursor)
+  on('#clipsearch-query','input',()=>{
+    if(S.clipSearchModal){
+      S.clipSearchModal.query=$('#clipsearch-query').value;
+      render();
+      setTimeout(()=>{const i=$('#clipsearch-query');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},10);
+    }
+  });
+  // Click a search result row → pick it
+  $$('[data-clip-pick]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    if(!S.clipSearchModal)return;
+    S.clipSearchModal.selectedRowIdx=parseInt(el.dataset.clipPick);
+    render();
+  });
+  // Back to search
+  $$('[data-clipsearch-back]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    if(!S.clipSearchModal)return;
+    S.clipSearchModal.selectedRowIdx=null;
+    render();
+  });
+  // Track input changes in detail form
+  on('#clipsearch-desc','input',()=>{if(S.clipSearchModal)S.clipSearchModal.desc=$('#clipsearch-desc').value});
+  on('#clipsearch-rel','change',()=>{if(S.clipSearchModal)S.clipSearchModal.rel=$('#clipsearch-rel').value});
+  on('#clipsearch-relev','change',()=>{if(S.clipSearchModal)S.clipSearchModal.relevancy=$('#clipsearch-relev').value});
+  on('#clipsearch-save','click',async()=>{
+    const m=S.clipSearchModal;if(!m||!m.selectedRowIdx)return;
+    const desc=($('#clipsearch-desc')?.value||'').trim();
+    const rel=$('#clipsearch-rel')?.value||'';
+    const relevancy=$('#clipsearch-relev')?.value||'';
+    if(!desc){toast('Description required','error');return}
+    if(!rel){toast('Relationship required','error');return}
+    if(!relevancy){toast('Relevancy required','error');return}
+    // SegType is auto-detected from clipType
+    const r=S.rows[m.selectedRowIdx];
+    const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
+    const clipType=typeCol>=0?(r[typeCol]||''):'';
+    const segType=RULES.typeMap[clipType]||clipType||'Other';
+    const res=await attachClipToNewTag(m.newTagName,m.selectedRowIdx,desc,segType,rel,relevancy);
+    if(!res.ok){toast(res.reason,'error');return}
+    S.clipSearchModal=null;
+    toast(`Attached clip to "${m.newTagName}"`,'success');
     buildIndex();render();
   });
   // Admin: user work filter dropdown
@@ -10880,6 +11522,9 @@ window.addEventListener('resize',fixIdxScroll);
       // Load hierarchy and synthetic tags
       try{S.tagHierarchy=await loadHierarchyFromTab();console.log(`Loaded hierarchy for ${Object.keys(S.tagHierarchy).length} entries`);}catch(e){console.warn('Could not load hierarchy:',e);S.tagHierarchy={};}
       try{S.syntheticTags=await loadSyntheticTagsFromTab();console.log(`Loaded ${S.syntheticTags.length} synthetic parent tags`);}catch(e){console.warn('Could not load synthetic tags:',e);S.syntheticTags=[];}
+      try{S.deletedEntries=await loadDeletedEntriesFromTab();console.log(`Loaded ${S.deletedEntries.size} deleted entries`);}catch(e){console.warn('Could not load deleted entries:',e);S.deletedEntries=new Set();}
+      try{S.newTags=await loadNewTagsFromTab();console.log(`Loaded ${S.newTags.length} new tags`);}catch(e){console.warn('Could not load new tags:',e);S.newTags=[];}
+      try{S.newTagBindings=await loadNewTagBindingsFromTab();console.log(`Loaded ${S.newTagBindings.length} new tag bindings`);}catch(e){console.warn('Could not load new tag bindings:',e);S.newTagBindings=[];}
       await loadTab(0);
       registerTeamMember();
       startAutoRefresh();
