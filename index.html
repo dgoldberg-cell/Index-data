@@ -176,6 +176,12 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-entry.is-deleted .idx-result-desc,.idx-entry.is-deleted .idx-result-ref{text-decoration:line-through;color:var(--tx-3)}
 .idx-entry-reinstate-bar{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:#fbe9e9;border:1px dashed #c66;border-radius:4px;margin:4px 0;font-size:11px;color:#933}
 .idx-entry-newtag-badge{font-size:9px;font-weight:600;background:#3a8a3a;color:white;padding:1px 5px;border-radius:8px;margin-left:4px}
+.idx-result.is-removed{opacity:0.55;background:#fef5f5}
+.idx-result.is-removed .idx-result-desc{text-decoration:line-through;color:var(--tx-3)}
+.idx-result-remove-btn{background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:12px;padding:0 4px;opacity:0;transition:opacity .15s;margin-left:6px}
+.idx-result:hover .idx-result-remove-btn{opacity:1}
+.idx-result-remove-btn:hover{color:#c33}
+.idx-result.is-removed .idx-result-remove-btn{opacity:1;color:#c33}
 .modal-backdrop{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:60px 20px}
 .modal-box{background:white;border-radius:6px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-width:560px;width:100%;max-height:80vh;display:flex;flex-direction:column}
 .modal-hd{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
@@ -1020,6 +1026,7 @@ seeAlsoRefs:{}, // {entryName: [{target, type:'tag'|'freetext'}]} — built from
 aliases:[], // [{alias, targetOriginal, addedBy, ts}] — built from _Aliases tab. Aliases appear as entries with "See: target".
 tagHierarchy:{}, // {childName: parentName} — built from _TagHierarchy. Empty parent = top-level.
 deletedEntries:new Set(), // Names of entries soft-deleted from workspace (excluded from export, crossed out in workspace)
+removedBindings:new Set(), // "tagName|rowIdx" — clip-tag pairings soft-removed (real bindings: crossed out; new bindings: hard-removed)
 newTags:[], // [{name, section, addedBy, ts}] — user-created tags that don't exist in main sheet
 newTagBindings:[], // [{tagName, rowIdx, desc, segType, rel, relevancy, addedBy, ts}] — each binding connects a new tag to a clip
 clipSearchModal:null, // {newTagName, query, segType?, etc} — open clip search modal for attaching to a new tag
@@ -2991,6 +2998,7 @@ async function manualRefresh(){
     try{S.deletedEntries=await loadDeletedEntriesFromTab();}catch(e){console.warn('Could not refresh deleted entries:',e);}
     try{S.newTags=await loadNewTagsFromTab();}catch(e){console.warn('Could not refresh new tags:',e);}
     try{S.newTagBindings=await loadNewTagBindingsFromTab();}catch(e){console.warn('Could not refresh new tag bindings:',e);}
+    try{S.removedBindings=await loadRemovedBindingsFromTab();}catch(e){console.warn('Could not refresh removed bindings:',e);}
     buildIndex();render(true);
     toast('All data refreshed','success');
   }catch(e){
@@ -4107,6 +4115,68 @@ async function loadDeletedEntriesFromTab(){
   }
 }
 
+// === REMOVED BINDINGS (per-clip-tag soft removal for real tags) ===
+// _RemovedBindings tab: Timestamp | Tag Name | Row Index | Action | Set By
+async function appendToRemovedBindingsLog(tagName,rowIdx,action,timestamp,user){
+  const TAB='_RemovedBindings';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:E1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Tag Name','Row Index','Action','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _RemovedBindings tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:E`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),tagName,String(rowIdx),action||'remove',user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to removed bindings log:',e)}
+}
+
+async function loadRemovedBindingsFromTab(){
+  const TAB='_RemovedBindings';
+  if(!S.connected)return new Set();
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return new Set();
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:E10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>(Date.parse(a[0]||'')||0)-(Date.parse(b[0]||'')||0));
+    const set=new Set();
+    sorted.forEach(row=>{
+      const tagName=(row[1]||'').trim();
+      const rowIdx=row[2]||'';
+      const action=(row[3]||'remove').trim();
+      if(!tagName||rowIdx==='')return;
+      const key=tagName+'|'+rowIdx;
+      if(action==='restore')set.delete(key);
+      else set.add(key);
+    });
+    return set;
+  }catch(e){
+    console.warn('Failed to load removed bindings:',e);
+    return new Set();
+  }
+}
+
 // === NEW TAGS (workspace-created) ===
 // _NewTags tab: Timestamp | Name | Section | Action | Set By
 async function appendToNewTagsLog(name,section,action,timestamp,user){
@@ -4435,6 +4505,39 @@ async function hardDeleteNewTag(name){
   await appendToNewTagsLog(name,'','remove',ts,user);
   logActivity(`Hard-deleted new tag "${name}" (${bindings.length} bindings, ${orphaned.length} children released)`);
   return{ok:true,bindings:bindings.length,orphaned};
+}
+
+// === REMOVE / RESTORE CLIP-TAG BINDING ===
+// For real tags (from main sheet): soft removal — visible crossed out, restorable.
+// For new tags: hard removal — removes the binding from _NewTagBindings entirely.
+async function removeBinding(tagName,rowIdx,isNewTagBinding){
+  const ts=new Date().toISOString();
+  const user=S.user?.name||S.user?.email||'Unknown';
+  if(isNewTagBinding){
+    // Hard remove from new tag bindings
+    const existing=S.newTagBindings.find(b=>b.tagName===tagName&&b.rowIdx===rowIdx);
+    if(!existing)return{ok:false,reason:'Binding not found'};
+    S.newTagBindings=S.newTagBindings.filter(b=>!(b.tagName===tagName&&b.rowIdx===rowIdx));
+    await appendToNewTagBindingsLog(existing.tagName,existing.rowIdx,existing.desc,existing.segType,existing.rel,existing.relevancy,'remove',ts,user);
+    logActivity(`Removed new-tag binding: "${tagName}" / clip ${rowIdx}`);
+    return{ok:true,hard:true};
+  }
+  // Soft remove — mark in _RemovedBindings
+  if(!S.removedBindings)S.removedBindings=new Set();
+  S.removedBindings.add(tagName+'|'+rowIdx);
+  await appendToRemovedBindingsLog(tagName,rowIdx,'remove',ts,user);
+  logActivity(`Soft-removed clip ${rowIdx} from "${tagName}"`);
+  return{ok:true,hard:false};
+}
+
+async function restoreBinding(tagName,rowIdx){
+  if(!S.removedBindings)S.removedBindings=new Set();
+  const key=tagName+'|'+rowIdx;
+  if(!S.removedBindings.has(key))return{ok:false,reason:'Not removed'};
+  S.removedBindings.delete(key);
+  await appendToRemovedBindingsLog(tagName,rowIdx,'restore',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  logActivity(`Restored clip ${rowIdx} to "${tagName}"`);
+  return{ok:true};
 }
 
 // Helper: tab title lookup
@@ -5595,13 +5698,26 @@ function buildIndex(){
     sections[sec]=flat;
   });
 
+  // === REMOVED BINDINGS: mark per-clip per-tag soft-removal flag ===
+  // S.removedBindings is a Set of "tagName|rowIdx" entries.
+  // Marked results still render (crossed out) but skip grouping and export.
+  if(S.removedBindings && S.removedBindings.size){
+    Object.values(sections).forEach(arr=>{
+      arr.forEach(e=>{
+        if(e.isAlias)return;
+        (e.results||[]).forEach(r=>{
+          const key=e.name+'|'+r.rowIdx;
+          if(S.removedBindings.has(key)){
+            r.isRemoved=true;
+          }
+        });
+      });
+    });
+  }
+
   // === DESCRIPTION GROUPING ===
   // For each entry's results, group clips that have IDENTICAL (case-insensitive, whitespace-normalized)
-  // description AND same segType. Each result gets:
-  //   r.groupKey   = normalized "description|segType" (or null if it's a singleton in its group)
-  //   r.groupSize  = how many clips are in its group (1 if singleton)
-  //   r.groupFirst = true if this is the first clip in the group (the "leader" of the group)
-  //   r.groupMembers = array of all r objects in this group (set on the leader only)
+  // description AND same segType. Removed bindings are skipped from grouping (treated as singletons).
   function normalizeDesc(s){
     return (s||'').toLowerCase().replace(/\s+/g,' ').trim();
   }
@@ -5610,6 +5726,11 @@ function buildIndex(){
       if(e.isAlias||e.isSynthetic)return;
       const buckets={};
       (e.results||[]).forEach(r=>{
+        // Removed bindings don't participate in grouping
+        if(r.isRemoved){
+          r.groupKey=null;r.groupSize=1;r.groupFirst=true;r.groupMembers=[r];
+          return;
+        }
         const norm=normalizeDesc(r.desc);
         if(!norm){
           // No description → no grouping. Singleton.
@@ -6049,6 +6170,8 @@ async function generateIndexTab(sectionName){
         bySeg[seg].sort(function(a,b){return(a.desc||'').localeCompare(b.desc||'')});
         
         bySeg[seg].forEach(function(r){
+          // Skip removed bindings (soft-removed clip-tag pairings)
+          if(r.isRemoved)return;
           // Skip non-first members of a group — they get merged into the first member's row
           if(r.groupKey && !r.groupFirst) return;
           var members=(r.groupKey && r.groupMembers && r.groupMembers.length) ? r.groupMembers : [r];
@@ -8231,7 +8354,8 @@ function rIndex(){
             else if(prevSame && nextSame)groupCls=' grouped-mid';
             else groupCls=' grouped-last';
           }
-          eh+=`<div class="idx-result${isPanelSrc?' panel-source':''}${groupCls}" data-rel="${relScore}">`;
+          const removedCls=r.isRemoved?' is-removed':'';
+          eh+=`<div class="idx-result${isPanelSrc?' panel-source':''}${groupCls}${removedCls}" data-rel="${relScore}">`;
           // Group badge: only on the FIRST row of a group, shows count + ungroup hint
           if(r.groupKey && r.groupFirst && r.groupSize>1){
             eh+=`<span class="idx-group-badge" title="${r.groupSize} clips with same description — grouped together. Edit one description differently to ungroup.">grouped ×${r.groupSize}</span>`;
@@ -8336,6 +8460,15 @@ function rIndex(){
           eh+=`<span class="idx-mini-btn" data-clippanel="${esc(e.name)}|${seg}|${r.rowIdx}" title="View clip details">ⓘ</span>`;
           // Status toggle — Pending/Reviewed
           eh+=`<button class="idx-status ${isReviewed?'reviewed':''}" data-desc-rv="${esc(e.name)}|${seg}|${r.rowIdx}">${isReviewed?'✓ Reviewed':'Pending'}</button>`;
+          // Remove / Restore binding button (× when active, ↺ when removed)
+          if(!e.isAlias){
+            if(r.isRemoved){
+              eh+=`<button class="idx-result-remove-btn" data-restore-binding="${esc(e.name)}|${r.rowIdx}" title="Restore this clip to this tag">↺</button>`;
+            }else{
+              const isNewBinding=r.isNewBinding?'1':'0';
+              eh+=`<button class="idx-result-remove-btn" data-remove-binding="${esc(e.name)}|${r.rowIdx}|${isNewBinding}" title="Remove this clip from this tag (workspace only — does not affect main sheet)">×</button>`;
+            }
+          }
           eh+=`</span>`; // end meta
           eh+=`</div>`;
         });
@@ -8787,6 +8920,7 @@ try{S.syntheticTags=await loadSyntheticTagsFromTab();console.log(`Loaded ${S.syn
 try{S.deletedEntries=await loadDeletedEntriesFromTab();console.log(`Loaded ${S.deletedEntries.size} deleted entries`);}catch(e){console.warn('Could not load deleted entries:',e);S.deletedEntries=new Set();}
 try{S.newTags=await loadNewTagsFromTab();console.log(`Loaded ${S.newTags.length} new tags`);}catch(e){console.warn('Could not load new tags:',e);S.newTags=[];}
 try{S.newTagBindings=await loadNewTagBindingsFromTab();console.log(`Loaded ${S.newTagBindings.length} new tag bindings`);}catch(e){console.warn('Could not load new tag bindings:',e);S.newTagBindings=[];}
+try{S.removedBindings=await loadRemovedBindingsFromTab();console.log(`Loaded ${S.removedBindings.size} removed clip-tag bindings`);}catch(e){console.warn('Could not load removed bindings:',e);S.removedBindings=new Set();}
 await loadTab(0);
 // CRITICAL: migration runs BEFORE any writes so tabs are populated before anything else touches them
 const migRes=await migrateBlobToPerRow();
@@ -9546,6 +9680,34 @@ function bindAll(){
     const name=el.dataset.reinstateEntry;
     await reinstateEntry(name);
     toast(`Reinstated "${name}"`,'success');
+    buildIndex();render();
+  });
+
+  // ── Remove a clip from a tag ──
+  $$('[data-remove-binding]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const parts=el.dataset.removeBinding.split('|');
+    const tagName=parts[0];
+    const rowIdx=parseInt(parts[1]);
+    const isNewBinding=parts[2]==='1';
+    if(isNewBinding){
+      if(!await customConfirm(`Permanently remove this clip from "${tagName}"?\n\nThis was added via the workspace ("+ Attach clip"). Removal cannot be undone for new-tag bindings.`))return;
+    }else{
+      if(!await customConfirm(`Remove this clip from "${tagName}"?\n\nIt will be crossed out here and excluded from the export. You can restore it any time.`))return;
+    }
+    const res=await removeBinding(tagName,rowIdx,isNewBinding);
+    if(!res.ok){toast(res.reason,'error');return}
+    toast(res.hard?'Binding removed':'Clip removed from tag','success');
+    buildIndex();render();
+  });
+  // ── Restore a removed clip-tag binding ──
+  $$('[data-restore-binding]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const [tagName,rowIdxStr]=el.dataset.restoreBinding.split('|');
+    const rowIdx=parseInt(rowIdxStr);
+    const res=await restoreBinding(tagName,rowIdx);
+    if(!res.ok){toast(res.reason,'error');return}
+    toast('Restored','success');
     buildIndex();render();
   });
 
@@ -11577,6 +11739,7 @@ window.addEventListener('resize',fixIdxScroll);
       try{S.deletedEntries=await loadDeletedEntriesFromTab();console.log(`Loaded ${S.deletedEntries.size} deleted entries`);}catch(e){console.warn('Could not load deleted entries:',e);S.deletedEntries=new Set();}
       try{S.newTags=await loadNewTagsFromTab();console.log(`Loaded ${S.newTags.length} new tags`);}catch(e){console.warn('Could not load new tags:',e);S.newTags=[];}
       try{S.newTagBindings=await loadNewTagBindingsFromTab();console.log(`Loaded ${S.newTagBindings.length} new tag bindings`);}catch(e){console.warn('Could not load new tag bindings:',e);S.newTagBindings=[];}
+      try{S.removedBindings=await loadRemovedBindingsFromTab();console.log(`Loaded ${S.removedBindings.size} removed clip-tag bindings`);}catch(e){console.warn('Could not load removed bindings:',e);S.removedBindings=new Set();}
       await loadTab(0);
       registerTeamMember();
       startAutoRefresh();
