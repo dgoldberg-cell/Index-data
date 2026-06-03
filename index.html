@@ -6229,38 +6229,56 @@ async function generateIndexTab(sectionName){
     console.log('Total rows to write:',dataRows.length);
     toast(`Built ${dataRows.length} rows, writing to sheet…`);
     
-    // Step 3: Write in small batches using append
+    // Step 3: Write in small batches using append, with rate-limit handling
+    // Strategy: 100 rows per batch, ~1.2s pace between batches (~50 writes/min, under Google's 60/min quota),
+    // retry the whole batch on 429 with exponential backoff (5s, 10s, 20s, 40s).
+    // No per-row fallback — that just makes 429s worse.
     var batchSize=100;
+    var PACE_MS=1200;
+    var totalBatches=Math.ceil(dataRows.length/batchSize);
+    var failedBatches=[];
     for(var i=0;i<dataRows.length;i+=batchSize){
       var chunk=dataRows.slice(i,i+batchSize);
-      try{
-        await gapi.client.sheets.spreadsheets.values.append({
-          spreadsheetId:S.sheetId,
-          range:tabName+'!A1',
-          valueInputOption:'RAW',
-          insertDataOption:'INSERT_ROWS',
-          resource:{values:chunk}
-        });
-        console.log('Wrote rows '+i+' to '+(i+chunk.length));
-      }catch(writeErr){
-        console.error('Batch write error at row '+i+':',writeErr);
-        toast('Write error at row '+i+', retrying one by one…','error');
-        // Fallback: write one row at a time
-        for(var j=0;j<chunk.length;j++){
-          try{
-            await gapi.client.sheets.spreadsheets.values.append({
-              spreadsheetId:S.sheetId,
-              range:tabName+'!A1',
-              valueInputOption:'RAW',
-              insertDataOption:'INSERT_ROWS',
-              resource:{values:[chunk[j]]}
-            });
-          }catch(singleErr){console.error('Row '+(i+j)+' failed:',singleErr)}
+      var batchNum=Math.floor(i/batchSize)+1;
+      var attempt=0;
+      var maxRetries=5;
+      var written=false;
+      while(attempt<maxRetries&&!written){
+        try{
+          await gapi.client.sheets.spreadsheets.values.append({
+            spreadsheetId:S.sheetId,
+            range:tabName+'!A1',
+            valueInputOption:'RAW',
+            insertDataOption:'INSERT_ROWS',
+            resource:{values:chunk}
+          });
+          written=true;
+          console.log('Wrote rows '+i+' to '+(i+chunk.length)+' (batch '+batchNum+'/'+totalBatches+')');
+        }catch(writeErr){
+          var isRateLimit=writeErr&&(writeErr.status===429||(writeErr.body&&writeErr.body.indexOf('429')>=0));
+          if(isRateLimit&&attempt<maxRetries-1){
+            // Exponential backoff: 5s, 10s, 20s, 40s, 80s
+            var wait=5000*Math.pow(2,attempt);
+            console.log('  ⏳ Rate-limited at row '+i+', batch '+batchNum+'. Waiting '+(wait/1000)+'s before retry…');
+            toast('Rate limited — waiting '+(wait/1000)+'s…','warn');
+            await new Promise(function(r){setTimeout(r,wait)});
+            attempt++;
+            continue;
+          }
+          // Non-recoverable, or out of retries — log and skip this batch
+          console.error('Batch '+batchNum+' write failed permanently at row '+i+':',writeErr);
+          failedBatches.push({batchNum:batchNum,startRow:i,size:chunk.length,error:writeErr});
+          break;
         }
       }
       // Progress toast every 500 rows
-      if(i%500<batchSize)toast('Writing… '+Math.min(i+batchSize,dataRows.length)+'/'+dataRows.length+' rows');
-      await new Promise(function(r){setTimeout(r,250)});
+      if(i%500<batchSize)toast('Writing… '+Math.min(i+batchSize,dataRows.length)+'/'+dataRows.length+' rows ('+batchNum+'/'+totalBatches+' batches)');
+      // Pace between batches to stay under 60 writes/min
+      if(i+batchSize<dataRows.length)await new Promise(function(r){setTimeout(r,PACE_MS)});
+    }
+    if(failedBatches.length){
+      console.warn('Failed batches:',failedBatches);
+      toast(failedBatches.length+' batch(es) failed — see console','error');
     }
     
     // Refresh sheet metadata
