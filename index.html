@@ -5553,46 +5553,53 @@ function buildIndex(){
       sections[sec].push(stub);
       entries[resolvedName]=stub;
     });
-    // Now attach bindings to each new-tag entry
-    if(Array.isArray(S.newTagBindings)){
-      S.newTagBindings.forEach(b=>{
-        const resolvedName=resolveTagName(b.tagName);
-        const tagEntry=entries[resolvedName];
-        if(!tagEntry||!tagEntry.isNewTag)return; // tag not loaded or not a new tag
-        const row=S.rows[b.rowIdx];
-        if(!row){
-          console.warn(`Binding references row ${b.rowIdx} which doesn't exist`);
-          return;
-        }
-        // Pull clip info from the main sheet row
-        const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
-        const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
-        const progCol=S.headers.findIndex(h=>h.toLowerCase()==='program_number');
-        const idCol=S.headers.findIndex(h=>h.toLowerCase()==='id');
-        const objIdCol=S.headers.findIndex(h=>h.toLowerCase()==='objectid');
-        const pvNameCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_name');
-        const pvTypeCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_type');
-        const transCol=S.headers.findIndex(h=>h.toLowerCase()==='transcript');
-        const clipType=typeCol>=0?(row[typeCol]||''):'';
-        const result={
-          rowIdx:b.rowIdx,
-          segType:b.segType,
-          desc:b.desc,
-          rel:b.rel,
-          relevancy:b.relevancy,
-          clipType,
-          clipName:nameCol>=0?(row[nameCol]||''):'',
-          progNum:progCol>=0?(row[progCol]||''):'',
-          clipId:idCol>=0?(row[idCol]||''):'',
-          objId:objIdCol>=0?(row[objIdCol]||''):'',
-          pvName:pvNameCol>=0?(row[pvNameCol]||''):'',
-          pvType:pvTypeCol>=0?(row[pvTypeCol]||''):'',
-          transcript:transCol>=0?(row[transCol]||''):'',
-          isNewBinding:true,
-        };
-        tagEntry.results.push(result);
-      });
-    }
+  }
+
+  // Attach new-tag bindings — works for BOTH new tags AND real tags
+  // (You can attach clips to existing real tags via "+ Attach clip" too)
+  if(Array.isArray(S.newTagBindings)&&S.newTagBindings.length){
+    S.newTagBindings.forEach(b=>{
+      const resolvedName=resolveTagName(b.tagName);
+      const tagEntry=entries[resolvedName];
+      if(!tagEntry)return; // tag doesn't exist
+      const row=S.rows[b.rowIdx];
+      if(!row){
+        console.warn(`Binding references row ${b.rowIdx} which doesn't exist`);
+        return;
+      }
+      // Avoid duplicate result if this same clip already appears (e.g. clip already had this tag in main sheet)
+      const alreadyHas=(tagEntry.results||[]).some(r=>r.rowIdx===b.rowIdx);
+      if(alreadyHas){
+        console.log(`Binding for "${b.tagName}" / row ${b.rowIdx} skipped — clip already in this tag from main sheet`);
+        return;
+      }
+      const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
+      const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
+      const progCol=S.headers.findIndex(h=>h.toLowerCase()==='program_number');
+      const idCol=S.headers.findIndex(h=>h.toLowerCase()==='id');
+      const objIdCol=S.headers.findIndex(h=>h.toLowerCase()==='objectid');
+      const pvNameCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_name');
+      const pvTypeCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_type');
+      const transCol=S.headers.findIndex(h=>h.toLowerCase()==='transcript');
+      const clipType=typeCol>=0?(row[typeCol]||''):'';
+      const result={
+        rowIdx:b.rowIdx,
+        segType:b.segType,
+        desc:b.desc,
+        rel:b.rel,
+        relevancy:b.relevancy,
+        clipType,
+        clipName:nameCol>=0?(row[nameCol]||''):'',
+        progNum:progCol>=0?(row[progCol]||''):'',
+        clipId:idCol>=0?(row[idCol]||''):'',
+        objId:objIdCol>=0?(row[objIdCol]||''):'',
+        pvName:pvNameCol>=0?(row[pvNameCol]||''):'',
+        pvType:pvTypeCol>=0?(row[pvTypeCol]||''):'',
+        transcript:transCol>=0?(row[transCol]||''):'',
+        isNewBinding:true,
+      };
+      tagEntry.results.push(result);
+    });
   }
 
   // === SOFT-DELETED ENTRIES: mark isDeleted flag (display still happens, export skips) ===
