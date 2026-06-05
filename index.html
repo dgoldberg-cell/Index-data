@@ -182,6 +182,13 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-result:hover .idx-result-remove-btn{opacity:1}
 .idx-result-remove-btn:hover{color:#c33}
 .idx-result.is-removed .idx-result-remove-btn{opacity:1;color:#c33}
+.idx-section-hd{position:relative}
+.idx-section-hd:hover .idx-section-edit{opacity:1}
+.idx-section-drag-handle{display:inline-block;font-size:14px;color:var(--tx-4);cursor:grab;padding:0 6px 0 0;opacity:0;transition:opacity .15s}
+.idx-section-hd:hover .idx-section-drag-handle{opacity:1}
+.idx-section-hd.dragging{opacity:0.5}
+.idx-section-hd.section-drop-before{border-top:3px solid var(--gold)}
+.idx-section-hd.section-drop-after{border-bottom:3px solid var(--gold)}
 .modal-backdrop{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:60px 20px}
 .modal-box{background:white;border-radius:6px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-width:560px;width:100%;max-height:80vh;display:flex;flex-direction:column}
 .modal-hd{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
@@ -1027,6 +1034,11 @@ aliases:[], // [{alias, targetOriginal, addedBy, ts}] — built from _Aliases ta
 tagHierarchy:{}, // {childName: parentName} — built from _TagHierarchy. Empty parent = top-level.
 deletedEntries:new Set(), // Names of entries soft-deleted from workspace (excluded from export, crossed out in workspace)
 removedBindings:new Set(), // "tagName|rowIdx" — clip-tag pairings soft-removed (real bindings: crossed out; new bindings: hard-removed)
+customSections:[], // [{name, addedBy, ts}] — user-created sections (workspace-only)
+sectionRenames:{}, // {originalName: newName} — display-only name overrides
+sectionPositions:{}, // {sectionName: orderIndex} — manual section position overrides (for drag-reorder)
+renamingSection:null, // {original, inputValue} — inline section rename in progress
+newSectionModal:null, // {name} — open "create new section" modal
 newTags:[], // [{name, section, addedBy, ts}] — user-created tags that don't exist in main sheet
 newTagBindings:[], // [{tagName, rowIdx, desc, segType, rel, relevancy, addedBy, ts}] — each binding connects a new tag to a clip
 clipSearchModal:null, // {newTagName, query, segType?, etc} — open clip search modal for attaching to a new tag
@@ -2999,6 +3011,9 @@ async function manualRefresh(){
     try{S.newTags=await loadNewTagsFromTab();}catch(e){console.warn('Could not refresh new tags:',e);}
     try{S.newTagBindings=await loadNewTagBindingsFromTab();}catch(e){console.warn('Could not refresh new tag bindings:',e);}
     try{S.removedBindings=await loadRemovedBindingsFromTab();}catch(e){console.warn('Could not refresh removed bindings:',e);}
+    try{S.customSections=await loadCustomSectionsFromTab();}catch(e){console.warn('Could not refresh custom sections:',e);}
+    try{S.sectionRenames=await loadSectionRenamesFromTab();}catch(e){console.warn('Could not refresh section renames:',e);}
+    try{S.sectionPositions=await loadSectionPositionsFromTab();}catch(e){console.warn('Could not refresh section positions:',e);}
     buildIndex();render(true);
     toast('All data refreshed','success');
   }catch(e){
@@ -4175,6 +4190,311 @@ async function loadRemovedBindingsFromTab(){
     console.warn('Failed to load removed bindings:',e);
     return new Set();
   }
+}
+
+// === CUSTOM SECTIONS — user-created sections (workspace-only) ===
+// _CustomSections tab: Timestamp | Section Name | Action | Set By
+async function appendToCustomSectionsLog(name,action,timestamp,user){
+  const TAB='_CustomSections';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:D1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Section Name','Action','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _CustomSections tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:D`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),name,action||'add',user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to custom sections log:',e)}
+}
+
+async function loadCustomSectionsFromTab(){
+  const TAB='_CustomSections';
+  if(!S.connected)return [];
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return [];
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:D10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>(Date.parse(a[0]||'')||0)-(Date.parse(b[0]||'')||0));
+    const map={};
+    sorted.forEach(row=>{
+      const name=(row[1]||'').trim();
+      const action=(row[2]||'add').trim();
+      const setBy=(row[3]||'').trim();
+      if(!name)return;
+      if(action==='remove')delete map[name];
+      else map[name]={name,addedBy:setBy,ts:row[0]};
+    });
+    return Object.values(map);
+  }catch(e){
+    console.warn('Failed to load custom sections:',e);
+    return [];
+  }
+}
+
+// === SECTION RENAMES — display overrides (does not affect main sheet data) ===
+// _SectionRenames tab: Timestamp | Original Name | New Name | Set By
+// Empty New Name = reset to original
+async function appendToSectionRenamesLog(originalName,newName,timestamp,user){
+  const TAB='_SectionRenames';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:D1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Original Name','New Name','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _SectionRenames tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:D`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),originalName,newName||'',user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to section renames log:',e)}
+}
+
+async function loadSectionRenamesFromTab(){
+  const TAB='_SectionRenames';
+  if(!S.connected)return {};
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return {};
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:D10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>(Date.parse(a[0]||'')||0)-(Date.parse(b[0]||'')||0));
+    const map={};
+    sorted.forEach(row=>{
+      const orig=(row[1]||'').trim();
+      const newName=(row[2]||'').trim();
+      if(!orig)return;
+      if(!newName)delete map[orig]; // empty = reset
+      else map[orig]=newName;
+    });
+    return map;
+  }catch(e){
+    console.warn('Failed to load section renames:',e);
+    return {};
+  }
+}
+
+// === SECTION POSITIONS — manual ordering ===
+// _SectionPositions tab: Timestamp | Section Name | Order Index | Set By
+async function appendToSectionPositionsLog(name,orderIdx,timestamp,user){
+  const TAB='_SectionPositions';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:D1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Section Name','Order Index','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _SectionPositions tab:',e)}
+  }
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:D`,
+      valueInputOption:'RAW',
+      resource:{values:[[timestamp||new Date().toISOString(),name,orderIdx===''||orderIdx==null?'':String(orderIdx),user||S.user?.name||S.user?.email||'Unknown']]}
+    });
+  }catch(e){console.warn('Could not append to section positions log:',e)}
+}
+
+// Batch writer for section positions
+async function batchAppendToSectionPositionsLog(entries,timestamp,user){
+  if(!entries||!entries.length)return;
+  const TAB='_SectionPositions';
+  const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!existing){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB,hidden:false}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:D1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Timestamp','Section Name','Order Index','Set By']]}
+      });
+    }catch(e){console.warn('Could not create _SectionPositions tab:',e)}
+  }
+  const ts=timestamp||new Date().toISOString();
+  const u=user||S.user?.name||S.user?.email||'Unknown';
+  const values=entries.map(en=>[ts,en.name||'',en.orderIdx===''||en.orderIdx==null?'':String(en.orderIdx),u]);
+  try{
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A:D`,
+      valueInputOption:'RAW',
+      resource:{values:values}
+    });
+  }catch(e){console.warn('Could not batch-append to section positions log:',e)}
+}
+
+async function loadSectionPositionsFromTab(){
+  const TAB='_SectionPositions';
+  if(!S.connected)return {};
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return {};
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:D10000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>(Date.parse(a[0]||'')||0)-(Date.parse(b[0]||'')||0));
+    const map={};
+    sorted.forEach(row=>{
+      const name=(row[1]||'').trim();
+      const orderStr=(row[2]||'').trim();
+      if(!name)return;
+      if(orderStr==='')delete map[name];
+      else map[name]=parseInt(orderStr);
+    });
+    return map;
+  }catch(e){
+    console.warn('Failed to load section positions:',e);
+    return {};
+  }
+}
+
+// === DISPLAY NAME helper ===
+// Given an original section name (e.g. "Topics"), return what to display ("Topics" or rename).
+function displaySectionName(orig){
+  return (S.sectionRenames && S.sectionRenames[orig]) ? S.sectionRenames[orig] : orig;
+}
+// Given a displayed name, find the original (for lookups against S.indexData.sections etc.)
+function originalSectionName(display){
+  if(!S.sectionRenames)return display;
+  for(const orig of Object.keys(S.sectionRenames)){
+    if(S.sectionRenames[orig]===display)return orig;
+  }
+  return display;
+}
+
+// Returns the full list of sections (RULES.sectionOrder + custom) sorted by S.sectionPositions if any
+function effectiveSectionOrder(){
+  const base=[...RULES.sectionOrder];
+  const customNames=(S.customSections||[]).map(s=>s.name);
+  customNames.forEach(n=>{if(!base.includes(n))base.push(n)});
+  // Apply manual positions
+  if(S.sectionPositions && Object.keys(S.sectionPositions).length){
+    // Stable sort by position (manual first, then alphabetic among unset)
+    const positioned=base.filter(n=>S.sectionPositions[n]!==undefined).sort((a,b)=>S.sectionPositions[a]-S.sectionPositions[b]);
+    const unpositioned=base.filter(n=>S.sectionPositions[n]===undefined);
+    // Reconstruct: place each positioned entry at its slot; fill gaps with unpositioned
+    const out=[];
+    const maxIdx=positioned.length+unpositioned.length;
+    let unpIdx=0;
+    for(let i=0;i<maxIdx;i++){
+      const atPos=positioned.find(n=>S.sectionPositions[n]===i);
+      if(atPos){
+        if(!out.includes(atPos))out.push(atPos);
+      }else if(unpIdx<unpositioned.length){
+        out.push(unpositioned[unpIdx++]);
+      }
+    }
+    // Catch anything missed
+    [...positioned,...unpositioned].forEach(n=>{if(!out.includes(n))out.push(n)});
+    return out;
+  }
+  return base;
+}
+
+// === ACTIONS ===
+async function createCustomSection(name){
+  const trimmed=name.trim();
+  if(!trimmed)return{ok:false,reason:'Empty name'};
+  // Collision with existing section (built-in or custom or rename)
+  const allSections=effectiveSectionOrder();
+  if(allSections.includes(trimmed))return{ok:false,reason:`"${trimmed}" already exists`};
+  if(Object.values(S.sectionRenames||{}).includes(trimmed))return{ok:false,reason:`"${trimmed}" is in use as a renamed section`};
+  S.customSections.push({name:trimmed,addedBy:S.user?.name||S.user?.email||'Unknown',ts:new Date().toISOString()});
+  await appendToCustomSectionsLog(trimmed,'add',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  logActivity(`Created new section: "${trimmed}"`);
+  return{ok:true};
+}
+
+async function deleteCustomSection(name){
+  // Only allow delete if empty (no entries assigned)
+  const entries=(S.indexData?.sections?.[name]||[]).filter(e=>!e.isAlias);
+  if(entries.length)return{ok:false,reason:`Section has ${entries.length} entries — move them out first`};
+  S.customSections=S.customSections.filter(s=>s.name!==name);
+  await appendToCustomSectionsLog(name,'','remove',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  // Also clear any position for it
+  if(S.sectionPositions[name]!==undefined){
+    delete S.sectionPositions[name];
+    await appendToSectionPositionsLog(name,'',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  }
+  logActivity(`Deleted section: "${name}"`);
+  return{ok:true};
+}
+
+async function renameSection(orig,newName){
+  const trimmed=newName.trim();
+  if(!trimmed)return{ok:false,reason:'Empty name'};
+  // Check collision (with another section's display name)
+  const allSections=effectiveSectionOrder();
+  for(const sec of allSections){
+    if(sec===orig)continue;
+    if(displaySectionName(sec)===trimmed)return{ok:false,reason:`"${trimmed}" is the display name of another section`};
+  }
+  S.sectionRenames[orig]=trimmed;
+  await appendToSectionRenamesLog(orig,trimmed,new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
+  logActivity(`Renamed section: "${orig}" → "${trimmed}"`);
+  return{ok:true};
 }
 
 // === NEW TAGS (workspace-created) ===
@@ -5760,6 +6080,13 @@ function buildIndex(){
     });
   });
 
+  // Ensure custom sections are present in sections object (even if empty)
+  if(Array.isArray(S.customSections)){
+    S.customSections.forEach(cs=>{
+      if(!sections[cs.name])sections[cs.name]=[];
+    });
+  }
+
   S.indexData={sections,totalEntries:Object.keys(entries).length+(S.aliases?.length||0),totalResults:Object.values(entries).reduce((s,e)=>s+e.results.length,0)};
 }
 
@@ -5864,10 +6191,10 @@ async function aiChat(msg){
   if(S.indexData){
     // Summary of all sections
     ctx+='INDEX OVERVIEW:\n';
-    RULES.sectionOrder.forEach(sec=>{
+    effectiveSectionOrder().forEach(sec=>{
       const entries=S.indexData.sections[sec]||[];
       const prog=sectionReviewProgress(sec);
-      ctx+=`  ${sec}: ${entries.length} entries, ${prog.reviewed}/${prog.total} reviewed\n`;
+      ctx+=`  ${displaySectionName(sec)}: ${entries.length} entries, ${prog.reviewed}/${prog.total} reviewed\n`;
     });
     
     // Current page entries (what user is looking at)
@@ -6049,7 +6376,7 @@ function buildAuditRulesText(){
 // ── Generate Index Tab in Google Sheet ────────────────────
 async function generateIndexTab(sectionName){
   if(!S.indexData||!S.indexData.sections[sectionName]){toast('No data for '+sectionName,'error');return}
-  const tabName='Index - '+sectionName;
+  const tabName='Index - '+displaySectionName(sectionName);
 
   // Ensure baseline is loaded — retry if missing. Baseline is used to populate
   // "Original Description" column. Without it, that column comes out blank.
@@ -6399,7 +6726,7 @@ function indexTabForSection(sectionName){
 // Find which section an entry belongs to
 function sectionForEntry(entryName){
   if(!S.indexData)return null;
-  for(const sec of RULES.sectionOrder){
+  for(const sec of effectiveSectionOrder()){
     const entries=S.indexData.sections[sec]||[];
     if(entries.find(e=>e.name===entryName))return sec;
   }
@@ -6545,7 +6872,7 @@ async function fullSyncToSheets(){
   if(!S.indexData){toast('No index data','error');return}
   toast('Syncing review data to sheets…');
   let synced=0,skipped=0;
-  for(const sec of RULES.sectionOrder){
+  for(const sec of effectiveSectionOrder()){
     const tabName=indexTabForSection(sec);
     const map=await getTabMap(tabName);
     if(!map){skipped++;continue}
@@ -6584,7 +6911,7 @@ async function fullSyncToSheets(){
       }
     }
   }
-  toast(`Synced ${Math.round(synced)} items to ${RULES.sectionOrder.length-skipped} tabs`,'success');
+  toast(`Synced ${Math.round(synced)} items to ${effectiveSectionOrder().length-skipped} tabs`,'success');
 }
 
 
@@ -6607,7 +6934,7 @@ async function runAudit(){
   }else if(scope==='visible'){
     // Audit what's currently visible in index preview
     const q=S.idxSearch.toLowerCase();
-    let sectionsToShow=S.idxActiveSection==='all'?RULES.sectionOrder:[S.idxActiveSection];
+    let sectionsToShow=S.idxActiveSection==='all'?effectiveSectionOrder():[S.idxActiveSection];
     sectionsToShow.forEach(sec=>{
       let entries=S.indexData.sections[sec]||[];
       if(q){
@@ -7063,7 +7390,7 @@ function render(force=true){
     h+=`<span class="af-count">${S.moveSelected.size}</span> entries `;
     h+=`<span>Move to:</span>`;
     h+=`<select id="move-target">`;
-    RULES.sectionOrder.forEach(sec=>{h+=`<option value="${sec}">${sec}</option>`});
+    effectiveSectionOrder().forEach(sec=>{h+=`<option value="${esc(sec)}">${esc(displaySectionName(sec))}</option>`});
     h+=`</select>`;
     h+=`<button class="af-run" id="move-execute">Move</button>`;
     h+=`<span class="af-close" id="move-float-x" title="Dismiss">✕</span>`;
@@ -7286,6 +7613,10 @@ function render(force=true){
   if(S.clipSearchModal){
     h+=rClipSearchModal();
   }
+  // New-section modal
+  if(S.newSectionModal){
+    h+=rNewSectionModal();
+  }
   // Save scroll positions before DOM replacement — catch all known scroll containers AND window
   const scrollSave={};
   scrollSave.win=window.scrollY||document.documentElement.scrollTop||0;
@@ -7378,11 +7709,14 @@ function rSidebar(){
     h+=`<div class="ws-sub" style="margin-bottom:6px">`;
     const allActive=isWorkspace&&S.idxActiveSection==='all';
     h+=`<div class="ws-sub-item ${allActive?'active':''}" data-idxsec-nav="all">All Sections</div>`;
-    RULES.sectionOrder.forEach(sec=>{
+    effectiveSectionOrder().forEach(sec=>{
       const cnt=(S.indexData.sections[sec]||[]).length;
-      if(!cnt)return;
+      // Show custom sections even when empty (so user can navigate to them); built-ins hide when empty
+      const isCustom=(S.customSections||[]).some(c=>c.name===sec);
+      if(!cnt && !isCustom)return;
       const active=isWorkspace&&S.idxActiveSection===sec;
-      h+=`<div class="ws-sub-item ${active?'active':''}" data-idxsec-nav="${esc(sec)}">${esc(sec)} <span style="color:var(--tx-4);font-size:9px;font-weight:400">${cnt}</span></div>`;
+      const displayName=displaySectionName(sec);
+      h+=`<div class="ws-sub-item ${active?'active':''}" data-idxsec-nav="${esc(sec)}">${esc(displayName)} <span style="color:var(--tx-4);font-size:9px;font-weight:400">${cnt}</span>${isCustom?' <span style="color:#3a8a3a;font-size:9px">★</span>':''}</div>`;
     });
     h+=`</div>`;
   }
@@ -7521,8 +7855,8 @@ function rBook(){
   if(!S.indexData)return'<div class="pad" style="color:var(--tx-3)">Loading index data…</div>';
   const ix=S.indexData;
   const scope=S.bookScope||'all'; // 'all' or a specific section name
-  const sections=scope==='all'?RULES.sectionOrder:[scope];
-  const title=scope==='all'?'Full Index':scope;
+  const sections=scope==='all'?effectiveSectionOrder():[scope];
+  const title=scope==='all'?'Full Index':displaySectionName(scope);
 
   // Header bar with section pills + export buttons
   let h=`<div class="page-hd" style="padding-bottom:10px">`;
@@ -7538,10 +7872,10 @@ function rBook(){
   h+=`<div class="book-section-pills" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:12px">`;
   const totalCnt=Object.values(ix.sections).reduce((a,s)=>a+s.length,0);
   h+=`<button class="book-pill ${scope==='all'?'active':''}" data-bookscope="all">Full Index <span class="book-pill-cnt">${totalCnt}</span></button>`;
-  RULES.sectionOrder.forEach(sec=>{
+  effectiveSectionOrder().forEach(sec=>{
     const cnt=(ix.sections[sec]||[]).length;
     if(!cnt)return;
-    h+=`<button class="book-pill ${scope===sec?'active':''}" data-bookscope="${esc(sec)}">${esc(sec)} <span class="book-pill-cnt">${cnt}</span></button>`;
+    h+=`<button class="book-pill ${scope===sec?'active':''}" data-bookscope="${esc(sec)}">${esc(displaySectionName(sec))} <span class="book-pill-cnt">${cnt}</span></button>`;
   });
   h+=`</div>`;
   h+=`</div>`;
@@ -7554,7 +7888,7 @@ function rBook(){
     // Section header: always rendered. Styled as print-only when viewing a single section
     // (so PDF export gets it, but on-screen doesn't show redundant header).
     const hdClass=scope==='all'?'book-section-hd':'book-section-hd print-only';
-    h+=`<h2 class="${hdClass}">${esc(section)}</h2>`;
+    h+=`<h2 class="${hdClass}">${esc(displaySectionName(section))}</h2>`;
     entries.forEach(e=>{
       h+=`<div class="book-entry">`;
       h+=`<div class="book-entry-head"><span class="book-entry-name">${esc(e.name)}</span><button class="book-entry-edit" data-bookedit="${esc(e.name)}" title="Edit in workstation">✎</button></div>`;
@@ -7634,12 +7968,12 @@ function rDash(){
   // Review Progress
   h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">Review Progress</h4>';
   let grandTotal=0,grandReviewed=0;
-  RULES.sectionOrder.forEach(sec=>{
+  effectiveSectionOrder().forEach(sec=>{
     const prog=sectionReviewProgress(sec);
     const pct=prog.total?Math.round(prog.reviewed/prog.total*100):0;
     grandTotal+=prog.total;grandReviewed+=prog.reviewed;
     h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">`;
-    h+=`<span style="font-size:11px;font-weight:500;min-width:85px">${sec}</span>`;
+    h+=`<span style="font-size:11px;font-weight:500;min-width:85px">${esc(displaySectionName(sec))}</span>`;
     h+=`<div class="progress-track" style="height:5px;flex:1"><div class="progress-fill" style="width:${pct}%;background:${pct===100?'var(--green)':'var(--gold)'}"></div></div>`;
     h+=`<span style="font-size:9px;color:var(--tx-3);min-width:80px;text-align:right">${prog.reviewed}/${prog.total} (${pct}%)</span>`;
     h+=`</div>`;
@@ -7715,7 +8049,7 @@ function rTools(){
   h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
   h+='<span style="font-size:11px;color:var(--tx-3)">Audit section:</span>';
   h+=`<select id="audit-sec-select" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;font-family:var(--font);background:var(--bg-white)">`;
-  RULES.sectionOrder.forEach(sec=>{h+=`<option value="${sec}">${sec}</option>`});
+  effectiveSectionOrder().forEach(sec=>{h+=`<option value="${esc(sec)}">${esc(displaySectionName(sec))}</option>`});
   h+=`</select>`;
   h+=`<button class="btn btn-sm btn-purple" id="audit-sec-run" style="font-size:11px">${IC.audit} Run Audit</button>`;
   h+='</div></div>';
@@ -7805,14 +8139,15 @@ function rTools(){
   h+='<div class="card" style="margin-bottom:16px"><h4 style="margin-bottom:8px">📋 Index Tabs</h4>';
   h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:8px">Generate per-section tabs in your Google Sheet. Click a section to create or update its tab.</p>';
   h+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">';
-  RULES.sectionOrder.forEach(sec=>{
-    const tabName='Index - '+sec;
+  effectiveSectionOrder().forEach(sec=>{
+    const tabName='Index - '+displaySectionName(sec);
     const exists=existingTabs.includes(tabName);
     const cnt=(ix.sections[sec]||[]).length;
+    const dispName=displaySectionName(sec);
     if(exists){
-      h+=`<button class="btn btn-sm" data-gentab="${sec}" style="font-size:10px;opacity:.7">${sec} ✓</button>`;
+      h+=`<button class="btn btn-sm" data-gentab="${esc(sec)}" style="font-size:10px;opacity:.7">${esc(dispName)} ✓</button>`;
     }else{
-      h+=`<button class="btn btn-sm btn-gold" data-gentab="${sec}" style="font-size:10px">${sec} (${cnt})</button>`;
+      h+=`<button class="btn btn-sm btn-gold" data-gentab="${esc(sec)}" style="font-size:10px">${esc(dispName)} (${cnt})</button>`;
     }
   });
   h+='</div>';
@@ -7836,10 +8171,25 @@ function rTools(){
 // ═══════════════════════════════════════════════════════════════
 // TEAM — admin-only: user-work filter, team list, invitations
 // ═══════════════════════════════════════════════════════════════
+function rNewSectionModal(){
+  const m=S.newSectionModal;
+  if(!m)return '';
+  let h=`<div class="modal-backdrop" id="newsection-modal-backdrop"><div class="modal-box">`;
+  h+=`<div class="modal-hd"><h3>+ Add New Section</h3><button class="btn btn-sm" data-newsection-cancel="1">×</button></div>`;
+  h+=`<div class="modal-body">`;
+  h+=`<p style="margin-top:0;color:var(--tx-3);font-size:12px">A new section lives in the workspace only. Entries auto-categorize into built-in sections (Topics, People, etc.) from the main sheet — to populate this new section, manually move entries into it.</p>`;
+  h+=`<div style="margin-bottom:10px"><label style="display:block;font-size:12px;color:var(--tx-3);margin-bottom:3px">Section name</label>`;
+  h+=`<input id="newsection-name" type="text" placeholder="e.g. Tzedoke" value="${esc(m.name||'')}" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px"></div>`;
+  h+=`</div>`;
+  h+=`<div class="modal-ft"><button class="btn btn-sm" data-newsection-cancel="1">Cancel</button><button class="btn btn-sm btn-gold" id="newsection-save">Create</button></div>`;
+  h+=`</div></div>`;
+  return h;
+}
+
 function rNewTagModal(){
   const m=S.newTagModal;
   if(!m)return '';
-  const sections=RULES.sectionOrder;
+  const sections=effectiveSectionOrder();
   let h=`<div class="modal-backdrop" id="newtag-modal-backdrop"><div class="modal-box">`;
   h+=`<div class="modal-hd"><h3>+ Add New Tag</h3><button class="btn btn-sm" data-newtag-cancel="1">×</button></div>`;
   h+=`<div class="modal-body">`;
@@ -7849,7 +8199,7 @@ function rNewTagModal(){
   h+=`<div style="margin-bottom:10px"><label style="display:block;font-size:12px;color:var(--tx-3);margin-bottom:3px">Section</label>`;
   h+=`<select id="newtag-section" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px">`;
   sections.forEach(s=>{
-    h+=`<option value="${esc(s)}" ${m.section===s?'selected':''}>${esc(s)}</option>`;
+    h+=`<option value="${esc(s)}" ${m.section===s?'selected':''}>${esc(displaySectionName(s))}</option>`;
   });
   h+=`</select></div>`;
   h+=`</div>`;
@@ -8012,7 +8362,7 @@ function rIndex(){
   const ix=S.indexData;
   const q=S.idxSearch.toLowerCase();
   // Always show selected section (no more nav modes — just sections)
-  let sectionsToShow=S.idxActiveSection==='all'?RULES.sectionOrder:[S.idxActiveSection];
+  let sectionsToShow=S.idxActiveSection==='all'?effectiveSectionOrder():[S.idxActiveSection];
 
   let h='<div class="idx-wrap">';
   // Back button (only if history exists)
@@ -8050,6 +8400,8 @@ function rIndex(){
   h+=`<button class="btn btn-sm btn-icon" id="idx-toggle-desc" title="${S.idxHideDescriptions?'Show descriptions':'Hide descriptions (show entry skeleton only)'}">${S.idxHideDescriptions?'📖':'📋'}</button>`;
   // New tag button
   h+=`<button class="btn btn-sm" id="idx-new-tag" title="Add a new tag (workspace only)" style="font-size:11px;color:#3a8a3a;border-color:#3a8a3a">+ New Tag</button>`;
+  // New section button
+  h+=`<button class="btn btn-sm" id="idx-new-section" title="Add a new index section (workspace only)" style="font-size:11px;color:#3a8a3a;border-color:#3a8a3a">+ New Section</button>`;
   // Layout toggle — single/double column
   h+=`<div class="tb-layout-toggle">`;
   h+=`<div class="tb-layout-btn ${S.idxLayout==='single'?'active':''}" data-idxlayout="single" title="Single column">☰</div>`;
@@ -8094,14 +8446,36 @@ function rIndex(){
       });
       entries=entries.filter(e=>includeNames.has(e.name));
     }
-    if(!entries.length)return;
+    const isCustomSec=(S.customSections||[]).some(c=>c.name===sec);
+    if(!entries.length && !isCustomSec)return; // built-in sections hide when empty; custom always show
     // Apply review filter
     entries=applyReviewFilter(entries);
-    if(!entries.length)return;
+    if(!entries.length && !isCustomSec)return;
 
     // Section header — skip when showing bookmarks
     if(S.reviewFilter!=='bookmarked'){
-      entryHtmls.push(`<div class="idx-section-hd">${sec}${isSectionReviewed(sec)?' <span style="color:var(--green);font-size:14px">✓ reviewed</span>':''}</div>`);
+      const isRenamed=S.sectionRenames&&S.sectionRenames[sec];
+      const dispName=displaySectionName(sec);
+      let secHd=`<div class="idx-section-hd" data-section-name="${esc(sec)}" draggable="true">`;
+      secHd+=`<span class="idx-section-drag-handle" title="Drag to reorder sections" data-secdrag="${esc(sec)}">⋮⋮</span>`;
+      if(S.renamingSection&&S.renamingSection.original===sec){
+        secHd+=`<input type="text" id="section-rename-input" value="${esc(S.renamingSection.inputValue)}" data-secrename-for="${esc(sec)}" style="font-family:var(--serif);font-size:inherit;font-weight:700;padding:2px 8px;border:1px solid var(--gold);border-radius:4px;min-width:200px">`;
+        secHd+=` <button class="btn btn-sm btn-gold" data-secrename-save="${esc(sec)}" style="font-size:11px;padding:2px 8px">Save</button>`;
+        secHd+=` <button class="btn btn-sm" data-secrename-cancel="1" style="font-size:11px;padding:2px 8px">Cancel</button>`;
+      }else{
+        secHd+=esc(dispName);
+        secHd+=` <button class="idx-section-edit" data-secrename-start="${esc(sec)}" title="Rename this section" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:13px;padding:0 4px;opacity:0;transition:opacity .15s">✎</button>`;
+        if(isCustomSec){
+          secHd+=` <button class="idx-section-edit" data-section-delete="${esc(sec)}" title="Delete this custom section (must be empty)" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:13px;padding:0 4px;opacity:0;transition:opacity .15s">🗑</button>`;
+          secHd+=` <span style="font-size:9px;color:#3a8a3a;background:#e8f4e8;padding:1px 5px;border-radius:8px;margin-left:4px;vertical-align:middle">custom</span>`;
+        }
+        if(isRenamed){
+          secHd+=` <span style="font-size:9px;color:var(--tx-4);font-style:italic;margin-left:4px">(was: ${esc(sec)})</span>`;
+        }
+        if(isSectionReviewed(sec))secHd+=' <span style="color:var(--green);font-size:14px">✓ reviewed</span>';
+      }
+      secHd+=`</div>`;
+      entryHtmls.push(secHd);
     }
 
     entries.forEach(e=>{
@@ -8657,10 +9031,10 @@ function rAuditor(){
   // Section checkboxes (if scope=sections)
   if(S.auditScope==='sections'){
     h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">';
-    RULES.sectionOrder.forEach(sec=>{
+    effectiveSectionOrder().forEach(sec=>{
       const cnt=(ix.sections[sec]||[]).length;
       const active=S.auditSections[sec];
-      h+=`<div class="audit-scope-opt section-opt ${active?'active':''}" data-auditsec="${sec}">${sec} (${cnt})</div>`;
+      h+=`<div class="audit-scope-opt section-opt ${active?'active':''}" data-auditsec="${esc(sec)}">${esc(displaySectionName(sec))} (${cnt})</div>`;
     });
     h+='</div>';
   }
@@ -8735,7 +9109,7 @@ function rSettings(){
   h+=`<input class="s-input" id="test-entry" placeholder="Entry name (e.g. Tefillin)" style="margin:0;flex:1;min-width:120px" value="${esc(S.testEntry||'')}">`;
   h+=`<input class="s-input" id="test-desc" placeholder="Description (e.g. With pride)" style="margin:0;flex:2;min-width:200px" value="${esc(S.testDesc||'')}">`;
   h+=`<select class="s-input" id="test-section" style="margin:0;min-width:100px">`;
-  RULES.sectionOrder.forEach(sec=>{h+=`<option ${S.testSection===sec?'selected':''}>${sec}</option>`});
+  effectiveSectionOrder().forEach(sec=>{h+=`<option value="${esc(sec)}" ${S.testSection===sec?'selected':''}>${esc(displaySectionName(sec))}</option>`});
   h+=`</select>`;
   h+=`<button class="btn btn-gold" id="test-audit-btn">${IC.audit} Test</button>`;
   h+='</div>';
@@ -8946,6 +9320,9 @@ try{S.deletedEntries=await loadDeletedEntriesFromTab();console.log(`Loaded ${S.d
 try{S.newTags=await loadNewTagsFromTab();console.log(`Loaded ${S.newTags.length} new tags`);}catch(e){console.warn('Could not load new tags:',e);S.newTags=[];}
 try{S.newTagBindings=await loadNewTagBindingsFromTab();console.log(`Loaded ${S.newTagBindings.length} new tag bindings`);}catch(e){console.warn('Could not load new tag bindings:',e);S.newTagBindings=[];}
 try{S.removedBindings=await loadRemovedBindingsFromTab();console.log(`Loaded ${S.removedBindings.size} removed clip-tag bindings`);}catch(e){console.warn('Could not load removed bindings:',e);S.removedBindings=new Set();}
+try{S.customSections=await loadCustomSectionsFromTab();console.log(`Loaded ${S.customSections.length} custom sections`);}catch(e){console.warn('Could not load custom sections:',e);S.customSections=[];}
+try{S.sectionRenames=await loadSectionRenamesFromTab();console.log(`Loaded ${Object.keys(S.sectionRenames).length} section renames`);}catch(e){console.warn('Could not load section renames:',e);S.sectionRenames={};}
+try{S.sectionPositions=await loadSectionPositionsFromTab();console.log(`Loaded ${Object.keys(S.sectionPositions).length} section positions`);}catch(e){console.warn('Could not load section positions:',e);S.sectionPositions={};}
 await loadTab(0);
 // CRITICAL: migration runs BEFORE any writes so tabs are populated before anything else touches them
 const migRes=await migrateBlobToPerRow();
@@ -9742,6 +10119,154 @@ function bindAll(){
     render();
     setTimeout(()=>{const i=$('#newtag-name');if(i)i.focus()},50);
   });
+  // ── New Section button (toolbar) ──
+  on('#idx-new-section','click',()=>{
+    S.newSectionModal={name:''};
+    render();
+    setTimeout(()=>{const i=$('#newsection-name');if(i)i.focus()},50);
+  });
+  $$('[data-newsection-cancel]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    S.newSectionModal=null;render();
+  });
+  on('#newsection-name','input',()=>{
+    if(S.newSectionModal)S.newSectionModal.name=$('#newsection-name').value;
+  });
+  on('#newsection-name','keydown',ev=>{
+    if(ev.key==='Enter'){ev.preventDefault();$('#newsection-save')?.click()}
+    else if(ev.key==='Escape'){S.newSectionModal=null;render()}
+  });
+  on('#newsection-save','click',async()=>{
+    const name=($('#newsection-name')?.value||'').trim();
+    if(!name){toast('Section name required','error');return}
+    const res=await createCustomSection(name);
+    if(!res.ok){toast(res.reason,'error');return}
+    S.newSectionModal=null;
+    toast(`Created section "${name}"`,'success');
+    buildIndex();render();
+  });
+
+  // ── Section rename ──
+  $$('[data-secrename-start]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const orig=el.dataset.secrenameStart;
+    S.renamingSection={original:orig,inputValue:displaySectionName(orig)};
+    render();
+    setTimeout(()=>{
+      const i=$('#section-rename-input');
+      if(i){i.focus();i.select()}
+    },50);
+  });
+  on('#section-rename-input','input',()=>{
+    if(S.renamingSection)S.renamingSection.inputValue=$('#section-rename-input').value;
+  });
+  on('#section-rename-input','keydown',ev=>{
+    if(ev.key==='Enter'){
+      ev.preventDefault();
+      const btn=$('[data-secrename-save]');
+      if(btn)btn.click();
+    }else if(ev.key==='Escape'){
+      S.renamingSection=null;render();
+    }
+  });
+  $$('[data-secrename-save]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const orig=el.dataset.secrenameSave;
+    const val=($('#section-rename-input')?.value||'').trim();
+    if(!val){toast('Section name required','error');return}
+    if(val===orig){S.renamingSection=null;render();return}
+    const res=await renameSection(orig,val);
+    if(!res.ok){toast(res.reason,'error');return}
+    S.renamingSection=null;
+    toast(`Section renamed`,'success');
+    buildIndex();render();
+  });
+  $$('[data-secrename-cancel]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    S.renamingSection=null;render();
+  });
+  // ── Delete custom section ──
+  $$('[data-section-delete]').forEach(el=>el.onclick=async ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const name=el.dataset.sectionDelete;
+    const cnt=(S.indexData?.sections?.[name]||[]).filter(e=>!e.isAlias).length;
+    if(cnt>0){
+      toast(`Cannot delete "${name}" — it has ${cnt} ${cnt===1?'entry':'entries'}. Move them out first.`,'error');
+      return;
+    }
+    if(!await customConfirm(`Delete custom section "${name}"?`))return;
+    const res=await deleteCustomSection(name);
+    if(!res.ok){toast(res.reason,'error');return}
+    toast(`Deleted section "${name}"`,'success');
+    buildIndex();render();
+  });
+
+  // ── Drag-reorder sections ──
+  $$('.idx-section-hd').forEach(el=>{
+    el.addEventListener('dragstart',ev=>{
+      // Only allow drag if from the handle (avoid conflicts with other drags)
+      const name=el.dataset.sectionName;
+      if(!name)return;
+      ev.dataTransfer.setData('application/x-section',name);
+      ev.dataTransfer.effectAllowed='move';
+      el.classList.add('dragging');
+    });
+    el.addEventListener('dragend',()=>{
+      el.classList.remove('dragging');
+      $$('.idx-section-hd').forEach(x=>{
+        x.classList.remove('section-drop-before');
+        x.classList.remove('section-drop-after');
+      });
+    });
+    el.addEventListener('dragover',ev=>{
+      const dragged=ev.dataTransfer.types.includes('application/x-section');
+      if(!dragged)return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect='move';
+      const rect=el.getBoundingClientRect();
+      const after=ev.clientY>=rect.top+rect.height/2;
+      el.classList.remove('section-drop-before');
+      el.classList.remove('section-drop-after');
+      el.classList.add(after?'section-drop-after':'section-drop-before');
+    });
+    el.addEventListener('dragleave',()=>{
+      el.classList.remove('section-drop-before');
+      el.classList.remove('section-drop-after');
+    });
+    el.addEventListener('drop',async ev=>{
+      ev.preventDefault();
+      el.classList.remove('section-drop-before');
+      el.classList.remove('section-drop-after');
+      const draggedName=ev.dataTransfer.getData('application/x-section');
+      const targetName=el.dataset.sectionName;
+      if(!draggedName||draggedName===targetName)return;
+      const rect=el.getBoundingClientRect();
+      const dropAfter=ev.clientY>=rect.top+rect.height/2;
+      // Reorder
+      const order=effectiveSectionOrder();
+      const draggedIdx=order.indexOf(draggedName);
+      const targetIdx=order.indexOf(targetName);
+      if(draggedIdx<0||targetIdx<0)return;
+      let newIdx=targetIdx;
+      if(dropAfter)newIdx=targetIdx+1;
+      if(draggedIdx<newIdx)newIdx--;
+      const [moved]=order.splice(draggedIdx,1);
+      order.splice(newIdx,0,moved);
+      // Persist all positions
+      const ts=new Date().toISOString();
+      const user=S.user?.name||S.user?.email||'Unknown';
+      const entries=order.map((n,i)=>({name:n,orderIdx:i}));
+      S.sectionPositions={};
+      entries.forEach(e=>{S.sectionPositions[e.name]=e.orderIdx});
+      batchAppendToSectionPositionsLog(entries,ts,user)
+        .then(()=>console.log(`Reordered ${entries.length} sections (1 API call)`))
+        .catch(e=>console.warn('Section reorder failed:',e));
+      logActivity(`Reordered sections — "${draggedName}" moved`);
+      toast('Sections reordered','success');
+      buildIndex();render();
+    });
+  });
+
   // New tag modal handlers
   $$('[data-newtag-cancel]').forEach(el=>el.onclick=ev=>{
     ev.preventDefault();ev.stopPropagation();
@@ -11400,10 +11925,10 @@ h2{font-size:20px;margin-top:30px;border-bottom:1px solid #8c7a50;padding-bottom
 </style></head><body>
 <h1>JEM Video Index</h1>`;
 
-  RULES.sectionOrder.forEach(sec=>{
+  effectiveSectionOrder().forEach(sec=>{
     const entries=ix.sections[sec]||[];
     if(!entries.length)return;
-    html+=`<h2>${sec}</h2>`;
+    html+=`<h2>${esc(displaySectionName(sec))}</h2>`;
     entries.forEach(e=>{
       html+=`<div class="entry"><div class="entry-name">${esc(e.name)}</div>`;
       const byseg={};
@@ -11446,7 +11971,7 @@ async function runConsistencyCheck(){
   // Collect all reviewed/finalized descriptions grouped by section
   const allDescs=[];
   const ix=S.indexData;
-  RULES.sectionOrder.forEach(sec=>{
+  effectiveSectionOrder().forEach(sec=>{
     (ix.sections[sec]||[]).forEach(entry=>{
       entry.results.forEach(r=>{
         if(r.desc&&r.desc.trim()){
@@ -11634,8 +12159,9 @@ function rGroups(){
   }
 
   groups.sort((a,b)=>{
-    const sa=RULES.sectionOrder.indexOf(a.section);
-    const sb=RULES.sectionOrder.indexOf(b.section);
+    const order=effectiveSectionOrder();
+    const sa=order.indexOf(a.section);
+    const sb=order.indexOf(b.section);
     if(sa!==sb)return sa-sb;
     return a.entry.localeCompare(b.entry);
   });
@@ -11652,7 +12178,7 @@ function rGroups(){
     h+=`<div class="card" style="margin-bottom:10px;border:1px solid var(--gold);background:#fbf8ec">`;
     h+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">`;
     h+=`<div style="flex:1">`;
-    h+=`<div style="font-size:11px;color:var(--tx-4)">${esc(g.section)} → <a href="#" data-jumpentry="${esc(g.entry)}" style="color:var(--blue);font-weight:600">${esc(g.entry)}</a> → ${esc(g.segType)}</div>`;
+    h+=`<div style="font-size:11px;color:var(--tx-4)">${esc(displaySectionName(g.section))} → <a href="#" data-jumpentry="${esc(g.entry)}" style="color:var(--blue);font-weight:600">${esc(g.entry)}</a> → ${esc(g.segType)}</div>`;
     h+=`<div style="font-size:14px;color:var(--tx-1);margin-top:3px"><b>${esc(g.desc)}</b></div>`;
     h+=`</div>`;
     h+=`<span class="idx-group-badge">×${g.members.length}</span>`;
@@ -11765,6 +12291,9 @@ window.addEventListener('resize',fixIdxScroll);
       try{S.newTags=await loadNewTagsFromTab();console.log(`Loaded ${S.newTags.length} new tags`);}catch(e){console.warn('Could not load new tags:',e);S.newTags=[];}
       try{S.newTagBindings=await loadNewTagBindingsFromTab();console.log(`Loaded ${S.newTagBindings.length} new tag bindings`);}catch(e){console.warn('Could not load new tag bindings:',e);S.newTagBindings=[];}
       try{S.removedBindings=await loadRemovedBindingsFromTab();console.log(`Loaded ${S.removedBindings.size} removed clip-tag bindings`);}catch(e){console.warn('Could not load removed bindings:',e);S.removedBindings=new Set();}
+      try{S.customSections=await loadCustomSectionsFromTab();}catch(e){console.warn('Could not load custom sections:',e);S.customSections=[];}
+      try{S.sectionRenames=await loadSectionRenamesFromTab();}catch(e){console.warn('Could not load section renames:',e);S.sectionRenames={};}
+      try{S.sectionPositions=await loadSectionPositionsFromTab();}catch(e){console.warn('Could not load section positions:',e);S.sectionPositions={};}
       await loadTab(0);
       registerTeamMember();
       startAutoRefresh();
