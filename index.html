@@ -725,6 +725,25 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
     margin:2px 0 1px !important;
     display:block !important;
   }
+  /* People-inline layout overrides: label sits beside refs on one line, wrapping refs align under refs */
+  .book-seg-people-inline{
+    display:flex !important;
+    align-items:baseline !important;
+    gap:8px !important;
+    break-inside:avoid !important;
+    page-break-inside:avoid !important;
+    margin:1px 0 1px 10px !important;
+  }
+  .book-seg-people-inline > .book-seg-label{
+    flex:0 0 100pt !important;
+    display:inline-block !important;
+    margin:0 !important;
+  }
+  .book-seg-people-inline > .book-seg-refs-inline{
+    flex:1 !important;
+    font-size:10px !important;
+    line-height:1.4 !important;
+  }
   .book-row{
     /* Individual clip line must not split mid-line */
     break-inside:avoid !important;
@@ -8292,6 +8311,46 @@ function rBook(){
       RULES.segOrder.forEach(seg=>{
         const rs=byseg[seg];
         if(!rs||!rs.length)return;
+
+        // ─── PEOPLE-ONLY SPECIAL LAYOUT ───
+        // For People section, when NONE of the rows under this segment have a visible description,
+        // collapse the segment label + all refs into ONE inline row:
+        //   "Timeless Moments    TM345, TM346, TM347…"
+        // Long ref lists wrap with refs aligning under refs (continuation indent).
+        const visibleRows=rs.filter(r=>!r.isRemoved && !(r.groupKey && !r.groupFirst));
+        const anyHasDesc=visibleRows.some(r=>{
+          if(!shouldShowDesc(r,section))return false;
+          return (r.desc||'').trim().length>0;
+        });
+        if(section==='People' && !anyHasDesc && visibleRows.length){
+          // Collect all refs across all rows in this segment
+          const allRefLinks=[];
+          visibleRows.forEach(r=>{
+            const members=(r.groupKey && r.groupMembers && r.groupMembers.length) ? r.groupMembers : [r];
+            members.forEach(m=>{
+              const vidUrl=clipLinkForResult(m);
+              let refText='';
+              if(m.clipType==='Film Chapter'||m.clipType==='Film'){
+                refText=filmRefForResult(m);
+              }else{
+                refText=refCodeForResult(m)||'';
+              }
+              if(refText){
+                allRefLinks.push(`<a class="book-ref" href="${vidUrl}" target="_blank" title="${esc(m.clipName||'')}">${esc(refText)}</a>`);
+              }
+            });
+          });
+          if(allRefLinks.length){
+            // Layout: label on left at fixed width, refs flow to the right and wrap under each other
+            h+=`<div class="book-seg book-seg-people-inline" style="margin:1px 0 1px 10px;display:flex;align-items:baseline;gap:8px">`;
+            h+=`<div class="book-seg-label" style="flex:0 0 110px;margin:0;display:inline-block">${esc(seg)}</div>`;
+            h+=`<div class="book-seg-refs-inline" style="flex:1;font-size:11px;line-height:1.5">${allRefLinks.join(', ')}</div>`;
+            h+=`</div>`;
+            return; // skip normal per-row rendering for this segment
+          }
+        }
+
+        // ─── DEFAULT LAYOUT (per row) ───
         h+=`<div class="book-seg"><div class="book-seg-label">${esc(seg)}</div>`;
         rs.forEach(r=>{
           // Skip removed bindings (excluded from export and book view)
