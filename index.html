@@ -257,7 +257,7 @@ body.clip-panel-open .idx-cols{gap:16px}
 .book-view{max-width:860px;margin:0 auto;padding:28px 40px;background:#fefdf8;color:#1a1a1a;font-family:Georgia,'Times New Roman',serif;line-height:1.55;box-shadow:0 2px 12px rgba(0,0,0,0.06);border-radius:4px}
 .book-page{column-count:2;column-gap:36px;column-rule:1px solid #e8e2d0}
 .book-section-hd{font-size:22px;font-weight:700;text-align:center;margin:18px 0 14px;padding:6px 0;border-top:2px solid #1a1a1a;border-bottom:1px solid #999;break-after:avoid;column-span:all;letter-spacing:0.5px}
-.book-entry{margin-bottom:10px;break-inside:avoid-column}
+.book-entry{margin-bottom:10px}
 .book-entry-depth-1{margin-left:14px}
 .book-entry-depth-2{margin-left:28px}
 .book-entry-head{display:flex;align-items:baseline;gap:6px;margin-bottom:2px}
@@ -694,13 +694,12 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
     page-break-after:avoid !important;
   }
 
-  /* Each entry stays whole — never split mid-entry, not across columns or pages */
+  /* Entries CAN flow across columns/pages — only section headers force page break.
+     But individual rows + entry name must NOT split mid-line. */
   .book-entry{
-    break-inside:avoid !important;
-    page-break-inside:avoid !important;
-    -webkit-column-break-inside:avoid !important;
     margin-bottom:8px !important;
     display:block !important;
+    /* break-inside: allow! */
   }
   .book-entry-depth-1{margin-left:14px !important}
   .book-entry-depth-2{margin-left:28px !important}
@@ -712,9 +711,7 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
   }
   .book-entry-name{font-weight:700 !important;font-size:12.5px !important;font-family:Georgia,serif !important}
   .book-seg{
-    break-inside:avoid !important;
-    page-break-inside:avoid !important;
-    -webkit-column-break-inside:avoid !important;
+    /* break-inside: allow! Long segments can span columns/pages */
     margin:1px 0 1px 10px !important;
   }
   .book-seg-label{
@@ -729,6 +726,7 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
     display:block !important;
   }
   .book-row{
+    /* Individual clip line must not split mid-line */
     break-inside:avoid !important;
     page-break-inside:avoid !important;
     -webkit-column-break-inside:avoid !important;
@@ -803,6 +801,7 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
 <div id="app"></div>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js"></script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
 // JEM INDEX WORKSTATION v2
@@ -7881,6 +7880,327 @@ function shouldShowDesc(r,section){
   return normalizeRel(r.rel)==='spoken about';
 }
 
+// ═══════════════════════════════════════════════════════════════
+// BOOK EXPORTS — Word (.docx) and InDesign (.icml)
+// ═══════════════════════════════════════════════════════════════
+// Both formats use named paragraph styles so the user can tweak
+// global appearance (e.g. tag name size) in one place.
+
+// Helper: collect the same data the book view renders, scoped per current view.
+// Returns ordered list of items: {type, text, target?, refs?, segType?, depth?}
+function _collectBookData(scope){
+  const ix=S.indexData;
+  if(!ix)return[];
+  const sections=scope==='all'?effectiveSectionOrder():[scope];
+  const out=[];
+  sections.forEach(section=>{
+    const entries=ix.sections[section]||[];
+    if(!entries.length)return;
+    // Sort entries alphabetically (same as book view)
+    const sorted=[...entries].filter(e=>!e.isDeleted).sort((a,b)=>{
+      const nameA=(a.name||'').toLowerCase();
+      const nameB=(b.name||'').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+    out.push({type:'section',text:displaySectionName(section)});
+    sorted.forEach(e=>{
+      // Alias entries
+      if(e.isAlias){
+        const target=e.aliasTargetResolved||e.aliasTarget||'';
+        if(!target)return;
+        if(S.deletedEntries&&S.deletedEntries.has(target))return;
+        out.push({type:'alias',text:e.name,target,depth:e.depth||0});
+        return;
+      }
+      out.push({type:'entry',text:e.name,depth:e.depth||0});
+      // See also
+      const seeAlsoList=S.seeAlsoRefs?.[e.name]||[];
+      if(seeAlsoList.length){
+        const visible=seeAlsoList.filter(s=>{
+          if(s.type==='tag'){
+            const resolved=resolveTagName(s.target);
+            if(S.deletedEntries&&S.deletedEntries.has(resolved))return false;
+          }
+          return true;
+        });
+        if(visible.length){
+          const parts=visible.map(s=>s.type==='tag'?resolveTagName(s.target):s.target);
+          out.push({type:'seealso',text:'See also: '+parts.join(', ')});
+        }
+      }
+      // Group results by segment
+      const byseg={};
+      e.results.forEach(r=>{
+        if(r.isRemoved)return;
+        if(!byseg[r.segType])byseg[r.segType]=[];
+        byseg[r.segType].push(r);
+      });
+      RULES.segOrder.forEach(seg=>{
+        const rs=byseg[seg];
+        if(!rs||!rs.length)return;
+        out.push({type:'seglabel',text:seg});
+        rs.forEach(r=>{
+          if(r.groupKey&&!r.groupFirst)return;
+          const members=(r.groupKey&&r.groupMembers&&r.groupMembers.length)?r.groupMembers:[r];
+          // Compute refs
+          const refs=members.map(m=>{
+            if(m.clipType==='Film Chapter'||m.clipType==='Film'){
+              return filmRefForResult(m);
+            }
+            return refCodeForResult(m)||'';
+          }).filter(x=>x);
+          // Description
+          const desc=shouldShowDesc(r,section)?(r.desc||''):'';
+          // Relationship labels are NEVER shown in book/export (per request)
+          const relLabel=null;
+          out.push({type:'row',desc,relLabel,refs,segType:seg});
+        });
+      });
+    });
+  });
+  return out;
+}
+
+// === Word (.docx) export ===
+async function downloadBookAsDocx(){
+  if(typeof docx==='undefined'){toast('Word library not loaded — try refreshing','error');return}
+  const scope=S.bookScope||'all';
+  toast('Generating Word document…');
+  try{
+    const data=_collectBookData(scope);
+    const {Document,Packer,Paragraph,TextRun,HeadingLevel,AlignmentType,PageOrientation,convertInchesToTwip,LevelFormat,StyleLevel,SectionType,LineRuleType}=docx;
+
+    // Define named paragraph styles — designer can tweak by modifying these styles in Word
+    const styles={
+      paragraphStyles:[
+        {id:'SectionHeader',name:'Section Header',basedOn:'Normal',next:'Normal',quickFormat:true,
+          run:{font:'Georgia',size:36,bold:true},
+          paragraph:{alignment:AlignmentType.CENTER,spacing:{before:240,after:240,line:360,lineRule:LineRuleType.AUTO},pageBreakBefore:true,border:{top:{style:'single',size:18,color:'1a1a1a'},bottom:{style:'single',size:6,color:'999999'}}}
+        },
+        {id:'TagName',name:'Tag Name',basedOn:'Normal',next:'Description',quickFormat:true,
+          run:{font:'Georgia',size:25,bold:true},
+          paragraph:{spacing:{before:160,after:40,line:280,lineRule:LineRuleType.AUTO},keepNext:true}
+        },
+        {id:'SubtagName',name:'Subtag Name',basedOn:'TagName',next:'Description',quickFormat:true,
+          run:{font:'Georgia',size:23,bold:true},
+          paragraph:{indent:{left:convertInchesToTwip(0.2)},spacing:{before:120,after:40,line:280,lineRule:LineRuleType.AUTO},keepNext:true}
+        },
+        {id:'SubSubtagName',name:'Sub-Subtag Name',basedOn:'TagName',next:'Description',quickFormat:true,
+          run:{font:'Georgia',size:22,bold:true},
+          paragraph:{indent:{left:convertInchesToTwip(0.4)},spacing:{before:100,after:40,line:280,lineRule:LineRuleType.AUTO},keepNext:true}
+        },
+        {id:'AliasPointer',name:'Alias Pointer',basedOn:'Normal',next:'Normal',quickFormat:true,
+          run:{font:'Georgia',size:22,italics:true,color:'555555'},
+          paragraph:{spacing:{before:120,after:80,line:260,lineRule:LineRuleType.AUTO}}
+        },
+        {id:'SeeAlso',name:'See Also',basedOn:'Normal',next:'Normal',quickFormat:true,
+          run:{font:'Georgia',size:18,italics:true,color:'555555'},
+          paragraph:{indent:{left:convertInchesToTwip(0.15)},spacing:{before:20,after:40,line:240,lineRule:LineRuleType.AUTO}}
+        },
+        {id:'SegmentLabel',name:'Segment Label',basedOn:'Normal',next:'Description',quickFormat:true,
+          run:{font:'Georgia',size:16,italics:true,color:'555555',allCaps:true},
+          paragraph:{indent:{left:convertInchesToTwip(0.15)},spacing:{before:60,after:20,line:240,lineRule:LineRuleType.AUTO},keepNext:true}
+        },
+        {id:'Description',name:'Description',basedOn:'Normal',next:'Description',quickFormat:true,
+          run:{font:'Georgia',size:20},
+          paragraph:{indent:{left:convertInchesToTwip(0.25)},spacing:{before:0,after:20,line:240,lineRule:LineRuleType.AUTO}}
+        },
+      ]
+    };
+
+    // Build paragraphs
+    const paragraphs=[];
+    let firstSection=true;
+    data.forEach(item=>{
+      if(item.type==='section'){
+        const para=new Paragraph({
+          style:'SectionHeader',
+          text:item.text,
+          pageBreakBefore:!firstSection,
+        });
+        firstSection=false;
+        paragraphs.push(para);
+      }else if(item.type==='entry'){
+        const styleId=item.depth===2?'SubSubtagName':(item.depth===1?'SubtagName':'TagName');
+        paragraphs.push(new Paragraph({style:styleId,text:item.text}));
+      }else if(item.type==='alias'){
+        paragraphs.push(new Paragraph({
+          style:'AliasPointer',
+          children:[new TextRun({text:item.text,bold:true}),new TextRun({text:'. See ',italics:true}),new TextRun({text:item.target,bold:true})]
+        }));
+      }else if(item.type==='seealso'){
+        paragraphs.push(new Paragraph({style:'SeeAlso',text:item.text}));
+      }else if(item.type==='seglabel'){
+        paragraphs.push(new Paragraph({style:'SegmentLabel',text:item.text}));
+      }else if(item.type==='row'){
+        const children=[];
+        if(item.desc)children.push(new TextRun({text:item.desc}));
+        if(item.relLabel)children.push(new TextRun({text:' ['+item.relLabel+']',italics:true,color:'777777',size:14}));
+        if(item.refs&&item.refs.length){
+          if(item.desc||item.relLabel)children.push(new TextRun({text:' '}));
+          item.refs.forEach((r,i)=>{
+            if(i>0)children.push(new TextRun({text:', '}));
+            children.push(new TextRun({text:r,bold:true}));
+          });
+        }
+        paragraphs.push(new Paragraph({style:'Description',children}));
+      }
+    });
+
+    // Document with 2-column layout, US Letter, 0.5" margins
+    const doc=new Document({
+      styles,
+      sections:[{
+        properties:{
+          page:{
+            size:{width:convertInchesToTwip(8.5),height:convertInchesToTwip(11),orientation:PageOrientation.PORTRAIT},
+            margin:{top:convertInchesToTwip(0.5),right:convertInchesToTwip(0.5),bottom:convertInchesToTwip(0.6),left:convertInchesToTwip(0.5),header:convertInchesToTwip(0.3),footer:convertInchesToTwip(0.3)},
+          },
+          column:{count:2,space:convertInchesToTwip(0.3),equalWidth:true},
+        },
+        children:paragraphs,
+      }],
+    });
+
+    const blob=await Packer.toBlob(doc);
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    const scopeLabel=scope==='all'?'Full-Index':displaySectionName(scope);
+    a.download=`JEM-Index-${scopeLabel.replace(/\s+/g,'-')}.docx`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('Word document downloaded','success');
+  }catch(err){
+    console.error('Word export failed:',err);
+    toast('Word export failed: '+(err?.message||err),'error');
+  }
+}
+
+// === InDesign (.icml) export ===
+// Generates an InDesign Markup Language XML file with named paragraph styles.
+// Designer opens in InDesign — styles are recognized natively; designer tweaks once.
+function downloadBookAsICML(){
+  const scope=S.bookScope||'all';
+  toast('Generating InDesign file…');
+  try{
+    const data=_collectBookData(scope);
+    const xmlEsc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+
+    // Style definitions — these become InDesign paragraph styles. Designer can override anywhere in their doc.
+    // Numbers are in points unless noted.
+    const styles=[
+      {name:'SectionHeader',font:'Georgia',size:18,bold:true,align:'Center',spaceBefore:12,spaceAfter:12,startsPage:true},
+      {name:'TagName',font:'Georgia',size:12.5,bold:true,leftIndent:0,spaceBefore:8,spaceAfter:2,keepWithNext:true},
+      {name:'SubtagName',font:'Georgia',size:11.5,bold:true,leftIndent:14,spaceBefore:6,spaceAfter:2,keepWithNext:true},
+      {name:'SubSubtagName',font:'Georgia',size:11,bold:true,leftIndent:28,spaceBefore:5,spaceAfter:2,keepWithNext:true},
+      {name:'AliasPointer',font:'Georgia',size:11,italic:true,spaceBefore:6,spaceAfter:4},
+      {name:'SeeAlso',font:'Georgia',size:9,italic:true,leftIndent:10,spaceBefore:1,spaceAfter:2},
+      {name:'SegmentLabel',font:'Georgia',size:8,italic:true,leftIndent:10,spaceBefore:3,spaceAfter:1,keepWithNext:true,allCaps:true},
+      {name:'Description',font:'Georgia',size:10,leftIndent:18,spaceBefore:0,spaceAfter:1},
+    ];
+
+    // Build the ICML XML
+    let xml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+    xml+='<?aid style="50" type="snippet" readerVersion="6.0" featureSet="257" product="14.0(186)" ?>\n';
+    xml+='<?aid SnippetType="InCopyInterchange"?>\n';
+    xml+='<Document DOMVersion="14.0" Self="d">\n';
+
+    // Define paragraph styles
+    xml+='<RootParagraphStyleGroup Self="root_pst">\n';
+    styles.forEach(s=>{
+      let attrs='';
+      attrs+=' Name="'+s.name+'"';
+      attrs+=' Self="ParagraphStyle/'+s.name+'"';
+      attrs+=' AppliedFont="'+s.font+'"';
+      attrs+=' PointSize="'+s.size+'"';
+      if(s.bold)attrs+=' FontStyle="Bold"';
+      if(s.italic)attrs+=' FontStyle="Italic"';
+      if(s.align)attrs+=' Justification="'+s.align+'Align"';
+      if(s.leftIndent!==undefined)attrs+=' LeftIndent="'+s.leftIndent+'"';
+      if(s.spaceBefore!==undefined)attrs+=' SpaceBefore="'+s.spaceBefore+'"';
+      if(s.spaceAfter!==undefined)attrs+=' SpaceAfter="'+s.spaceAfter+'"';
+      if(s.keepWithNext)attrs+=' KeepWithNext="1"';
+      if(s.startsPage)attrs+=' StartParagraph="NextPage"';
+      if(s.allCaps)attrs+=' Capitalization="AllCaps"';
+      xml+='  <ParagraphStyle'+attrs+'/>\n';
+    });
+    xml+='</RootParagraphStyleGroup>\n';
+
+    // Story (the actual content)
+    xml+='<Story Self="story_main" AppliedNamedGrid="n" AppliedTOCStyle="n" TrackChanges="false" StoryTitle="JEM Index" AppliedTOCStyle="n">\n';
+
+    let firstSection=true;
+    data.forEach(item=>{
+      const writePara=(styleName,text)=>{
+        xml+='  <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/'+styleName+'">\n';
+        xml+='    <CharacterStyleRange>\n';
+        xml+='      <Content>'+xmlEsc(text)+'</Content>\n';
+        xml+='      <Br/>\n';
+        xml+='    </CharacterStyleRange>\n';
+        xml+='  </ParagraphStyleRange>\n';
+      };
+      if(item.type==='section'){
+        // Suppress page break before FIRST section so we don't start with a blank page
+        if(firstSection){
+          xml+='  <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/SectionHeader">\n';
+          xml+='    <CharacterStyleRange>\n';
+          xml+='      <Properties><StartParagraph type="enumeration">Anywhere</StartParagraph></Properties>\n';
+          xml+='      <Content>'+xmlEsc(item.text)+'</Content>\n';
+          xml+='      <Br/>\n';
+          xml+='    </CharacterStyleRange>\n';
+          xml+='  </ParagraphStyleRange>\n';
+          firstSection=false;
+        }else{
+          writePara('SectionHeader',item.text);
+        }
+      }else if(item.type==='entry'){
+        const styleName=item.depth===2?'SubSubtagName':(item.depth===1?'SubtagName':'TagName');
+        writePara(styleName,item.text);
+      }else if(item.type==='alias'){
+        // Compose: "Name. See Target" — Name bold, "See" italic, Target bold
+        xml+='  <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/AliasPointer">\n';
+        xml+='    <CharacterStyleRange FontStyle="Bold"><Content>'+xmlEsc(item.text)+'</Content></CharacterStyleRange>\n';
+        xml+='    <CharacterStyleRange FontStyle="Italic"><Content>. See </Content></CharacterStyleRange>\n';
+        xml+='    <CharacterStyleRange FontStyle="Bold"><Content>'+xmlEsc(item.target)+'</Content><Br/></CharacterStyleRange>\n';
+        xml+='  </ParagraphStyleRange>\n';
+      }else if(item.type==='seealso'){
+        writePara('SeeAlso',item.text);
+      }else if(item.type==='seglabel'){
+        writePara('SegmentLabel',item.text);
+      }else if(item.type==='row'){
+        xml+='  <ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/Description">\n';
+        if(item.desc){
+          xml+='    <CharacterStyleRange><Content>'+xmlEsc(item.desc)+'</Content></CharacterStyleRange>\n';
+        }
+        if(item.relLabel){
+          xml+='    <CharacterStyleRange FontStyle="Italic" PointSize="8"><Content> ['+xmlEsc(item.relLabel)+']</Content></CharacterStyleRange>\n';
+        }
+        if(item.refs&&item.refs.length){
+          const refsText=' '+item.refs.join(', ');
+          xml+='    <CharacterStyleRange FontStyle="Bold"><Content>'+xmlEsc(refsText)+'</Content></CharacterStyleRange>\n';
+        }
+        xml+='    <CharacterStyleRange><Br/></CharacterStyleRange>\n';
+        xml+='  </ParagraphStyleRange>\n';
+      }
+    });
+
+    xml+='</Story>\n';
+    xml+='</Document>\n';
+
+    const blob=new Blob([xml],{type:'application/xml'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    const scopeLabel=scope==='all'?'Full-Index':displaySectionName(scope);
+    a.download=`JEM-Index-${scopeLabel.replace(/\s+/g,'-')}.icml`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('InDesign file downloaded','success');
+  }catch(err){
+    console.error('ICML export failed:',err);
+    toast('ICML export failed: '+(err?.message||err),'error');
+  }
+}
+
 function rBook(){
   if(!S.indexData)return'<div class="pad" style="color:var(--tx-3)">Loading index data…</div>';
   const ix=S.indexData;
@@ -7894,8 +8214,10 @@ function rBook(){
   h+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">`;
   h+=`<div style="flex:1;min-width:200px"><h1 style="margin-bottom:2px">📖 Book View</h1><p style="margin:0">Read the index as it will appear in print. Click ✎ on any entry or sub-entry to jump to the editor.</p></div>`;
   h+=`<div style="display:flex;gap:6px;flex-shrink:0">`;
-  h+=`<button class="btn btn-sm" id="book-download-pdf" title="Open print dialog — choose 'Save as PDF'">📄 Download as PDF</button>`;
-  h+=`<button class="btn btn-sm" id="export-index" title="Export full index as standalone HTML" style="border-color:var(--green);color:var(--green)">📥 Export HTML</button>`;
+  h+=`<button class="btn btn-sm" id="book-download-pdf" title="Open print dialog — choose 'Save as PDF'">📄 PDF</button>`;
+  h+=`<button class="btn btn-sm" id="book-download-docx" title="Download as Word document (.docx) with paragraph styles">📝 Word</button>`;
+  h+=`<button class="btn btn-sm" id="book-download-icml" title="Download as InDesign ICML (paragraph styles for designer)">🎨 InDesign</button>`;
+  h+=`<button class="btn btn-sm" id="export-index" title="Export full index as standalone HTML" style="border-color:var(--green);color:var(--green)">📥 HTML</button>`;
   h+=`</div>`;
   h+=`</div>`;
   // Section selector pills
@@ -7990,10 +8312,7 @@ function rBook(){
               h+=`<span class="book-desc book-desc-empty">[empty]</span>`;
             }
           }
-          // Relationship label (only when it differs from segment default, or Nigunim "spoken about")
-          if(shouldShowRel(r,section)){
-            h+=`<span class="book-rel">[${esc(r.rel)}]</span>`;
-          }
+          // Relationship labels are NEVER shown in book view (per request).
           // Reference codes — one per member, each linked to its own clip
           members.forEach((m,idx)=>{
             const vidUrl=clipLinkForResult(m);
@@ -9468,6 +9787,8 @@ function bindAll(){
     // Restore title after print dialog closes
     setTimeout(()=>{document.title=oldTitle},1000);
   });
+  on('#book-download-docx','click',downloadBookAsDocx);
+  on('#book-download-icml','click',downloadBookAsICML);
   on('#nav-ai','click',()=>{S.aiOpen=!S.aiOpen;render()});
   on('#ai-fab','click',()=>{S.aiOpen=true;render()});
 
