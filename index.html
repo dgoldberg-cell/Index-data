@@ -183,6 +183,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-result-remove-btn:hover{color:#c33}
 .idx-result.is-removed .idx-result-remove-btn{opacity:1;color:#c33}
 .idx-section-hd{position:relative}
+.idx-section-edit{opacity:0;transition:opacity .15s}
 .idx-section-hd:hover .idx-section-edit{opacity:1}
 .idx-section-drag-handle{display:inline-block;font-size:14px;color:var(--tx-4);cursor:grab;padding:0 6px 0 0;opacity:0;transition:opacity .15s}
 .idx-section-hd:hover .idx-section-drag-handle{opacity:1}
@@ -8464,9 +8465,9 @@ function rIndex(){
         secHd+=` <button class="btn btn-sm" data-secrename-cancel="1" style="font-size:11px;padding:2px 8px">Cancel</button>`;
       }else{
         secHd+=esc(dispName);
-        secHd+=` <button class="idx-section-edit" data-secrename-start="${esc(sec)}" title="Rename this section" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:13px;padding:0 4px;opacity:0;transition:opacity .15s">✎</button>`;
+        secHd+=` <button class="idx-section-edit" data-secrename-start="${esc(sec)}" title="Rename this section" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:13px;padding:0 4px;transition:opacity .15s">✎</button>`;
         if(isCustomSec){
-          secHd+=` <button class="idx-section-edit" data-section-delete="${esc(sec)}" title="Delete this custom section (must be empty)" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:13px;padding:0 4px;opacity:0;transition:opacity .15s">🗑</button>`;
+          secHd+=` <button class="idx-section-edit" data-section-delete="${esc(sec)}" title="Delete this custom section (must be empty)" style="background:none;border:none;cursor:pointer;color:var(--tx-4);font-size:13px;padding:0 4px;transition:opacity .15s">🗑</button>`;
           secHd+=` <span style="font-size:9px;color:#3a8a3a;background:#e8f4e8;padding:1px 5px;border-radius:8px;margin-left:4px;vertical-align:middle">custom</span>`;
         }
         if(isRenamed){
