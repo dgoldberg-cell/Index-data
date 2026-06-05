@@ -258,6 +258,8 @@ body.clip-panel-open .idx-cols{gap:16px}
 .book-page{column-count:2;column-gap:36px;column-rule:1px solid #e8e2d0}
 .book-section-hd{font-size:22px;font-weight:700;text-align:center;margin:18px 0 14px;padding:6px 0;border-top:2px solid #1a1a1a;border-bottom:1px solid #999;break-after:avoid;column-span:all;letter-spacing:0.5px}
 .book-entry{margin-bottom:10px;break-inside:avoid-column}
+.book-entry-depth-1{margin-left:14px}
+.book-entry-depth-2{margin-left:28px}
 .book-entry-head{display:flex;align-items:baseline;gap:6px;margin-bottom:2px}
 .book-entry-name{font-weight:700;font-size:15px}
 .book-entry-edit{opacity:0;background:none;border:none;cursor:pointer;font-size:12px;color:#888;padding:0 3px;transition:opacity .1s}
@@ -700,6 +702,8 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
     margin-bottom:8px !important;
     display:block !important;
   }
+  .book-entry-depth-1{margin-left:14px !important}
+  .book-entry-depth-2{margin-left:28px !important}
   .book-entry-head{
     break-after:avoid !important;
     page-break-after:avoid !important;
@@ -746,23 +750,48 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
   .book-row[data-rel="2"] .book-ref{font-style:italic !important;color:#333 !important}
   .book-row[data-rel="1"] .book-ref{font-weight:300 !important;color:#555 !important}
 
-  /* Page setup: Letter size, tight margins, page numbers at bottom, title at top */
+  /* Page setup: Letter size, 0.5" margins all around, page numbers at outer bottom (like a real book) */
   @page{
     size:letter;
-    margin:0.9in 0.75in 0.85in 0.75in;
+    margin:0.5in;
     @top-center{
-      content:"JEM Index";
-      font-family:Georgia,serif;
-      font-size:10px;
-      color:#999;
-      letter-spacing:0.5px;
+      content:"";
     }
     @bottom-center{
       content:counter(page);
       font-family:Georgia,serif;
-      font-size:11px;
-      color:#666;
+      font-size:10px;
+      color:#555;
     }
+  }
+  /* Real-book page numbers: right side on right-hand (odd) pages, left side on left-hand (even) pages */
+  @page :right{
+    @bottom-right{
+      content:counter(page);
+      font-family:Georgia,serif;
+      font-size:10px;
+      color:#555;
+    }
+    @bottom-center{content:""}
+  }
+  @page :left{
+    @bottom-left{
+      content:counter(page);
+      font-family:Georgia,serif;
+      font-size:10px;
+      color:#555;
+    }
+    @bottom-center{content:""}
+  }
+  /* Section header forces a new page (real books start each section on a fresh page) */
+  .book-section-hd{
+    page-break-before:always !important;
+    break-before:page !important;
+  }
+  .book-view > .book-page > .book-section-hd:first-child,
+  .book-view > .book-page > h2.book-section-hd:first-child{
+    page-break-before:auto !important;
+    break-before:auto !important;
   }
 
   /* Orphans/widows */
@@ -7891,8 +7920,50 @@ function rBook(){
     const hdClass=scope==='all'?'book-section-hd':'book-section-hd print-only';
     h+=`<h2 class="${hdClass}">${esc(displaySectionName(section))}</h2>`;
     entries.forEach(e=>{
-      h+=`<div class="book-entry">`;
+      // Skip soft-deleted entries from book view (export skips them too)
+      if(e.isDeleted)return;
+
+      // ─── Alias entry: render as "Joy. See Simchat Torah" ───
+      if(e.isAlias){
+        const targetDisplay=e.aliasTargetResolved||e.aliasTarget||'';
+        if(!targetDisplay)return; // alias with no target — skip
+        // Skip if target is deleted
+        if(S.deletedEntries && S.deletedEntries.has(targetDisplay))return;
+        const depthClsA=e.depth?` book-entry-depth-${Math.min(e.depth,2)}`:'';
+        h+=`<div class="book-entry book-entry-alias${depthClsA}">`;
+        h+=`<div class="book-entry-head"><span class="book-entry-name">${esc(e.name)}</span></div>`;
+        h+=`<div class="book-seg"><div class="book-row" style="font-style:italic;color:var(--tx-3)">See <a href="#" data-bookjumpalias="${esc(targetDisplay)}" style="color:var(--blue);font-style:normal;font-weight:600">${esc(targetDisplay)}</a></div></div>`;
+        h+=`</div>`;
+        return;
+      }
+
+      const depthCls=e.depth?` book-entry-depth-${Math.min(e.depth,2)}`:'';
+      h+=`<div class="book-entry${depthCls}">`;
       h+=`<div class="book-entry-head"><span class="book-entry-name">${esc(e.name)}</span><button class="book-entry-edit" data-bookedit="${esc(e.name)}" title="Edit in workstation">✎</button></div>`;
+
+      // ─── See Also: under tag name, smaller text ───
+      // Pulled from S.seeAlsoRefs[e.name]. Skip tag refs whose target is deleted (matching export behavior).
+      const seeAlsoList=S.seeAlsoRefs?.[e.name]||[];
+      if(seeAlsoList.length){
+        const visibleRefs=seeAlsoList.filter(s=>{
+          if(s.type==='tag'){
+            const resolved=resolveTagName(s.target);
+            if(S.deletedEntries && S.deletedEntries.has(resolved))return false;
+          }
+          return true;
+        });
+        if(visibleRefs.length){
+          const parts=visibleRefs.map(s=>{
+            if(s.type==='tag'){
+              const resolved=resolveTagName(s.target);
+              return `<a href="#" data-bookjumpalias="${esc(resolved)}" style="color:var(--blue)">${esc(resolved)}</a>`;
+            }
+            return `<span>${esc(s.target)}</span>`;
+          });
+          h+=`<div class="book-seealso" style="font-size:11px;color:var(--tx-3);font-style:italic;margin-left:10px;margin-bottom:3px">See also: <span style="font-style:normal">${parts.join(', ')}</span></div>`;
+        }
+      }
+
       // Group results by segment type, in canonical order
       const byseg={};
       e.results.forEach(r=>{if(!byseg[r.segType])byseg[r.segType]=[];byseg[r.segType].push(r)});
@@ -7901,6 +7972,8 @@ function rBook(){
         if(!rs||!rs.length)return;
         h+=`<div class="book-seg"><div class="book-seg-label">${esc(seg)}</div>`;
         rs.forEach(r=>{
+          // Skip removed bindings (excluded from export and book view)
+          if(r.isRemoved)return;
           // Skip non-first members of a group — refs get merged onto the first
           if(r.groupKey && !r.groupFirst) return;
           const members=(r.groupKey && r.groupMembers && r.groupMembers.length) ? r.groupMembers : [r];
@@ -9440,6 +9513,33 @@ function bindAll(){
       render();
       setTimeout(()=>{const i=$('#note-input');if(i)i.focus()},80);
     },350);
+  });
+  // Book View — alias / see-also click: scroll to the target entry within the book view
+  $$('[data-bookjumpalias]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    const target=el.dataset.bookjumpalias;
+    // First, switch the book scope to the section containing the target if needed
+    let targetSection=null;
+    for(const sec of Object.keys(S.indexData?.sections||{})){
+      if((S.indexData.sections[sec]||[]).some(en=>en.name===target&&!en.isAlias)){targetSection=sec;break}
+    }
+    if(targetSection && S.bookScope && S.bookScope!=='all' && S.bookScope!==targetSection){
+      S.bookScope=targetSection;
+      render();
+    }
+    // Then scroll to the target entry
+    setTimeout(()=>{
+      const all=document.querySelectorAll('.book-entry-name');
+      for(const el2 of all){
+        if(el2.textContent.trim()===target){
+          el2.scrollIntoView({behavior:'smooth',block:'center'});
+          el2.style.transition='background .5s';
+          el2.style.background='#fff3a0';
+          setTimeout(()=>{el2.style.background=''},1500);
+          break;
+        }
+      }
+    },150);
   });
   // Book View — edit DESCRIPTION button: jump to sub-entry, open inline description editor
   $$('[data-bookdescedit]').forEach(el=>el.onclick=()=>{
