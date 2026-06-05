@@ -3947,6 +3947,14 @@ function isDuplicate(clip) {
   return !!getReviewField(clip, 'duplicateOf');
 }
 
+// Returns true if a clip should be included in the export, book view, and other published
+// deliverables. A clip is exportable when it's approved AND NOT marked as a duplicate.
+// (A clip can be both approved and a duplicate — see the dup-marking flow — but we never
+// want the duplicate version published, even if its draft happens to be approved.)
+function isExportable(clip) {
+  return getStatus(clip) === 'approved' && !isDuplicate(clip);
+}
+
 function setReviewField(clip, field, val) {
   const bucket = S.byType[clip.typeKey];
   if (!bucket) return;
@@ -6365,13 +6373,13 @@ function renderExportView() {
   const typeCfg = activeTypeCfg();
   const titleEl = document.getElementById('exportTitle');
   if (titleEl && typeCfg) titleEl.textContent = `Export — ${typeCfg.displayName}`;
-  let approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
+  let approved = activeBucket().clips.filter(c => isExportable(c));
   if (S.activeType === 'film_chapter' && _filmOrderCache) {
     const byFilm = {};
     approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
     const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
     approved = [];
-    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => getStatus(c) === 'approved')); });
+    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportable(c))); });
   }
   document.getElementById('exportStats').textContent = `${approved.length} approved clips`;
   const showOrig = document.getElementById('exportShowOriginal')?.checked;
@@ -6401,14 +6409,14 @@ function renderExportView() {
 async function generateSheetExport() {
   const typeCfg = activeTypeCfg();
   const typeKey = S.activeType;
-  let approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
+  let approved = activeBucket().clips.filter(c => isExportable(c));
   // For Film Chapters: respect the saved chapter ordering per film
   if (typeKey === 'film_chapter' && _filmOrderCache) {
     const byFilm = {};
     approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
     const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
     approved = [];
-    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => getStatus(c) === 'approved')); });
+    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportable(c))); });
   }
   if (!approved.length) { showToast('No approved clips to export', 'error'); return; }
   const tabName = `${typeCfg.displayName} Export`;
@@ -6532,13 +6540,13 @@ async function generateSheetExport() {
 function downloadCsv() {
   const typeCfg = activeTypeCfg();
   const typeKey = S.activeType;
-  let approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
+  let approved = activeBucket().clips.filter(c => isExportable(c));
   if (typeKey === 'film_chapter' && _filmOrderCache) {
     const byFilm = {};
     approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
     const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
     approved = [];
-    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => getStatus(c) === 'approved')); });
+    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportable(c))); });
   }
   if (!approved.length) { showToast('No approved clips to export', 'error'); return; }
   const isShortFilm = typeKey === 'short_film';
@@ -6582,7 +6590,7 @@ function downloadCsv() {
 }
 
 function exportHTML() {
-  const approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
+  const approved = activeBucket().clips.filter(c => isExportable(c));
   const rows = approved.map(clip => {
     const tags = parseTags(clip);
     const summary = clip.rewrite || clip.description || '';
@@ -6613,14 +6621,14 @@ function exportHTML() {
 // BOOK VIEW
 // ══════════════════════════════════════════════
 function renderBookView() {
-  let approved = activeBucket().clips.filter(c => getStatus(c) === 'approved');
+  let approved = activeBucket().clips.filter(c => isExportable(c));
   // For film chapters, sort by saved film order
   if (S.activeType === 'film_chapter' && _filmOrderCache) {
     const byFilm = {};
     approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
     const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
     approved = [];
-    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => getStatus(c) === 'approved')); });
+    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportable(c))); });
   }
   const el = document.getElementById('bookPages');
   if (!approved.length) { el.innerHTML = `<div class="empty-state">No approved summaries yet</div>`; return; }
@@ -7671,7 +7679,7 @@ function renderFullBookView() {
   CLIP_TYPES.forEach(t => {
     const bucket = S.byType[t.key];
     if (!bucket) return;
-    let approved = bucket.clips.filter(c => getStatus(c) === 'approved');
+    let approved = bucket.clips.filter(c => isExportable(c));
     if (!approved.length) return;
     // For film chapters: order by saved film order
     if (t.key === 'film_chapter') {
@@ -7680,7 +7688,7 @@ function renderFullBookView() {
       approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
       const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
       approved = [];
-      filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => getStatus(c) === 'approved')); });
+      filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportable(c))); });
     }
     // Section title page
     pageNum++;
