@@ -266,6 +266,11 @@ body.clip-panel-open .idx-cols{gap:16px}
 .book-entry:hover .book-entry-edit{opacity:1}
 .book-entry-edit:hover{color:var(--gold)}
 .book-seg{margin-left:10px;margin-bottom:4px}
+/* People-inline: float label left, refs flow right and wrap. Same pattern as print so behavior matches. */
+.book-seg-people-inline{margin-left:10px;margin-bottom:4px}
+.book-seg-people-inline > .book-seg-label{float:left;width:110px;margin:0;padding:0}
+.book-seg-people-inline > .book-seg-refs-inline{margin-left:118px;font-size:11px;line-height:1.5}
+.book-seg-people-inline::after{content:"";display:table;clear:both}
 .book-seg-label{font-style:italic;color:#666;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;margin:3px 0 1px}
 .book-row{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;font-size:13px;line-height:1.5;padding:1px 0 1px 10px}
 .book-desc{flex:1 1 auto;min-width:100px}
@@ -725,23 +730,27 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
     margin:2px 0 1px !important;
     display:block !important;
   }
-  /* People-inline layout overrides: label sits beside refs on one line, wrapping refs align under refs */
+  /* People-inline layout: float label left, refs flow as inline text right of it.
+     Uses float (not flex) because flex containers do not fragment well across pages. */
   .book-seg-people-inline{
-    display:flex !important;
-    align-items:baseline !important;
-    gap:8px !important;
+    display:block !important;
     margin:1px 0 1px 10px !important;
+    /* Allow this whole block to split across columns/pages */
   }
   .book-seg-people-inline > .book-seg-label{
-    flex:0 0 100pt !important;
-    display:inline-block !important;
+    float:left !important;
+    width:100pt !important;
     margin:0 !important;
+    padding:0 !important;
   }
   .book-seg-people-inline > .book-seg-refs-inline{
-    flex:1 !important;
+    margin-left:108pt !important;
     font-size:10px !important;
     line-height:1.4 !important;
+    display:block !important;
   }
+  /* Clearfix so the float doesn't leak into the next sibling */
+  .book-seg-people-inline::after{content:"";display:table;clear:both}
   .book-row{
     /* Individual clip line must not split mid-line */
     break-inside:avoid !important;
@@ -8339,10 +8348,11 @@ function rBook(){
             });
           });
           if(allRefLinks.length){
-            // Layout: label on left at fixed width, refs flow to the right and wrap under each other
-            h+=`<div class="book-seg book-seg-people-inline" style="margin:1px 0 1px 10px;display:flex;align-items:baseline;gap:8px">`;
-            h+=`<div class="book-seg-label" style="flex:0 0 110px;margin:0;display:inline-block">${esc(seg)}</div>`;
-            h+=`<div class="book-seg-refs-inline" style="flex:1;font-size:11px;line-height:1.5">${allRefLinks.join(', ')}</div>`;
+            // Layout: label floats left at fixed width, refs fill the rest and wrap.
+            // CSS class handles all styling (float-based so it splits across pages properly).
+            h+=`<div class="book-seg book-seg-people-inline">`;
+            h+=`<div class="book-seg-label">${esc(seg)}</div>`;
+            h+=`<div class="book-seg-refs-inline">${allRefLinks.join(', ')}</div>`;
             h+=`</div>`;
             return; // skip normal per-row rendering for this segment
           }
