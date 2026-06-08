@@ -158,8 +158,17 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .idx-drag-handle:hover{opacity:1 !important;color:var(--tx-2)}
 .idx-drag-handle:active{cursor:grabbing}
 .idx-entry-orderbadge{font-size:9px;font-weight:600;background:var(--gold);color:white;padding:1px 5px;border-radius:8px;margin-left:4px;vertical-align:middle}
-.idx-entry.depth-1{margin-left:24px;padding-left:12px;border-left:2px solid var(--line)}
-.idx-entry.depth-2{margin-left:48px;padding-left:12px;border-left:2px solid var(--line)}
+.idx-entry.depth-1{margin-left:18px;padding-left:10px;border-left:2px solid var(--line)}
+.idx-entry.depth-2{margin-left:32px;padding-left:10px;border-left:2px solid var(--line)}
+.idx-entry.depth-3{margin-left:44px;padding-left:10px;border-left:2px solid var(--line)}
+.idx-entry.depth-4{margin-left:54px;padding-left:10px;border-left:2px solid var(--line)}
+.idx-entry.depth-5{margin-left:62px;padding-left:10px;border-left:2px solid var(--line)}
+/* Depth dot — visually indicates sub-level depth without consuming much space */
+.idx-entry[class*="depth-"]::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--gold);margin-right:6px;vertical-align:middle;opacity:0.6}
+.idx-entry.depth-2::before{width:5px;height:5px;background:#b89860}
+.idx-entry.depth-3::before{width:4px;height:4px;background:#a07744}
+.idx-entry.depth-4::before{width:4px;height:4px;background:#8a5e2f;opacity:0.7}
+.idx-entry.depth-5::before{width:3px;height:3px;background:#754a20;opacity:0.7}
 .idx-entry.has-children .idx-entry-name{font-weight:800}
 .idx-entry-synth-badge{font-size:9px;font-weight:600;background:#a08055;color:white;padding:1px 5px;border-radius:8px;margin-left:4px}
 .idx-entry-parent-badge{font-size:10px;color:var(--tx-4);font-style:italic;margin-left:6px}
@@ -258,8 +267,20 @@ body.clip-panel-open .idx-cols{gap:16px}
 .book-page{column-count:2;column-gap:36px;column-rule:1px solid #e8e2d0}
 .book-section-hd{font-size:22px;font-weight:700;text-align:center;margin:18px 0 14px;padding:6px 0;border-top:2px solid #1a1a1a;border-bottom:1px solid #999;break-after:avoid;column-span:all;letter-spacing:0.5px}
 .book-entry{margin-bottom:10px}
-.book-entry-depth-1{margin-left:14px}
-.book-entry-depth-2{margin-left:28px}
+.book-entry-depth-1{margin-left:10px}
+.book-entry-depth-2{margin-left:20px}
+.book-entry-depth-3{margin-left:30px}
+.book-entry-depth-4{margin-left:38px}
+.book-entry-depth-5{margin-left:44px}
+.book-entry-depth-1 .book-entry-name::before,
+.book-entry-depth-2 .book-entry-name::before,
+.book-entry-depth-3 .book-entry-name::before,
+.book-entry-depth-4 .book-entry-name::before,
+.book-entry-depth-5 .book-entry-name::before{content:"";display:inline-block;width:4px;height:4px;border-radius:50%;background:#888;margin-right:6px;vertical-align:middle;opacity:0.5}
+.book-entry-depth-2 .book-entry-name::before{background:#999}
+.book-entry-depth-3 .book-entry-name::before{background:#aaa;width:3px;height:3px}
+.book-entry-depth-4 .book-entry-name::before{background:#bbb;width:3px;height:3px}
+.book-entry-depth-5 .book-entry-name::before{background:#ccc;width:3px;height:3px}
 .book-entry-head{display:flex;align-items:baseline;gap:6px;margin-bottom:2px}
 .book-entry-name{font-weight:700;font-size:15px}
 .book-entry-edit{opacity:0;background:none;border:none;cursor:pointer;font-size:12px;color:#888;padding:0 3px;transition:opacity .1s}
@@ -706,8 +727,11 @@ input[type="checkbox"]:checked::after{content:'✓';position:absolute;top:-2px;l
     display:block !important;
     /* break-inside: allow! */
   }
-  .book-entry-depth-1{margin-left:14px !important}
-  .book-entry-depth-2{margin-left:28px !important}
+  .book-entry-depth-1{margin-left:10px !important}
+  .book-entry-depth-2{margin-left:20px !important}
+  .book-entry-depth-3{margin-left:30px !important}
+  .book-entry-depth-4{margin-left:38px !important}
+  .book-entry-depth-5{margin-left:44px !important}
   .book-entry-head{
     break-after:avoid !important;
     page-break-after:avoid !important;
@@ -4616,7 +4640,7 @@ async function loadNewTagsFromTab(){
 
 // === NEW TAG BINDINGS — connects a new tag to a specific clip with description/segType/relationship/relevancy ===
 // _NewTagBindings tab: Timestamp | Tag Name | Row Index | Description | SegType | Relationship | Relevancy | Action | Set By
-async function appendToNewTagBindingsLog(tagName,rowIdx,desc,segType,rel,relevancy,action,timestamp,user){
+async function appendToNewTagBindingsLog(tagName,rowIdx,desc,segType,rel,relevancy,action,timestamp,user,bindingType){
   const TAB='_NewTagBindings';
   const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
   if(!existing){
@@ -4631,18 +4655,18 @@ async function appendToNewTagBindingsLog(tagName,rowIdx,desc,segType,rel,relevan
       }catch(_){}
       await gapi.client.sheets.spreadsheets.values.update({
         spreadsheetId:S.sheetId,
-        range:`'${TAB}'!A1:I1`,
+        range:`'${TAB}'!A1:J1`,
         valueInputOption:'RAW',
-        resource:{values:[['Timestamp','Tag Name','Row Index','Description','SegType','Relationship','Relevancy','Action','Set By']]}
+        resource:{values:[['Timestamp','Tag Name','Row Index','Description','SegType','Relationship','Relevancy','Action','Set By','Binding Type']]}
       });
     }catch(e){console.warn('Could not create _NewTagBindings tab:',e)}
   }
   try{
     await gapi.client.sheets.spreadsheets.values.append({
       spreadsheetId:S.sheetId,
-      range:`'${TAB}'!A:I`,
+      range:`'${TAB}'!A:J`,
       valueInputOption:'RAW',
-      resource:{values:[[timestamp||new Date().toISOString(),tagName,String(rowIdx),desc||'',segType||'',rel||'',String(relevancy||''),action||'add',user||S.user?.name||S.user?.email||'Unknown']]}
+      resource:{values:[[timestamp||new Date().toISOString(),tagName,String(rowIdx),desc||'',segType||'',rel||'',String(relevancy||''),action||'add',user||S.user?.name||S.user?.email||'Unknown',bindingType||'clip']]}
     });
   }catch(e){console.warn('Could not append to new tag bindings log:',e)}
 }
@@ -4655,7 +4679,7 @@ async function loadNewTagBindingsFromTab(){
   try{
     const r=await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId:S.sheetId,
-      range:`'${TAB}'!A2:I10000`
+      range:`'${TAB}'!A2:J10000`
     });
     const rows=r.result.values||[];
     const sorted=[...rows].sort((a,b)=>(Date.parse(a[0]||'')||0)-(Date.parse(b[0]||'')||0));
@@ -4670,10 +4694,11 @@ async function loadNewTagBindingsFromTab(){
       const relevancy=parseInt(row[6]||'0')||0;
       const action=(row[7]||'add').trim();
       const setBy=(row[8]||'').trim();
+      const bindingType=(row[9]||'clip').trim();
       if(!tagName||rowIdx<0)return;
       const key=tagName+'|'+rowIdx;
       if(action==='remove')delete map[key];
-      else map[key]={tagName,rowIdx,desc,segType,rel,relevancy,addedBy:setBy,ts:row[0]};
+      else map[key]={tagName,rowIdx,desc,segType,rel,relevancy,addedBy:setBy,ts:row[0],bindingType};
     });
     return Object.values(map);
   }catch(e){
@@ -4831,17 +4856,18 @@ async function createNewTag(name,section){
 }
 
 // === ATTACH CLIP TO NEW TAG ===
-async function attachClipToNewTag(tagName,rowIdx,desc,segType,rel,relevancy){
+async function attachClipToNewTag(tagName,rowIdx,desc,segType,rel,relevancy,bindingType){
   if(!desc||!desc.trim())return{ok:false,reason:'Description required'};
   if(!rel)return{ok:false,reason:'Relationship required'};
   if(!relevancy)return{ok:false,reason:'Relevancy required'};
   // Check duplicate binding
   const existing=S.newTagBindings.find(b=>b.tagName===tagName&&b.rowIdx===rowIdx);
   if(existing)return{ok:false,reason:'This clip is already attached to this tag'};
-  const binding={tagName,rowIdx,desc:desc.trim(),segType,rel,relevancy:parseInt(relevancy)||4,addedBy:S.user?.name||S.user?.email||'Unknown',ts:new Date().toISOString()};
+  const bt=bindingType||'clip';
+  const binding={tagName,rowIdx,desc:desc.trim(),segType,rel,relevancy:parseInt(relevancy)||4,addedBy:S.user?.name||S.user?.email||'Unknown',ts:new Date().toISOString(),bindingType:bt};
   S.newTagBindings.push(binding);
-  await appendToNewTagBindingsLog(tagName,rowIdx,desc,segType,rel,relevancy,'add',binding.ts,binding.addedBy);
-  logActivity(`Attached clip ${rowIdx} to new tag "${tagName}"`);
+  await appendToNewTagBindingsLog(tagName,rowIdx,desc,segType,rel,relevancy,'add',binding.ts,binding.addedBy,bt);
+  logActivity(`Attached ${bt} ${rowIdx} to new tag "${tagName}"`);
   return{ok:true};
 }
 
@@ -4855,7 +4881,7 @@ async function hardDeleteNewTag(name){
   // 1) Remove all bindings for this tag
   const bindings=S.newTagBindings.filter(b=>b.tagName===name);
   for(const b of bindings){
-    await appendToNewTagBindingsLog(b.tagName,b.rowIdx,b.desc,b.segType,b.rel,b.relevancy,'remove',ts,user);
+    await appendToNewTagBindingsLog(b.tagName,b.rowIdx,b.desc,b.segType,b.rel,b.relevancy,'remove',ts,user,b.bindingType||'clip');
   }
   S.newTagBindings=S.newTagBindings.filter(b=>b.tagName!==name);
   // 2) Release any children whose parent is this tag — write hierarchy 'remove' rows
@@ -4893,7 +4919,7 @@ async function removeBinding(tagName,rowIdx,isNewTagBinding){
     const existing=S.newTagBindings.find(b=>b.tagName===tagName&&b.rowIdx===rowIdx);
     if(!existing)return{ok:false,reason:'Binding not found'};
     S.newTagBindings=S.newTagBindings.filter(b=>!(b.tagName===tagName&&b.rowIdx===rowIdx));
-    await appendToNewTagBindingsLog(existing.tagName,existing.rowIdx,existing.desc,existing.segType,existing.rel,existing.relevancy,'remove',ts,user);
+    await appendToNewTagBindingsLog(existing.tagName,existing.rowIdx,existing.desc,existing.segType,existing.rel,existing.relevancy,'remove',ts,user,existing.bindingType||'clip');
     logActivity(`Removed new-tag binding: "${tagName}" / clip ${rowIdx}`);
     return{ok:true,hard:true};
   }
@@ -5955,8 +5981,10 @@ function buildIndex(){
       const objIdCol=S.headers.findIndex(h=>h.toLowerCase()==='objectid');
       const pvNameCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_name');
       const pvTypeCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_type');
+      const pvIdCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_id');
       const transCol=S.headers.findIndex(h=>h.toLowerCase()==='transcript');
       const clipType=typeCol>=0?(row[typeCol]||''):'';
+      const isFullFilm=(b.bindingType==='film')||(clipType==='Film');
       const result={
         rowIdx:b.rowIdx,
         segType:b.segType,
@@ -5970,8 +5998,10 @@ function buildIndex(){
         objId:objIdCol>=0?(row[objIdCol]||''):'',
         pvName:pvNameCol>=0?(row[pvNameCol]||''):'',
         pvType:pvTypeCol>=0?(row[pvTypeCol]||''):'',
+        pvId:pvIdCol>=0?(row[pvIdCol]||''):'',
         transcript:transCol>=0?(row[transCol]||''):'',
         isNewBinding:true,
+        isFullFilm,
       };
       tagEntry.results.push(result);
     });
@@ -6502,7 +6532,7 @@ async function generateIndexTab(sectionName){
       if(entry.isDeleted)return;
       // Determine which column to put the entry name in based on hierarchy depth
       var depth=entry.depth||0;
-      var nameCol=depth>=2?2:(depth===1?1:0); // 0=A, 1=B, 2=C; cap at 2 (3-level max)
+      var nameCol=Math.min(depth,5); // 0=A, 1=B, 2=C, 3=D, 4=E, 5=F — cap at 5 (6-level max)
       // === Alias stub entry: single row, just shows "See: target" ===
       if(entry.isAlias){
         // Skip alias if its target is deleted
@@ -6790,6 +6820,10 @@ function sectionForEntry(entryName){
 
 // Build clip link from a result object (same logic as generateIndexTab)
 function clipLinkForResult(r){
+  // Full film: link to ?produced=<pvId>
+  if(r.isFullFilm && r.pvId){
+    return 'https://videos.jem.tv/video-player?produced='+r.pvId;
+  }
   const cid=r.clipId||(r.objId?(r.objId.replace('video_clip-','')):'');
   return cid?('https://videos.jem.tv/video-player?clip='+cid):'';
 }
@@ -6817,6 +6851,10 @@ function refCodeForResult(r){
 function filmRefForResult(r){
   const rawTitle=r.pvName||r.clipName||'';
   if(!rawTitle)return '';
+  // FULL FILM binding: just the film name (no chapter suffix)
+  if(r.isFullFilm){
+    return r.clipName||rawTitle;
+  }
   // Extract main film name (strip Vol/chapter suffix)
   const mainTitle=rawTitle.split(/[·:|\-–—]|Vol\.?|Chapter|Ch\.?/i)[0].trim();
   // Check for user override
@@ -8047,7 +8085,7 @@ async function downloadBookAsDocx(){
         firstSection=false;
         paragraphs.push(para);
       }else if(item.type==='entry'){
-        const styleId=item.depth===2?'SubSubtagName':(item.depth===1?'SubtagName':'TagName');
+        const styleId=item.depth>=2?'SubSubtagName':(item.depth===1?'SubtagName':'TagName');
         paragraphs.push(new Paragraph({style:styleId,text:item.text}));
       }else if(item.type==='alias'){
         paragraphs.push(new Paragraph({
@@ -8180,7 +8218,7 @@ function downloadBookAsICML(){
           writePara('SectionHeader',item.text);
         }
       }else if(item.type==='entry'){
-        const styleName=item.depth===2?'SubSubtagName':(item.depth===1?'SubtagName':'TagName');
+        const styleName=item.depth>=2?'SubSubtagName':(item.depth===1?'SubtagName':'TagName');
         writePara(styleName,item.text);
       }else if(item.type==='alias'){
         // Compose: "Name. See Target" — Name bold, "See" italic, Target bold
@@ -8277,7 +8315,7 @@ function rBook(){
         if(!targetDisplay)return; // alias with no target — skip
         // Skip if target is deleted
         if(S.deletedEntries && S.deletedEntries.has(targetDisplay))return;
-        const depthClsA=e.depth?` book-entry-depth-${Math.min(e.depth,2)}`:'';
+        const depthClsA=e.depth?` book-entry-depth-${Math.min(e.depth,5)}`:'';
         h+=`<div class="book-entry book-entry-alias${depthClsA}">`;
         h+=`<div class="book-entry-head"><span class="book-entry-name">${esc(e.name)}</span></div>`;
         h+=`<div class="book-seg"><div class="book-row" style="font-style:italic;color:var(--tx-3)">See <a href="#" data-bookjumpalias="${esc(targetDisplay)}" style="color:var(--blue);font-style:normal;font-weight:600">${esc(targetDisplay)}</a></div></div>`;
@@ -8285,7 +8323,7 @@ function rBook(){
         return;
       }
 
-      const depthCls=e.depth?` book-entry-depth-${Math.min(e.depth,2)}`:'';
+      const depthCls=e.depth?` book-entry-depth-${Math.min(e.depth,5)}`:'';
       h+=`<div class="book-entry${depthCls}">`;
       h+=`<div class="book-entry-head"><span class="book-entry-name">${esc(e.name)}</span><button class="book-entry-edit" data-bookedit="${esc(e.name)}" title="Edit in workstation">✎</button></div>`;
 
@@ -8671,62 +8709,117 @@ function rNewTagModal(){
 function rClipSearchModal(){
   const m=S.clipSearchModal;
   if(!m)return '';
-  let h=`<div class="modal-backdrop" id="clipsearch-modal-backdrop"><div class="modal-box" style="max-width:720px">`;
-  h+=`<div class="modal-hd"><h3>Attach a clip to "${esc(m.newTagName)}"</h3><button class="btn btn-sm" data-clipsearch-cancel="1">×</button></div>`;
+  let h=`<div class="modal-backdrop" id="clipsearch-modal-backdrop"><div class="modal-box" style="max-width:860px">`;
+  h+=`<div class="modal-hd"><h3>Attach to "${esc(m.newTagName)}"</h3><button class="btn btn-sm" data-clipsearch-cancel="1">×</button></div>`;
   h+=`<div class="modal-body">`;
   if(!m.selectedRowIdx){
-    // Search phase: user types a query, we search clip names and program numbers
-    h+=`<p style="margin-top:0;color:var(--tx-3);font-size:12px">Find a clip by title or program number.</p>`;
-    h+=`<input id="clipsearch-query" type="text" placeholder="Search clip title or program number…" value="${esc(m.query||'')}" autocomplete="off" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;margin-bottom:10px">`;
-    // Compute results
+    // Search phase: two side-by-side searches — Clips/Chapters and Full Films
+    h+=`<p style="margin-top:0;color:var(--tx-3);font-size:12px">Search for a clip/chapter OR a full produced film. Pick a result to continue.</p>`;
+    h+=`<div style="display:flex;gap:12px">`;
+
+    // === LEFT: Clips/Chapters search ===
+    h+=`<div style="flex:1;min-width:0">`;
+    h+=`<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;color:var(--tx-3);margin-bottom:4px">Clips / Film Chapters</div>`;
+    h+=`<input id="clipsearch-query" type="text" placeholder="Search clip title or program #…" value="${esc(m.query||'')}" autocomplete="off" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;margin-bottom:8px;box-sizing:border-box">`;
     const q=(m.query||'').trim().toLowerCase();
     if(q&&q.length>=2){
-      const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
-      const progCol=S.headers.findIndex(h=>h.toLowerCase()==='program_number');
-      const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
-      const pvNameCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_name');
+      const nameCol=S.headers.findIndex(hd=>hd.toLowerCase()==='name');
+      const progCol=S.headers.findIndex(hd=>hd.toLowerCase()==='program_number');
+      const typeCol=S.headers.findIndex(hd=>hd.toLowerCase()==='type');
+      const pvNameCol=S.headers.findIndex(hd=>hd.toLowerCase()==='produced_video_name');
       const results=[];
       for(let i=0;i<S.rows.length&&results.length<30;i++){
         const r=S.rows[i];
+        const t=(r[typeCol]||'');
+        if(t==='Film')continue; // exclude full films from this list
         const name=(r[nameCol]||'').toLowerCase();
         const prog=String(r[progCol]||'').toLowerCase();
         const pvName=(r[pvNameCol]||'').toLowerCase();
         if(name.includes(q)||prog.includes(q)||pvName.includes(q)){
-          results.push({rowIdx:i,name:r[nameCol]||'',prog:r[progCol]||'',type:r[typeCol]||'',pvName:r[pvNameCol]||''});
+          results.push({rowIdx:i,name:r[nameCol]||'',prog:r[progCol]||'',type:t,pvName:r[pvNameCol]||''});
         }
       }
       if(!results.length){
-        h+=`<div style="padding:20px;text-align:center;color:var(--tx-3);font-size:12px">No matches found.</div>`;
+        h+=`<div style="padding:14px;text-align:center;color:var(--tx-3);font-size:11px;border:1px dashed var(--line);border-radius:4px">No matches</div>`;
       }else{
-        h+=`<div style="max-height:400px;overflow-y:auto;border:1px solid var(--line);border-radius:4px">`;
+        h+=`<div style="max-height:360px;overflow-y:auto;border:1px solid var(--line);border-radius:4px">`;
         results.forEach(r=>{
-          h+=`<div data-clip-pick="${r.rowIdx}" style="padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12px" onmouseover="this.style.background='#f5f0e0'" onmouseout="this.style.background=''">`;
-          h+=`<div><b>${esc(r.name)}</b> <span style="color:var(--tx-4);font-size:10px">${esc(r.type)}${r.prog?' · #'+esc(r.prog):''}</span></div>`;
-          if(r.pvName)h+=`<div style="color:var(--tx-4);font-size:10px;margin-top:2px">from: ${esc(r.pvName)}</div>`;
+          h+=`<div data-clip-pick="${r.rowIdx}" style="padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:11px" onmouseover="this.style.background='#f5f0e0'" onmouseout="this.style.background=''">`;
+          h+=`<div><b>${esc(r.name)}</b> <span style="color:var(--tx-4);font-size:9px">${esc(r.type)}${r.prog?' · #'+esc(r.prog):''}</span></div>`;
+          if(r.pvName)h+=`<div style="color:var(--tx-4);font-size:9px;margin-top:2px">from: ${esc(r.pvName)}</div>`;
           h+=`</div>`;
         });
         h+=`</div>`;
       }
     }else{
-      h+=`<div style="padding:20px;text-align:center;color:var(--tx-4);font-size:11px">Type at least 2 characters to search.</div>`;
+      h+=`<div style="padding:14px;text-align:center;color:var(--tx-4);font-size:10px;border:1px dashed var(--line);border-radius:4px">Type 2+ chars</div>`;
     }
+    h+=`</div>`;
+
+    // === RIGHT: Full Films search ===
+    h+=`<div style="flex:1;min-width:0">`;
+    h+=`<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;color:#3a8a3a;margin-bottom:4px">Full Films</div>`;
+    h+=`<input id="filmsearch-query" type="text" placeholder="Search film name…" value="${esc(m.filmQuery||'')}" autocomplete="off" style="width:100%;padding:6px 10px;border:1px solid #3a8a3a;border-radius:4px;font-size:13px;margin-bottom:8px;box-sizing:border-box">`;
+    const fq=(m.filmQuery||'').trim().toLowerCase();
+    if(fq&&fq.length>=2){
+      const nameCol=S.headers.findIndex(hd=>hd.toLowerCase()==='name');
+      const typeCol=S.headers.findIndex(hd=>hd.toLowerCase()==='type');
+      const pvIdCol=S.headers.findIndex(hd=>hd.toLowerCase()==='produced_video_id');
+      const pvNameCol=S.headers.findIndex(hd=>hd.toLowerCase()==='produced_video_name');
+      const results=[];
+      for(let i=0;i<S.rows.length&&results.length<30;i++){
+        const r=S.rows[i];
+        const t=(r[typeCol]||'');
+        if(t!=='Film')continue; // ONLY full-film rows
+        const name=(r[nameCol]||'').toLowerCase();
+        const pvName=(r[pvNameCol]||'').toLowerCase();
+        if(name.includes(fq)||pvName.includes(fq)){
+          results.push({rowIdx:i,name:r[nameCol]||'',pvId:r[pvIdCol]||'',pvName:r[pvNameCol]||''});
+        }
+      }
+      if(!results.length){
+        h+=`<div style="padding:14px;text-align:center;color:var(--tx-3);font-size:11px;border:1px dashed var(--line);border-radius:4px">No matches</div>`;
+      }else{
+        h+=`<div style="max-height:360px;overflow-y:auto;border:1px solid var(--line);border-radius:4px">`;
+        results.forEach(r=>{
+          h+=`<div data-film-pick="${r.rowIdx}" style="padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:11px" onmouseover="this.style.background='#e8f4e8'" onmouseout="this.style.background=''">`;
+          h+=`<div><b>${esc(r.name)}</b> <span style="color:white;background:#3a8a3a;font-size:8px;padding:1px 5px;border-radius:6px;font-weight:600;margin-left:4px">FILM</span></div>`;
+          if(r.pvId)h+=`<div style="color:var(--tx-4);font-size:9px;margin-top:2px">produced #${esc(r.pvId)}</div>`;
+          h+=`</div>`;
+        });
+        h+=`</div>`;
+      }
+    }else{
+      h+=`<div style="padding:14px;text-align:center;color:var(--tx-4);font-size:10px;border:1px dashed var(--line);border-radius:4px">Type 2+ chars</div>`;
+    }
+    h+=`</div>`;
+
+    h+=`</div>`; // close flex row
   }else{
-    // Detail phase: user picked a clip, now fill in description/segType/rel/relevancy
+    // Detail phase: user picked a clip OR film, now fill in description/relationship/relevancy
     const r=S.rows[m.selectedRowIdx];
     if(!r){h+='<div>Row not found.</div>';h+='</div></div></div>';return h}
-    const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
-    const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
-    const progCol=S.headers.findIndex(h=>h.toLowerCase()==='program_number');
+    const nameCol=S.headers.findIndex(hd=>hd.toLowerCase()==='name');
+    const typeCol=S.headers.findIndex(hd=>hd.toLowerCase()==='type');
+    const progCol=S.headers.findIndex(hd=>hd.toLowerCase()==='program_number');
+    const pvIdCol=S.headers.findIndex(hd=>hd.toLowerCase()==='produced_video_id');
     const clipName=r[nameCol]||'';
     const clipType=r[typeCol]||'';
     const prog=r[progCol]||'';
+    const pvId=r[pvIdCol]||'';
     const segType=RULES.typeMap[clipType]||clipType||'Other';
-    h+=`<div style="margin-bottom:10px;padding:8px;background:#f5f5f0;border-radius:4px;font-size:12px">`;
-    h+=`<div><b>${esc(clipName)}</b></div>`;
-    h+=`<div style="color:var(--tx-3);font-size:11px;margin-top:3px">Type: ${esc(clipType)} → SegType: <b>${esc(segType)}</b>${prog?' · Program #'+esc(prog):''}</div>`;
+    const isFilm=clipType==='Film';
+    const bgColor=isFilm?'#e8f4e8':'#f5f5f0';
+    h+=`<div style="margin-bottom:10px;padding:8px;background:${bgColor};border-radius:4px;font-size:12px">`;
+    h+=`<div><b>${esc(clipName)}</b>`;
+    if(isFilm){
+      h+=` <span style="color:white;background:#3a8a3a;font-size:9px;padding:1px 6px;border-radius:8px;font-weight:600;margin-left:4px">FULL FILM</span>`;
+    }
+    h+=`</div>`;
+    h+=`<div style="color:var(--tx-3);font-size:11px;margin-top:3px">Type: ${esc(clipType)} → SegType: <b>${esc(segType)}</b>${prog?' · Program #'+esc(prog):''}${isFilm&&pvId?' · produced #'+esc(pvId):''}</div>`;
     h+=`</div>`;
     h+=`<div style="margin-bottom:10px"><label style="display:block;font-size:12px;color:var(--tx-3);margin-bottom:3px">Description (required)</label>`;
-    h+=`<textarea id="clipsearch-desc" placeholder="Describe how this clip relates to the tag…" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;min-height:60px;font-family:var(--font);resize:vertical">${esc(m.desc||'')}</textarea></div>`;
+    h+=`<textarea id="clipsearch-desc" placeholder="${isFilm?'Describe how this film relates to the tag…':'Describe how this clip relates to the tag…'}" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;min-height:60px;font-family:var(--font);resize:vertical">${esc(m.desc||'')}</textarea></div>`;
     // Relationship dropdown — common options
     h+=`<div style="margin-bottom:10px"><label style="display:block;font-size:12px;color:var(--tx-3);margin-bottom:3px">Relationship (required) <span style="color:#c00">*</span></label>`;
     h+=`<select id="clipsearch-rel" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px">`;
@@ -8990,7 +9083,7 @@ function rIndex(){
       const manualOrder=S.tagOrder?.[orderGroupKey]?.[e.name];
       const hasManualOrder=manualOrder!==undefined;
       const hasChildren=e.children&&e.children.length>0;
-      const depthClass=e.depth?`depth-${Math.min(e.depth,2)}`:'';
+      const depthClass=e.depth?`depth-${Math.min(e.depth,5)}`:'';
       const deletedCls=e.isDeleted?' is-deleted':'';
       eh+=`<div class="idx-entry ${tooMany?'flagged':''} ${isBM?'bookmarked':''} ${depthClass} ${hasChildren?'has-children':''}${deletedCls}" data-entry-name="${esc(e.name)}" data-entry-section="${esc(e.section||'')}" data-entry-parent="${esc(e.parent||'')}" draggable="true">`;
       eh+=`<div class="idx-entry-name" data-entry="${esc(e.name)}">`;
@@ -9138,7 +9231,7 @@ function rIndex(){
         }
         // For new-tag entries: always offer attach
         if(!e.isDeleted && !e.isAlias){
-          eh+=` <button data-attach-clip="${esc(e.name)}" title="Attach a clip to this tag" style="background:none;border:1px dashed #3a8a3a;border-radius:10px;cursor:pointer;color:#3a8a3a;font-size:10px;padding:1px 8px;margin-left:4px">+ Attach clip</button>`;
+          eh+=` <button data-attach-clip="${esc(e.name)}" title="Attach a clip or full film to this tag" style="background:none;border:1px dashed #3a8a3a;border-radius:10px;cursor:pointer;color:#3a8a3a;font-size:10px;padding:1px 8px;margin-left:4px">+ Attach</button>`;
         }
         eh+=`</div>`;
       }else{
@@ -9151,7 +9244,7 @@ function rIndex(){
         }
         // For new-tag entries: button to attach more clips
         if(!e.isDeleted && !e.isAlias){
-          eh+=` <button data-attach-clip="${esc(e.name)}" title="Attach a clip to this tag" style="background:none;border:1px dashed #3a8a3a;border-radius:10px;cursor:pointer;color:#3a8a3a;font-size:10px;padding:1px 8px">+ Attach clip</button>`;
+          eh+=` <button data-attach-clip="${esc(e.name)}" title="Attach a clip or full film to this tag" style="background:none;border:1px dashed #3a8a3a;border-radius:10px;cursor:pointer;color:#3a8a3a;font-size:10px;padding:1px 8px">+ Attach</button>`;
         }
         eh+=`</div>`;
       }
@@ -10787,7 +10880,7 @@ function bindAll(){
   $$('[data-attach-clip]').forEach(el=>el.onclick=ev=>{
     ev.preventDefault();ev.stopPropagation();
     const tagName=el.dataset.attachClip;
-    S.clipSearchModal={newTagName:tagName,query:'',selectedRowIdx:null,desc:'',rel:'',relevancy:''};
+    S.clipSearchModal={newTagName:tagName,query:'',filmQuery:'',selectedRowIdx:null,pickedAsFilm:false,desc:'',rel:'',relevancy:''};
     render();
     setTimeout(()=>{const i=$('#clipsearch-query');if(i)i.focus()},50);
   });
@@ -10803,11 +10896,28 @@ function bindAll(){
       setTimeout(()=>{const i=$('#clipsearch-query');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},10);
     }
   });
-  // Click a search result row → pick it
+  // Film search input — separate query, only searches type=Film rows
+  on('#filmsearch-query','input',()=>{
+    if(S.clipSearchModal){
+      S.clipSearchModal.filmQuery=$('#filmsearch-query').value;
+      render();
+      setTimeout(()=>{const i=$('#filmsearch-query');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},10);
+    }
+  });
+  // Click a clip search result → pick it
   $$('[data-clip-pick]').forEach(el=>el.onclick=ev=>{
     ev.preventDefault();ev.stopPropagation();
     if(!S.clipSearchModal)return;
     S.clipSearchModal.selectedRowIdx=parseInt(el.dataset.clipPick);
+    S.clipSearchModal.pickedAsFilm=false;
+    render();
+  });
+  // Click a film search result → pick it (marks as full-film binding)
+  $$('[data-film-pick]').forEach(el=>el.onclick=ev=>{
+    ev.preventDefault();ev.stopPropagation();
+    if(!S.clipSearchModal)return;
+    S.clipSearchModal.selectedRowIdx=parseInt(el.dataset.filmPick);
+    S.clipSearchModal.pickedAsFilm=true;
     render();
   });
   // Back to search
@@ -10815,6 +10925,7 @@ function bindAll(){
     ev.preventDefault();ev.stopPropagation();
     if(!S.clipSearchModal)return;
     S.clipSearchModal.selectedRowIdx=null;
+    S.clipSearchModal.pickedAsFilm=false;
     render();
   });
   // Track input changes in detail form
@@ -10834,7 +10945,8 @@ function bindAll(){
     const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
     const clipType=typeCol>=0?(r[typeCol]||''):'';
     const segType=RULES.typeMap[clipType]||clipType||'Other';
-    const res=await attachClipToNewTag(m.newTagName,m.selectedRowIdx,desc,segType,rel,relevancy);
+    const bindingType=(m.pickedAsFilm||clipType==='Film')?'film':'clip';
+    const res=await attachClipToNewTag(m.newTagName,m.selectedRowIdx,desc,segType,rel,relevancy,bindingType);
     if(!res.ok){toast(res.reason,'error');return}
     S.clipSearchModal=null;
     toast(`Attached clip to "${m.newTagName}"`,'success');
