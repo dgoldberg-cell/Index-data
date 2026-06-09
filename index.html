@@ -6610,7 +6610,12 @@ async function generateIndexTab(sectionName){
           if(r.clipType==='Film Chapter'){
             row[8]=members.map(function(m){return m.clipName||''}).filter(function(s){return s}).join(', ');
           }
-          row[9]=(r.relevancy||'').toString();
+          // J: Relevancy — for grouped clips, list each member's relevancy in same order as refs
+          if(members.length>1){
+            row[9]=members.map(function(m){return (m.relevancy||'').toString()}).join(', ');
+          }else{
+            row[9]=(r.relevancy||'').toString();
+          }
           // K: Review Status — for groups, only "Reviewed" if ALL members are reviewed
           if(members.length>1){
             var allReviewed=members.every(function(m){
@@ -6627,9 +6632,8 @@ async function generateIndexTab(sectionName){
             row[10]='';
             row[11]='';
           }
-          // N: Clip link — first member only
-          var cid=r.clipId||(r.objId?(r.objId.replace('video_clip-','')):'');
-          row[13]=cid?('https://videos.jem.tv/video-player?clip='+cid):'';
+          // N: Clip link — uses clipLinkForResult so full films get ?produced=X
+          row[13]=clipLinkForResult(r);
           // O: Clip title — join across members
           row[14]=members.map(function(m){return m.clipName||''}).filter(function(s){return s}).join(' | ');
           row[15]=(r.transcript||'').substring(0,500);
@@ -6820,11 +6824,20 @@ function sectionForEntry(entryName){
 
 // Build clip link from a result object (same logic as generateIndexTab)
 function clipLinkForResult(r){
-  // Full film: link to ?produced=<pvId>
-  if(r.isFullFilm && r.pvId){
-    return 'https://videos.jem.tv/video-player?produced='+r.pvId;
+  // Full film detection: explicit isFullFilm flag, OR clipType is 'Film', OR objectId starts with 'produced_video-'
+  const objIdStr=r.objId||'';
+  const isFilm=r.isFullFilm||r.clipType==='Film'||objIdStr.indexOf('produced_video-')===0;
+  if(isFilm){
+    // Prefer explicit pvId, fall back to extracting from objectId like 'produced_video-696'
+    let producedId=r.pvId;
+    if(!producedId&&objIdStr.indexOf('produced_video-')===0){
+      producedId=objIdStr.substring('produced_video-'.length);
+    }
+    if(producedId){
+      return 'https://videos.jem.tv/video-player?produced='+producedId;
+    }
   }
-  const cid=r.clipId||(r.objId?(r.objId.replace('video_clip-','')):'');
+  const cid=r.clipId||(objIdStr?objIdStr.replace('video_clip-',''):'');
   return cid?('https://videos.jem.tv/video-player?clip='+cid):'';
 }
 
@@ -7533,9 +7546,7 @@ function render(force=true){
     const entry=findEntry(cp.entryName);
     const r=entry?.results.find(x=>x.segType===cp.segType&&x.rowIdx===cp.rowIdx);
     if(r){
-      let vidUrl='';
-      const cleanId=(r.objId||r.clipId||'').toString().replace(/^video_clip-/,'');
-      if(cleanId)vidUrl=`https://videos.jem.tv/video-player?clip=${cleanId}`;
+      let vidUrl=clipLinkForResult(r);
       const k=rvKey(cp.entryName,cp.segType,cp.rowIdx);
       const rv=getRV(k);
       // Initialize chat state on this panel if missing
@@ -7574,8 +7585,9 @@ function render(force=true){
       }else{
         h+=`<div class="clip-panel-img">No image available</div>`;
       }
-      // Title under image
-      h+=`<div style="margin-top:10px"><strong style="font-size:15px">${esc(r.pvName||r.clipName||'Untitled')}</strong>${r.progNum?` <span style="color:var(--tx-3);font-weight:400;font-size:13px">· #${esc(r.progNum)}</span>`:''}</div>`;
+      // Title under image — clip/chapter uses its own title; full film uses the film name
+      const panelTitle=r.isFullFilm?(r.pvName||r.clipName||'Untitled'):(r.clipName||r.pvName||'Untitled');
+      h+=`<div style="margin-top:10px"><strong style="font-size:15px">${esc(panelTitle)}</strong>${r.progNum?` <span style="color:var(--tx-3);font-weight:400;font-size:13px">· #${esc(r.progNum)}</span>`:''}</div>`;
       if(vidUrl)h+=`<a href="${vidUrl}" target="_blank" class="btn btn-sm" style="text-decoration:none;display:inline-block;margin-top:8px">▶ Watch on JEM.tv</a>`;
       h+=`</div>`;
       // Summary section
@@ -9281,7 +9293,7 @@ function rIndex(){
         eh+=`<div class="idx-seg"><div class="idx-seg-label">${seg}</div>`;
         byseg[seg].forEach((r,ri)=>{
           const descEmpty=!r.desc?.trim();
-          const vidUrl=r.clipId?`https://videos.jem.tv/video-player?clip=${r.clipId}`:(r.objId?`https://videos.jem.tv/video-player?clip=${r.objId.replace('video_clip-','')}`:'');
+          const vidUrl=clipLinkForResult(r);
           const k=rvKey(e.name,r.segType,r.rowIdx);
           const rv=getRV(k);
           const isReviewed=rv&&rv.reviewed;
@@ -10888,27 +10900,54 @@ function bindAll(){
     ev.preventDefault();ev.stopPropagation();
     S.clipSearchModal=null;render();
   });
-  // Debounced search input — only re-render after typing pauses, prevents key-dropping/focus-jumping
-  function debouncedSearchUpdate(field,inputId){
-    if(!S._searchDebounce)S._searchDebounce={};
-    if(S._searchDebounce[field])clearTimeout(S._searchDebounce[field]);
-    S._searchDebounce[field]=setTimeout(()=>{
-      if(!S.clipSearchModal)return;
-      const i=$(inputId);
-      if(!i)return;
-      const val=i.value;
-      const caretPos=i.selectionStart;
-      S.clipSearchModal[field]=val;
+  // Modal search inputs — use SAME pattern as the main idx-search:
+  // Long debounce (1.5s) + read live value at re-render time + requestAnimationFrame to restore caret.
+  // This avoids dropped keystrokes and focus-jumping that happen with shorter debounce on re-render.
+  if(!S._modalSearchTimers)S._modalSearchTimers={};
+  function setupModalSearchInput(inputId,field){
+    const el=document.querySelector(inputId);
+    if(!el)return;
+    let _lastVal=S.clipSearchModal?.[field]||'';
+    const doUpdate=()=>{
+      const cur=document.querySelector(inputId);
+      if(!cur||!S.clipSearchModal)return;
+      const v=cur.value;
+      const p=cur.selectionStart??v.length;
+      if(v===_lastVal)return;
+      _lastVal=v;
+      S.clipSearchModal[field]=v;
       render();
-      // Restore focus + caret position after re-render
-      setTimeout(()=>{
-        const i2=$(inputId);
-        if(i2){i2.focus();try{i2.setSelectionRange(caretPos,caretPos)}catch(_){}}
-      },10);
-    },220);
+      requestAnimationFrame(()=>{
+        const fresh=document.querySelector(inputId);
+        if(fresh){
+          fresh.value=v;
+          fresh.focus();
+          try{fresh.selectionStart=fresh.selectionEnd=p}catch(_){}
+        }
+      });
+    };
+    el.addEventListener('input',()=>{
+      if(S._modalSearchTimers[field])clearTimeout(S._modalSearchTimers[field]);
+      S._modalSearchTimers[field]=setTimeout(doUpdate,1500);
+    });
+    el.addEventListener('change',()=>{
+      if(S._modalSearchTimers[field])clearTimeout(S._modalSearchTimers[field]);
+      doUpdate();
+    });
+    el.addEventListener('keydown',(ev)=>{
+      if(ev.key==='Enter'){
+        ev.preventDefault();
+        if(S._modalSearchTimers[field])clearTimeout(S._modalSearchTimers[field]);
+        doUpdate();
+      }
+    });
+    el.addEventListener('blur',()=>{
+      if(S._modalSearchTimers[field])clearTimeout(S._modalSearchTimers[field]);
+      doUpdate();
+    });
   }
-  on('#clipsearch-query','input',()=>debouncedSearchUpdate('query','#clipsearch-query'));
-  on('#filmsearch-query','input',()=>debouncedSearchUpdate('filmQuery','#filmsearch-query'));
+  setupModalSearchInput('#clipsearch-query','query');
+  setupModalSearchInput('#filmsearch-query','filmQuery');
   // Click a clip search result → pick it
   $$('[data-clip-pick]').forEach(el=>el.onclick=ev=>{
     ev.preventDefault();ev.stopPropagation();
