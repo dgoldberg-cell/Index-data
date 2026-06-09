@@ -6517,9 +6517,12 @@ async function generateIndexTab(sectionName){
       if(pref===undefined)pref=r.clipType||''; // unknown type → use the clipType verbatim
       return pref+r.progNum;
     }
-    // Column layout: A=Entry, B=Subtag, C=Sub-subtag, D=Segment, E=Original Desc, F=Description, G=Relationship, H=Reference, I=Chapter, J=Relevancy, K=Review, L=AI Suggestion, M=spacer, N=Clip Link, O=Clip Title, P=Transcript, Q=spacer, R=Notes, S=Bookmarked, T=Original Tag Name, U=See Also
-    var EC=21; // total columns (3 entry-depth cols replace 1; Parent removed)
-    var headers=['Entry','Subtag','Sub-subtag','Segment Type','Original Description','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked','Original Tag Name','See Also'];
+    // Column layout: A=Entry, B=Sub1, C=Sub2, D=Sub3, E=Sub4, F=Sub5 (6 name cols),
+    // G=Segment, H=Original Desc, I=Description, J=Relationship, K=Reference, L=Chapter Name,
+    // M=Relevancy, N=Review, O=AI Suggestion, P=spacer, Q=Clip Link, R=Clip Title, S=Transcript,
+    // T=spacer, U=Notes, V=Bookmarked, W=Original Tag Name, X=See Also
+    var EC=24; // total columns (6 name cols + 18 data cols)
+    var headers=['Entry','Sub1','Sub2','Sub3','Sub4','Sub5','Segment Type','Original Description','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked','Original Tag Name','See Also'];
     
     // Step 2: Build rows in indented format
     const dataRows=[headers];
@@ -6575,9 +6578,10 @@ async function generateIndexTab(sectionName){
     }
     function entryColumn(e){
       var root=entryRoot[e.name];
-      if(!root)return Math.min(e.depth||0,5);
+      if(!root)return Math.min(e.depth||0,5); // cap at 5 (A=0..F=5)
       var rootMax=rootMaxDepthFromRoot[root]||0;
       var depthFromRoot=entryDepthFromRoot[e.name]||0;
+      // Right-aligned: rightmost name column is F (index 5)
       var col=5-(rootMax-depthFromRoot);
       if(col<0)col=0;
       if(col>5)col=5;
@@ -6596,8 +6600,8 @@ async function generateIndexTab(sectionName){
         if(entry.aliasTargetResolved && S.deletedEntries && S.deletedEntries.has(entry.aliasTargetResolved))return;
         var aliasRow=[];for(var z=0;z<EC;z++)aliasRow.push('');
         aliasRow[nameCol]=entry.name||'';
-        aliasRow[5]='See: '+entry.aliasTargetResolved; // Description column (F=index 5)
-        aliasRow[10]='Alias'; // Review Status column (K=index 10)
+        aliasRow[8]='See: '+entry.aliasTargetResolved; // Description column (I=index 8)
+        aliasRow[13]='Alias'; // Review Status column (N=index 13)
         dataRows.push(aliasRow);
         return;
       }
@@ -6608,13 +6612,13 @@ async function generateIndexTab(sectionName){
         var col=entryColumn(anc);
         entryRow[col]=anc.name||'';
       });
-      // T (col 19): Original Tag Name — populated if entry was renamed
+      // W (col 22): Original Tag Name — populated if entry was renamed
       if(entry.originalNames&&entry.originalNames.size){
-        entryRow[19]=Array.from(entry.originalNames).join('; ');
+        entryRow[22]=Array.from(entry.originalNames).join('; ');
       }else if(entry.originalName&&entry.originalName!==entry.name){
-        entryRow[19]=entry.originalName;
+        entryRow[22]=entry.originalName;
       }
-      // U (col 20): See Also — list tag refs (resolved current names) and free-text refs
+      // X (col 23): See Also — list tag refs (resolved current names) and free-text refs
       // Skip tag references whose target is soft-deleted
       var seeAlsoList=S.seeAlsoRefs?.[entry.name]||[];
       if(seeAlsoList.length){
@@ -6626,7 +6630,7 @@ async function generateIndexTab(sectionName){
           return true;
         });
         if(visibleRefs.length){
-          entryRow[20]=visibleRefs.map(function(s){
+          entryRow[23]=visibleRefs.map(function(s){
             if(s.type==='tag')return resolveTagName(s.target);
             return '"'+s.target+'"';
           }).join('; ');
@@ -6645,7 +6649,7 @@ async function generateIndexTab(sectionName){
         if(!bySeg[seg])return;
         
         var segRow=[];for(var z=0;z<EC;z++)segRow.push('');
-        segRow[3]=seg; // D: Segment Type (index 3)
+        segRow[6]=seg; // G: Segment Type (index 6)
         dataRows.push(segRow);
         
         bySeg[seg].sort(function(a,b){return(a.desc||'').localeCompare(b.desc||'')});
@@ -6659,46 +6663,46 @@ async function generateIndexTab(sectionName){
           var row=[];for(var z=0;z<EC;z++)row.push('');
           var rvk=rvKey(entry.name,seg,r.rowIdx);
           var rvd=getRV(rvk);
-          row[4]=(rvd&&rvd.originalDesc)?rvd.originalDesc:'';
-          row[5]=r.desc||'';
+          row[7]=(rvd&&rvd.originalDesc)?rvd.originalDesc:'';   // H: Original Description
+          row[8]=r.desc||'';                                     // I: Description
           var defRel=relDefaults[seg]||'spoken_about';
           if(r.rel&&r.rel!==defRel){
-            if(sectionName==='Nigunim'){if(r.rel==='spoken_about')row[6]=r.rel}
-            else row[6]=r.rel;
+            if(sectionName==='Nigunim'){if(r.rel==='spoken_about')row[9]=r.rel}
+            else row[9]=r.rel;                                   // J: Relationship
           }
-          // H: Reference — join refs across all members (films keep their format individually)
-          row[7]=members.map(function(m){return refForClip(m)}).filter(function(s){return s}).join(', ');
-          // I: Chapter — only for Film Chapters; join across members
+          // K: Reference — join refs across all members (films keep their format individually)
+          row[10]=members.map(function(m){return refForClip(m)}).filter(function(s){return s}).join(', ');
+          // L: Chapter — only for Film Chapters; join across members
           if(r.clipType==='Film Chapter'){
-            row[8]=members.map(function(m){return m.clipName||''}).filter(function(s){return s}).join(', ');
+            row[11]=members.map(function(m){return m.clipName||''}).filter(function(s){return s}).join(', ');
           }
-          // J: Relevancy — for grouped clips, list each member's relevancy in same order as refs
+          // M: Relevancy — for grouped clips, list each member's relevancy in same order as refs
           if(members.length>1){
-            row[9]=members.map(function(m){return (m.relevancy||'').toString()}).join(', ');
+            row[12]=members.map(function(m){return (m.relevancy||'').toString()}).join(', ');
           }else{
-            row[9]=(r.relevancy||'').toString();
+            row[12]=(r.relevancy||'').toString();
           }
-          // K: Review Status — for groups, only "Reviewed" if ALL members are reviewed
+          // N: Review Status — for groups, only "Reviewed" if ALL members are reviewed
           if(members.length>1){
             var allReviewed=members.every(function(m){
               var rv2=getRV(rvKey(entry.name,seg,m.rowIdx));
               return rv2 && rv2.reviewed;
             });
-            row[10]=allReviewed ? '✓ Reviewed' : '';
-            row[11]='';
+            row[13]=allReviewed ? '✓ Reviewed' : '';
+            row[14]='';                                          // O: AI Suggestion
           }else if(rvd){
             var statusLabels={pending:'⏳ Pending',accepted:'✅ Accepted',denied:'❌ Denied',custom:'✏️ Custom',ok:'✓ OK'};
-            row[10]=statusLabels[rvd.status]||(rvd.reviewed?'✓ Reviewed':'');
-            row[11]=rvd.suggestion||'';
+            row[13]=statusLabels[rvd.status]||(rvd.reviewed?'✓ Reviewed':'');
+            row[14]=rvd.suggestion||'';
           }else{
-            row[10]='';
-            row[11]='';
+            row[13]='';
+            row[14]='';
           }
-          // N: Clip link — uses clipLinkForResult so full films get ?produced=X
-          row[13]=clipLinkForResult(r);
-          // O: Clip title — join across members
-          row[14]=members.map(function(m){return m.clipName||''}).filter(function(s){return s}).join(' | ');
-          row[15]=(r.transcript||'').substring(0,500);
+          // Q: Clip link — uses clipLinkForResult so full films get ?produced=X
+          row[16]=clipLinkForResult(r);
+          // R: Clip title — join across members
+          row[17]=members.map(function(m){return m.clipName||''}).filter(function(s){return s}).join(' | ');
+          row[18]=(r.transcript||'').substring(0,500);            // S: Transcript
           dataRows.push(row);
         });
       });
@@ -6843,7 +6847,7 @@ async function buildIndexTabMap(tabName){
   try{
     const r=await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId:S.sheetId,
-      range:`'${tabName}'!A:M`
+      range:`'${tabName}'!A:R`
     });
     const rows=r.result.values||[];
     const map={}; // key: "entryName|clipLink" → {sheetRow (1-indexed), tabName}
@@ -6851,15 +6855,21 @@ async function buildIndexTabMap(tabName){
     let currentSeg='';
     for(let i=1;i<rows.length;i++){ // skip header
       const row=rows[i]||[];
-      const colA=(row[0]||'').trim();
-      const colB=(row[1]||'').trim();
-      const colL=(row[11]||'').trim(); // clip link (column L)
-      if(colA){currentEntry=colA;currentSeg='';continue}
-      if(colB){currentSeg=colB;continue}
-      // Result row — has clip link in col L
-      if(colL&&currentEntry){
-        const mapKey=currentEntry+'|'+colL;
-        map[mapKey]={sheetRow:i+1,tabName,entry:currentEntry,seg:currentSeg}; // +1 because sheets are 1-indexed
+      // Name columns are now A-F (indices 0-5). Find the rightmost non-empty one — that's the entry name on a tag header row.
+      let entryHere='';
+      for(let c=5;c>=0;c--){
+        if((row[c]||'').trim()){entryHere=(row[c]||'').trim();break}
+      }
+      const segG=(row[6]||'').trim();    // G: Segment Type (index 6)
+      const colQ=(row[16]||'').trim();   // Q: Clip Link (index 16)
+      // Header row: has an entry name in cols A-F and NO clip link
+      if(entryHere && !colQ){currentEntry=entryHere;currentSeg='';continue}
+      // Segment header row: G has segment, but nothing in A-F and no clip link
+      if(segG && !entryHere && !colQ){currentSeg=segG;continue}
+      // Result row — has clip link in col Q
+      if(colQ && currentEntry){
+        const mapKey=currentEntry+'|'+colQ;
+        map[mapKey]={sheetRow:i+1,tabName,entry:currentEntry,seg:currentSeg};
       }
     }
     return map;
