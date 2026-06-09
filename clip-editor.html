@@ -3955,6 +3955,82 @@ function isExportable(clip) {
   return getStatus(clip) === 'approved' && !isDuplicate(clip);
 }
 
+// ══════════════════════════════════════════════
+// FILMS EXPORT — interleaved film+chapter rows
+// ══════════════════════════════════════════════
+// Films export is structurally different from other types: each film overview is followed
+// by all of its chapters in workstation order. The "Type" column distinguishes between
+// rows so consumers (sheets, CSV, HTML, book views) can render them differently.
+//
+// Special rules for films export only:
+// • Includes UNAPPROVED film overviews — flagged with Approval Status column
+// • Includes chapters marked as duplicates — flagged with Duplicate column
+// • Includes chapters marked as "Treated as Address" — treated as a regular chapter
+// • Order: films alphabetically, chapters in workstation order (intro pinned first if marked)
+
+// Build the interleaved list of "entries" — each entry represents either a film overview
+// row or a chapter row. Returns objects with shape:
+//   { kind: 'overview'|'chapter'|'intro', clip, film, chapterIndex }
+// The export functions then map these to whichever format they produce.
+function buildFilmsExportEntries() {
+  const filmsBucket = S.byType['films'];
+  if (!filmsBucket || !filmsBucket.clips?.length) return [];
+  const films = filmsBucket.clips.slice().sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  const entries = [];
+  films.forEach(film => {
+    // Film overview row — always include, even if not approved or marked duplicate
+    entries.push({ kind: 'overview', clip: film, film });
+    // Then chapters in workstation order (intro pinned first if marked)
+    const chapters = getOrderedChapters(film.filmName || film.title);
+    const introId = _filmIntroCache?.[film.filmName || film.title] || '';
+    const introChapter = introId ? chapters.find(c => String(c.clipId) === String(introId)) : null;
+    const otherChapters = introChapter ? chapters.filter(c => String(c.clipId) !== String(introId)) : chapters;
+    const orderedChapters = introChapter ? [introChapter, ...otherChapters] : chapters;
+    orderedChapters.forEach((ch, i) => {
+      entries.push({
+        kind: String(ch.clipId) === String(introId) ? 'intro' : 'chapter',
+        clip: ch,
+        film,
+        chapterIndex: i + 1,
+      });
+    });
+  });
+  return entries;
+}
+
+// Header used for the films export across Sheet / CSV. Same column order everywhere.
+const FILMS_EXPORT_HEADER = ['Thumbnail', 'Type', 'Film Name', 'Chapter Title', 'Subtitle', 'Description', 'Date', 'Duration', 'Watch URL', 'Approval Status', 'Duplicate'];
+
+// Build a single export row from an entry. Returns an array of cell values aligned with
+// FILMS_EXPORT_HEADER. Pass `includeThumbnail = false` for HTML/CSV exports that don't use the thumb.
+function buildFilmsExportRow(entry) {
+  const { kind, clip, film } = entry;
+  const isOverview = kind === 'overview';
+  const typeLabel = isOverview ? 'Film Overview' : (kind === 'intro' ? 'Intro Chapter' : 'Chapter');
+  const desc = clip.rewrite || clip._draft || clip.description || '';
+  const status = getStatus(clip);
+  const dup = isDuplicate(clip);
+  const watchSrc = (clip.filmId || clip.clipId || '').toString().trim();
+  const watchUrl = watchSrc
+    ? (isOverview
+       ? `https://videos.jem.tv/video-player?produced=${watchSrc}`
+       : `https://videos.jem.tv/video-player?clip=${watchSrc}`)
+    : '';
+  return [
+    clip.thumbnail || '',
+    typeLabel,
+    film.title || film.filmName || '',
+    isOverview ? '' : (clip.title || ''),
+    isOverview ? (clip.subtitle || '') : '',
+    desc,
+    formatClipDate(clip.date),
+    formatDuration(clip.durationMs),
+    watchUrl,
+    status === 'approved' ? 'Approved' : 'Not Approved',
+    dup ? 'YES' : '',
+  ];
+}
+
 function setReviewField(clip, field, val) {
   const bucket = S.byType[clip.typeKey];
   if (!bucket) return;
@@ -6373,6 +6449,49 @@ function renderExportView() {
   const typeCfg = activeTypeCfg();
   const titleEl = document.getElementById('exportTitle');
   if (titleEl && typeCfg) titleEl.textContent = `Export — ${typeCfg.displayName}`;
+
+  // Films export is structurally different: each film overview is followed by its chapters
+  // in workstation order. Renders all films (approved + not approved), all chapters
+  // (including duplicates with a flag), all with a "Type" column distinguishing rows.
+  if (S.activeType === 'films') {
+    const entries = buildFilmsExportEntries();
+    document.getElementById('exportStats').textContent = `${entries.length} rows (${entries.filter(e => e.kind === 'overview').length} films, ${entries.filter(e => e.kind !== 'overview').length} chapters)`;
+    const showOrig = document.getElementById('exportShowOriginal')?.checked;
+    const el = document.getElementById('exportList');
+    el.innerHTML = entries.map(entry => {
+      const { kind, clip, film } = entry;
+      const isOverview = kind === 'overview';
+      const desc = clip.rewrite || clip._draft || clip.description || '';
+      const original = getReviewField(clip, 'originalBackup') || clip.description || '';
+      const status = getStatus(clip);
+      const dup = isDuplicate(clip);
+      const thumbHTML = clip.thumbnail
+        ? `<img class="export-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
+        : `<div class="export-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--tx4)">${isOverview ? '🎬' : '🎞️'}</div>`;
+      const typeLabel = isOverview ? 'Film Overview' : (kind === 'intro' ? 'Intro Chapter' : 'Chapter');
+      const flagBadges = [];
+      if (status !== 'approved') flagBadges.push(`<span style="background:#F0C97B;color:#5A4317;padding:2px 8px;border-radius:var(--radius-pill);font-size:10px;font-weight:600">NOT APPROVED</span>`);
+      if (dup) flagBadges.push(`<span style="background:#E8DACA;color:#6B5230;padding:2px 8px;border-radius:var(--radius-pill);font-size:10px;font-weight:600">🔁 DUPLICATE</span>`);
+      const fd = formatClipDate(clip.date);
+      const dur = formatDuration(clip.durationMs);
+      return `<div class="export-item" style="${isOverview ? 'background:rgba(184,153,104,0.06);border-left:3px solid var(--accent)' : 'margin-left:24px;border-left:1px dashed var(--border)'}">
+        ${thumbHTML}
+        <div class="export-body">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
+            <span style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:${isOverview ? 'var(--accent2)' : 'var(--tx3)'}">${typeLabel}</span>
+            ${flagBadges.join(' ')}
+          </div>
+          <div class="export-clip-title">${esc(isOverview ? (film.title || film.filmName || '') : clip.title)}</div>
+          ${isOverview && clip.subtitle ? `<div style="font-size:12px;color:var(--tx3);font-style:italic;margin-bottom:4px">${esc(clip.subtitle)}</div>` : ''}
+          <div class="export-meta">${isOverview ? '' : `<span style="color:var(--tx4)">${esc(film.title || film.filmName || '')}</span>`}${fd ? (isOverview ? '' : ' · ') + esc(fd) : ''}${dur ? ' · ⏱ ' + esc(dur) : ''}</div>
+          ${showOrig && !isOverview ? `<div style="font-size:12px;color:var(--tx3);background:var(--bg2);border-radius:6px;padding:8px;margin-bottom:6px"><strong style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--tx4);display:block;margin-bottom:3px">Original</strong>${esc(original)}</div>` : ''}
+          <div class="export-summary">${esc(desc) || '<em style="color:var(--tx4)">(no description)</em>'}</div>
+        </div>
+      </div>`;
+    }).join('') || `<div class="empty-state">No films found</div>`;
+    return;
+  }
+
   let approved = activeBucket().clips.filter(c => isExportable(c));
   if (S.activeType === 'film_chapter' && _filmOrderCache) {
     const byFilm = {};
@@ -6409,6 +6528,82 @@ function renderExportView() {
 async function generateSheetExport() {
   const typeCfg = activeTypeCfg();
   const typeKey = S.activeType;
+
+  // Films: structurally different — interleaved film overview + chapter rows.
+  if (typeKey === 'films') {
+    const entries = buildFilmsExportEntries();
+    if (!entries.length) { showToast('No films to export', 'error'); return; }
+    const tabName = `${typeCfg.displayName} Export`;
+    showLoading('Creating sheet tab…');
+    try {
+      const meta = await getSheetMeta();
+      const existing = meta.sheets?.find(s => s.properties.title === tabName);
+      const requests = [];
+      if (existing) requests.push({ deleteSheet: { sheetId: existing.properties.sheetId } });
+      requests.push({ addSheet: { properties: { title: tabName, gridProperties: { frozenRowCount: 1 } } } });
+      const batchRes = await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests })
+      });
+      invalidateSheetMeta();
+      const newSheetId = batchRes.replies?.find(r => r.addSheet)?.addSheet?.properties?.sheetId;
+      const rows = entries.map(e => buildFilmsExportRow(e));
+      showLoading('Writing data…');
+      await sheetsSet(`'${tabName}'!A1`, [FILMS_EXPORT_HEADER, ...rows]);
+      // Format: bold header, freeze first row, wrap description, sensible widths,
+      // visual distinction for overview rows.
+      if (newSheetId !== undefined) {
+        const descColIdx = FILMS_EXPORT_HEADER.indexOf('Description');
+        const fmtRequests = [
+          // Bold + tinted header
+          { repeatCell: {
+              range: { sheetId: newSheetId, startRowIndex: 0, endRowIndex: 1 },
+              cell: { userEnteredFormat: { textFormat: { bold: true }, backgroundColor: { red: 0.94, green: 0.92, blue: 0.86 } } },
+              fields: 'userEnteredFormat(textFormat,backgroundColor)'
+          } },
+          // Wrap description column
+          { repeatCell: {
+              range: { sheetId: newSheetId, startColumnIndex: descColIdx, endColumnIndex: descColIdx + 1 },
+              cell: { userEnteredFormat: { wrapStrategy: 'WRAP', verticalAlignment: 'TOP' } },
+              fields: 'userEnteredFormat(wrapStrategy,verticalAlignment)'
+          } },
+          // Column widths
+          { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 160 }, fields: 'pixelSize' } },
+          { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
+          { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 220 }, fields: 'pixelSize' } },
+          { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 220 }, fields: 'pixelSize' } },
+          { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: descColIdx, endIndex: descColIdx + 1 }, properties: { pixelSize: 480 }, fields: 'pixelSize' } },
+        ];
+        // Highlight every overview row with a warm tint so visual scanning is easy
+        entries.forEach((e, i) => {
+          if (e.kind === 'overview') {
+            fmtRequests.push({ repeatCell: {
+              range: { sheetId: newSheetId, startRowIndex: i + 1, endRowIndex: i + 2 },
+              cell: { userEnteredFormat: { backgroundColor: { red: 0.98, green: 0.95, blue: 0.86 }, textFormat: { bold: true } } },
+              fields: 'userEnteredFormat(backgroundColor,textFormat)'
+            } });
+          }
+        });
+        await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requests: fmtRequests })
+        });
+      }
+      hideLoading();
+      const filmCount = entries.filter(e => e.kind === 'overview').length;
+      const chapterCount = entries.length - filmCount;
+      showToast(`Exported ${filmCount} films + ${chapterCount} chapters to "${tabName}" tab`, 'success');
+      window.open(`https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/edit#gid=${newSheetId || ''}`, '_blank');
+    } catch(e) {
+      hideLoading();
+      showToast('Export failed: ' + e.message, 'error');
+      console.error(e);
+    }
+    return;
+  }
+
   let approved = activeBucket().clips.filter(c => isExportable(c));
   // For Film Chapters: respect the saved chapter ordering per film
   if (typeKey === 'film_chapter' && _filmOrderCache) {
@@ -6540,6 +6735,36 @@ async function generateSheetExport() {
 function downloadCsv() {
   const typeCfg = activeTypeCfg();
   const typeKey = S.activeType;
+
+  // Films: interleaved overview + chapter rows
+  if (typeKey === 'films') {
+    const entries = buildFilmsExportEntries();
+    if (!entries.length) { showToast('No films to export', 'error'); return; }
+    const csvCell = (v) => {
+      const s = String(v ?? '');
+      if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+    // CSV doesn't include the thumbnail column (it's a URL anyway, but adds noise)
+    const headerNoThumb = FILMS_EXPORT_HEADER.filter(h => h !== 'Thumbnail');
+    const thumbIdx = FILMS_EXPORT_HEADER.indexOf('Thumbnail');
+    const lines = [headerNoThumb.map(csvCell).join(',')];
+    entries.forEach(e => {
+      const row = buildFilmsExportRow(e);
+      row.splice(thumbIdx, 1); // drop thumbnail col
+      lines.push(row.map(csvCell).join(','));
+    });
+    const csv = lines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `JEM_Films_Export_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    const filmCount = entries.filter(e => e.kind === 'overview').length;
+    showToast(`Downloaded ${filmCount} films + ${entries.length - filmCount} chapters as CSV`, 'success');
+    return;
+  }
+
   let approved = activeBucket().clips.filter(c => isExportable(c));
   if (typeKey === 'film_chapter' && _filmOrderCache) {
     const byFilm = {};
@@ -6590,6 +6815,51 @@ function downloadCsv() {
 }
 
 function exportHTML() {
+  // Films: interleaved overview + chapter rows with the Type column
+  if (S.activeType === 'films') {
+    const entries = buildFilmsExportEntries();
+    if (!entries.length) { showToast('No films to export', 'error'); return; }
+    const rows = entries.map(entry => {
+      const { kind, clip, film } = entry;
+      const isOverview = kind === 'overview';
+      const desc = clip.rewrite || clip._draft || clip.description || '';
+      const status = getStatus(clip);
+      const dup = isDuplicate(clip);
+      const watchSrc = (clip.filmId || clip.clipId || '').toString().trim();
+      const watchUrl = watchSrc
+        ? (isOverview
+           ? `https://videos.jem.tv/video-player?produced=${watchSrc}`
+           : `https://videos.jem.tv/video-player?clip=${watchSrc}`)
+        : '';
+      const typeLabel = isOverview ? 'Film Overview' : (kind === 'intro' ? 'Intro Chapter' : 'Chapter');
+      const rowStyle = isOverview ? 'background:#FBF6E8;font-weight:600' : '';
+      return `<tr style="${rowStyle}">
+        <td><img src="${clip.thumbnail || ''}" style="width:80px;height:52px;object-fit:cover;border-radius:4px"></td>
+        <td><strong>${typeLabel}</strong></td>
+        <td>${esc(film.title || film.filmName || '')}</td>
+        <td>${isOverview ? '' : esc(clip.title || '')}</td>
+        <td>${isOverview ? esc(clip.subtitle || '') : ''}</td>
+        <td>${esc(desc)}</td>
+        <td>${esc(formatClipDate(clip.date))}</td>
+        <td>${esc(formatDuration(clip.durationMs))}</td>
+        <td>${watchUrl ? `<a href="${watchUrl}" target="_blank">Watch</a>` : ''}</td>
+        <td>${status === 'approved' ? 'Approved' : '<span style="color:#A86A2C">Not Approved</span>'}</td>
+        <td>${dup ? '<span style="color:#6B5230">🔁 YES</span>' : ''}</td>
+      </tr>`;
+    }).join('');
+    const filmCount = entries.filter(e => e.kind === 'overview').length;
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>JEM Films Export</title>
+<style>body{font-family:Georgia,serif;padding:24px;background:#faf7f2}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d4c9b5;padding:8px;vertical-align:top;font-size:12px}th{background:#f0ece3;font-weight:bold}</style></head>
+<body><h1 style="font-size:20px;margin-bottom:16px">JEM Films — ${filmCount} films · ${entries.length - filmCount} chapters</h1>
+<table><thead><tr><th>Thumb</th><th>Type</th><th>Film Name</th><th>Chapter Title</th><th>Subtitle</th><th>Description</th><th>Date</th><th>Duration</th><th>Watch</th><th>Approval Status</th><th>Duplicate</th></tr></thead>
+<tbody>${rows}</tbody></table></body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'JEM_Films_' + new Date().toISOString().slice(0,10) + '.html';
+    a.click();
+    return;
+  }
+
   const approved = activeBucket().clips.filter(c => isExportable(c));
   const rows = approved.map(clip => {
     const tags = parseTags(clip);
@@ -6621,6 +6891,53 @@ function exportHTML() {
 // BOOK VIEW
 // ══════════════════════════════════════════════
 function renderBookView() {
+  // Films: interleaved film overview + chapter pages
+  if (S.activeType === 'films') {
+    const entries = buildFilmsExportEntries();
+    const el = document.getElementById('bookPages');
+    if (!entries.length) { el.innerHTML = `<div class="empty-state">No films found</div>`; return; }
+    const perPage = CONFIG.ENTRIES_PER_PAGE;
+    const pages = [];
+    for (let i = 0; i < entries.length; i += perPage) pages.push(entries.slice(i, i + perPage));
+    el.innerHTML = pages.map((pageEntries, pi) => {
+      const html = pageEntries.map(entry => {
+        const { kind, clip, film } = entry;
+        const isOverview = kind === 'overview';
+        const desc = clip.rewrite || clip._draft || clip.description || '';
+        const status = getStatus(clip);
+        const dup = isDuplicate(clip);
+        const thumbHTML = clip.thumbnail
+          ? `<img class="book-entry-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
+          : `<div class="book-entry-thumb" style="display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--tx4)">🎬</div>`;
+        const fd = formatClipDate(clip.date);
+        const dur = formatDuration(clip.durationMs);
+        const typeLabel = isOverview ? 'Film Overview' : (kind === 'intro' ? 'Intro Chapter' : `Chapter`);
+        const flags = [];
+        if (status !== 'approved') flags.push('Not Approved');
+        if (dup) flags.push('🔁 Duplicate');
+        return `<div class="book-entry" style="${isOverview ? 'background:rgba(184,153,104,0.08);border-left:3px solid var(--accent);padding-left:12px' : 'margin-left:32px'}">
+          <div class="book-entry-inner">
+            ${thumbHTML}
+            <div class="book-entry-content">
+              <div style="font-size:9px;color:${isOverview ? 'var(--accent2)' : 'var(--tx4)'};text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px;font-weight:600">${typeLabel}${flags.length ? ' · ' + flags.join(' · ') : ''}</div>
+              <div class="book-entry-title">${esc(isOverview ? (film.title || film.filmName || '') : clip.title)}</div>
+              ${isOverview && clip.subtitle ? `<div style="font-size:13px;color:var(--tx3);font-style:italic;margin:2px 0 4px">${esc(clip.subtitle)}</div>` : ''}
+              ${!isOverview ? `<div style="font-size:9px;color:var(--tx4);margin-bottom:3px">${esc(film.title || film.filmName || '')}</div>` : ''}
+              <div class="book-entry-meta">${fd ? esc(fd) : ''}${dur ? (fd ? ' · ' : '') + '⏱ ' + esc(dur) : ''}</div>
+              <div class="book-entry-summary">${esc(desc) || '<em style="color:var(--tx4)">(no description)</em>'}</div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      return `<div class="book-page">
+        <div class="book-page-header"><div class="book-page-header-title">JEM Video Index · Films</div></div>
+        <div class="book-entries">${html}</div>
+        <div class="book-page-footer"><span>JEM · Jewish Educational Media</span><span>${pi + 1}</span><span>Films</span></div>
+      </div>`;
+    }).join('');
+    return;
+  }
+
   let approved = activeBucket().clips.filter(c => isExportable(c));
   // For film chapters, sort by saved film order
   if (S.activeType === 'film_chapter' && _filmOrderCache) {
@@ -7679,6 +7996,65 @@ function renderFullBookView() {
   CLIP_TYPES.forEach(t => {
     const bucket = S.byType[t.key];
     if (!bucket) return;
+
+    // Films: interleaved overview + chapter rows. Skip the film_chapter section entirely
+    // when films section runs — chapters are folded INTO the films section here, not separate.
+    if (t.key === 'films') {
+      const entries = buildFilmsExportEntries();
+      if (!entries.length) return;
+      const filmCount = entries.filter(e => e.kind === 'overview').length;
+      const chapterCount = entries.length - filmCount;
+      // Section title page
+      pageNum++;
+      html += `<div class="book-page" style="display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;min-height:680px;">
+        <div style="font-family:var(--font-serif);font-size:14px;color:var(--tx3);letter-spacing:3px;text-transform:uppercase;margin-bottom:24px">Section</div>
+        <h1 style="font-family:var(--font-serif);font-size:56px;font-weight:500;color:var(--tx);letter-spacing:-1.5px;line-height:1.1;margin:0 0 18px">${esc(t.displayName)}</h1>
+        <div style="font-family:var(--font-serif);font-size:16px;color:var(--tx3);font-style:italic">${filmCount} film${filmCount === 1 ? '' : 's'} · ${chapterCount} chapter${chapterCount === 1 ? '' : 's'}</div>
+      </div>`;
+      const perPage = CONFIG.ENTRIES_PER_PAGE || 10;
+      for (let i = 0; i < entries.length; i += perPage) {
+        pageNum++;
+        const pageEntries = entries.slice(i, i + perPage);
+        const entriesHTML = pageEntries.map(entry => {
+          const { kind, clip, film } = entry;
+          const isOverview = kind === 'overview';
+          const desc = clip.rewrite || clip._draft || clip.description || '';
+          const status = getStatus(clip);
+          const dup = isDuplicate(clip);
+          const thumbHTML = clip.thumbnail
+            ? `<img class="book-entry-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
+            : `<div class="book-entry-thumb" style="display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--tx4)">🎬</div>`;
+          const fd = formatClipDate(clip.date);
+          const dur = formatDuration(clip.durationMs);
+          const typeLabel = isOverview ? 'Film Overview' : (kind === 'intro' ? 'Intro Chapter' : 'Chapter');
+          const flags = [];
+          if (status !== 'approved') flags.push('Not Approved');
+          if (dup) flags.push('🔁 Duplicate');
+          return `<div class="book-entry" style="${isOverview ? 'background:rgba(184,153,104,0.08);border-left:3px solid var(--accent);padding-left:12px' : 'margin-left:32px'}">
+            <div class="book-entry-inner">
+              ${thumbHTML}
+              <div class="book-entry-content">
+                <div style="font-size:9px;color:${isOverview ? 'var(--accent2)' : 'var(--tx4)'};text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px;font-weight:600">${typeLabel}${flags.length ? ' · ' + flags.join(' · ') : ''}</div>
+                <div class="book-entry-title">${esc(isOverview ? (film.title || film.filmName || '') : clip.title)}</div>
+                ${isOverview && clip.subtitle ? `<div style="font-size:13px;color:var(--tx3);font-style:italic;margin:2px 0 4px">${esc(clip.subtitle)}</div>` : ''}
+                ${!isOverview ? `<div style="font-size:9px;color:var(--tx4);margin-bottom:3px">${esc(film.title || film.filmName || '')}</div>` : ''}
+                <div class="book-entry-meta">${fd ? esc(fd) : ''}${dur ? (fd ? ' · ' : '') + '⏱ ' + esc(dur) : ''}</div>
+                <div class="book-entry-summary">${esc(desc) || '<em style="color:var(--tx4)">(no description)</em>'}</div>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+        html += `<div class="book-page">
+          <div class="book-page-header"><div class="book-page-header-title">JEM Video Index · ${esc(t.displayName)}</div></div>
+          <div class="book-entries">${entriesHTML}</div>
+          <div class="book-page-footer"><span>JEM · Jewish Educational Media</span><span>${pageNum}</span><span>${esc(t.displayName)}</span></div>
+        </div>`;
+      }
+      return;
+    }
+    // Skip film_chapter as a top-level section — chapters are folded into the Films section above
+    if (t.key === 'film_chapter') return;
+
     let approved = bucket.clips.filter(c => isExportable(c));
     if (!approved.length) return;
     // For film chapters: order by saved film order
