@@ -4750,8 +4750,8 @@ async function setParent(childName,parentName){
     });
   }
   const finalDepth=parentDepth+1+maxChildSubtreeDepth;
-  if(finalDepth>2){ // 0-indexed: 0,1,2 = three levels
-    return{ok:false,reason:`Would exceed 3-level max (final depth ${finalDepth+1})`};
+  if(finalDepth>5){ // 0-indexed: 0,1,2,3,4,5 = six levels
+    return{ok:false,reason:`Would exceed 6-level max (final depth ${finalDepth+1})`};
   }
   S.tagHierarchy[childName]=parentName;
   await appendToHierarchyLog(childName,parentName,'add',new Date().toISOString(),S.user?.name||S.user?.email||'Unknown');
@@ -10888,22 +10888,27 @@ function bindAll(){
     ev.preventDefault();ev.stopPropagation();
     S.clipSearchModal=null;render();
   });
-  // Clip search input — re-render to filter (preserve cursor)
-  on('#clipsearch-query','input',()=>{
-    if(S.clipSearchModal){
-      S.clipSearchModal.query=$('#clipsearch-query').value;
+  // Debounced search input — only re-render after typing pauses, prevents key-dropping/focus-jumping
+  function debouncedSearchUpdate(field,inputId){
+    if(!S._searchDebounce)S._searchDebounce={};
+    if(S._searchDebounce[field])clearTimeout(S._searchDebounce[field]);
+    S._searchDebounce[field]=setTimeout(()=>{
+      if(!S.clipSearchModal)return;
+      const i=$(inputId);
+      if(!i)return;
+      const val=i.value;
+      const caretPos=i.selectionStart;
+      S.clipSearchModal[field]=val;
       render();
-      setTimeout(()=>{const i=$('#clipsearch-query');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},10);
-    }
-  });
-  // Film search input — separate query, only searches type=Film rows
-  on('#filmsearch-query','input',()=>{
-    if(S.clipSearchModal){
-      S.clipSearchModal.filmQuery=$('#filmsearch-query').value;
-      render();
-      setTimeout(()=>{const i=$('#filmsearch-query');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},10);
-    }
-  });
+      // Restore focus + caret position after re-render
+      setTimeout(()=>{
+        const i2=$(inputId);
+        if(i2){i2.focus();try{i2.setSelectionRange(caretPos,caretPos)}catch(_){}}
+      },10);
+    },220);
+  }
+  on('#clipsearch-query','input',()=>debouncedSearchUpdate('query','#clipsearch-query'));
+  on('#filmsearch-query','input',()=>debouncedSearchUpdate('filmQuery','#filmsearch-query'));
   // Click a clip search result → pick it
   $$('[data-clip-pick]').forEach(el=>el.onclick=ev=>{
     ev.preventDefault();ev.stopPropagation();
