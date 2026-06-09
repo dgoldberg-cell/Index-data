@@ -6527,12 +6527,69 @@ async function generateIndexTab(sectionName){
     // Safe relationship defaults lookup
     const relDefaults=(RULES.relDefaults&&RULES.relDefaults[sectionName])?RULES.relDefaults[sectionName]:(RULES.relDefaults&&RULES.relDefaults.Topics?RULES.relDefaults.Topics:{});
     
+    // === Compute right-aligned name column layout ===
+    // For each entry in this section, compute:
+    //   - chain (array of names from root down to this entry)
+    //   - rootSubtreeMaxDepth (max distance from root down to any descendant)
+    //   - this entry's column = (rightmost col 5) - (rootSubtreeMaxDepth - this depth from root)
+    //                          = 5 - rootSubtreeMaxDepth + entry.depth
+    // Result: deepest leaves land at column F (5); ancestors fill leftward.
+    // On child tag rows, ancestor names repeat in each ancestor's own column.
+    var entryByName={};
+    entries.forEach(function(e){if(!e.isAlias)entryByName[e.name]=e});
+    // For each entry: pre-compute its root name and its depth-from-root in O(N) total
+    var entryRoot={};        // entryName -> root entry name
+    var entryDepthFromRoot={}; // entryName -> depth from root
+    var rootMaxDepthFromRoot={}; // rootName -> max depth-from-root in its subtree
+    entries.forEach(function(e){
+      if(e.isAlias)return;
+      var cur=e;
+      var seen={};
+      var hops=0;
+      while(cur&&cur.parent&&!seen[cur.name]){
+        seen[cur.name]=1;
+        var p=entryByName[cur.parent];
+        if(!p)break;
+        cur=p;
+        hops++;
+        if(hops>50)break; // cycle guard
+      }
+      entryRoot[e.name]=cur.name;
+      entryDepthFromRoot[e.name]=hops;
+      if(rootMaxDepthFromRoot[cur.name]===undefined||hops>rootMaxDepthFromRoot[cur.name]){
+        rootMaxDepthFromRoot[cur.name]=hops;
+      }
+    });
+    function ancestorChain(e){
+      var chain=[];
+      var cur=e;
+      var seen={};
+      while(cur){
+        if(seen[cur.name])break;
+        seen[cur.name]=1;
+        chain.unshift(cur); // unshift = build root→...→entry
+        if(!cur.parent)break;
+        cur=entryByName[cur.parent];
+      }
+      return chain;
+    }
+    function entryColumn(e){
+      var root=entryRoot[e.name];
+      if(!root)return Math.min(e.depth||0,5);
+      var rootMax=rootMaxDepthFromRoot[root]||0;
+      var depthFromRoot=entryDepthFromRoot[e.name]||0;
+      var col=5-(rootMax-depthFromRoot);
+      if(col<0)col=0;
+      if(col>5)col=5;
+      return col;
+    }
+
     entries.forEach(function(entry){
       // Skip soft-deleted entries entirely in export
       if(entry.isDeleted)return;
-      // Determine which column to put the entry name in based on hierarchy depth
+      // Determine which column to put the entry name in (right-aligned tree layout)
+      var nameCol=entryColumn(entry);
       var depth=entry.depth||0;
-      var nameCol=Math.min(depth,5); // 0=A, 1=B, 2=C, 3=D, 4=E, 5=F — cap at 5 (6-level max)
       // === Alias stub entry: single row, just shows "See: target" ===
       if(entry.isAlias){
         // Skip alias if its target is deleted
@@ -6545,7 +6602,12 @@ async function generateIndexTab(sectionName){
         return;
       }
       var entryRow=[];for(var z=0;z<EC;z++)entryRow.push('');
-      entryRow[nameCol]=entry.name||'';
+      // Fill ancestor chain across the name columns: each ancestor goes in its OWN column
+      var chain=ancestorChain(entry);
+      chain.forEach(function(anc){
+        var col=entryColumn(anc);
+        entryRow[col]=anc.name||'';
+      });
       // T (col 19): Original Tag Name — populated if entry was renamed
       if(entry.originalNames&&entry.originalNames.size){
         entryRow[19]=Array.from(entry.originalNames).join('; ');
@@ -6824,14 +6886,16 @@ function sectionForEntry(entryName){
 
 // Build clip link from a result object (same logic as generateIndexTab)
 function clipLinkForResult(r){
-  // Full film detection: explicit isFullFilm flag, OR clipType is 'Film', OR objectId starts with 'produced_video-'
+  // Full film detection: explicit isFullFilm flag, OR clipType is 'Film', OR id/objectId starts with 'produced_video-'
   const objIdStr=r.objId||'';
-  const isFilm=r.isFullFilm||r.clipType==='Film'||objIdStr.indexOf('produced_video-')===0;
+  const clipIdStr=(r.clipId||'').toString();
+  const isFilm=r.isFullFilm||r.clipType==='Film'||objIdStr.indexOf('produced_video-')===0||clipIdStr.indexOf('produced_video-')===0;
   if(isFilm){
-    // Prefer explicit pvId, fall back to extracting from objectId like 'produced_video-696'
+    // Prefer explicit pvId, fall back to extracting from id or objectid (whichever has 'produced_video-')
     let producedId=r.pvId;
-    if(!producedId&&objIdStr.indexOf('produced_video-')===0){
-      producedId=objIdStr.substring('produced_video-'.length);
+    if(!producedId){
+      if(objIdStr.indexOf('produced_video-')===0)producedId=objIdStr.substring('produced_video-'.length);
+      else if(clipIdStr.indexOf('produced_video-')===0)producedId=clipIdStr.substring('produced_video-'.length);
     }
     if(producedId){
       return 'https://videos.jem.tv/video-player?produced='+producedId;
