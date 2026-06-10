@@ -5018,16 +5018,17 @@ async function createNewTag(name,section){
 
 // === ATTACH CLIP TO NEW TAG ===
 async function attachClipToNewTag(tagName,rowIdx,desc,segType,rel,relevancy,bindingType){
-  if(!desc||!desc.trim())return{ok:false,reason:'Description required'};
+  // Description is optional — empty string is fine
   if(!rel)return{ok:false,reason:'Relationship required'};
   if(!relevancy)return{ok:false,reason:'Relevancy required'};
   // Check duplicate binding
   const existing=S.newTagBindings.find(b=>b.tagName===tagName&&b.rowIdx===rowIdx);
   if(existing)return{ok:false,reason:'This clip is already attached to this tag'};
   const bt=bindingType||'clip';
-  const binding={tagName,rowIdx,desc:desc.trim(),segType,rel,relevancy:parseInt(relevancy)||4,addedBy:S.user?.name||S.user?.email||'Unknown',ts:new Date().toISOString(),bindingType:bt};
+  const cleanDesc=(desc||'').trim();
+  const binding={tagName,rowIdx,desc:cleanDesc,segType,rel,relevancy:parseInt(relevancy)||4,addedBy:S.user?.name||S.user?.email||'Unknown',ts:new Date().toISOString(),bindingType:bt};
   S.newTagBindings.push(binding);
-  await appendToNewTagBindingsLog(tagName,rowIdx,desc,segType,rel,relevancy,'add',binding.ts,binding.addedBy,bt);
+  await appendToNewTagBindingsLog(tagName,rowIdx,cleanDesc,segType,rel,relevancy,'add',binding.ts,binding.addedBy,bt);
   logActivity(`Attached ${bt} ${rowIdx} to new tag "${tagName}"`);
   return{ok:true};
 }
@@ -9106,7 +9107,7 @@ function rClipSearchModal(){
     h+=`</div>`;
     h+=`<div style="color:var(--tx-3);font-size:11px;margin-top:3px">Type: ${esc(clipType)} → SegType: <b>${esc(segType)}</b>${prog?' · Program #'+esc(prog):''}${isFilm&&pvId?' · produced #'+esc(pvId):''}</div>`;
     h+=`</div>`;
-    h+=`<div style="margin-bottom:10px"><label style="display:block;font-size:12px;color:var(--tx-3);margin-bottom:3px">Description (required)</label>`;
+    h+=`<div style="margin-bottom:10px"><label style="display:block;font-size:12px;color:var(--tx-3);margin-bottom:3px">Description (optional)</label>`;
     h+=`<textarea id="clipsearch-desc" placeholder="${isFilm?'Describe how this film relates to the tag…':'Describe how this clip relates to the tag…'}" style="width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;min-height:60px;font-family:var(--font);resize:vertical">${esc(m.desc||'')}</textarea></div>`;
     // Relationship dropdown — common options
     h+=`<div style="margin-bottom:10px"><label style="display:block;font-size:12px;color:var(--tx-3);margin-bottom:3px">Relationship (required) <span style="color:#c00">*</span></label>`;
@@ -11260,7 +11261,7 @@ function bindAll(){
     const desc=($('#clipsearch-desc')?.value||'').trim();
     const rel=$('#clipsearch-rel')?.value||'';
     const relevancy=$('#clipsearch-relev')?.value||'';
-    if(!desc){toast('Description required','error');return}
+    // Description is optional — only rel and relevancy required
     if(!rel){toast('Relationship required','error');return}
     if(!relevancy){toast('Relevancy required','error');return}
     // SegType is auto-detected from clipType
