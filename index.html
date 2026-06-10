@@ -1117,6 +1117,8 @@ customSections:[], // [{name, addedBy, ts}] — user-created sections (workspace
 sectionRenames:{}, // {originalName: newName} — display-only name overrides
 sectionPositions:{}, // {sectionName: orderIndex} — manual section position overrides (for drag-reorder)
 refOverrides:{}, // {clipId: refCode} — manual reference-code overrides (e.g. T45B for second TM in Living Torah programs)
+filmNameOverrides:{}, // {producedVideoId: shortFilmName} — manual film name shortening (e.g. Faithful instead of "Faithful and Fortified")
+chapterOverrides:{}, // {clipId: shortChapterName} — manual chapter name shortening (e.g. Ch3 instead of full chapter title)
 renamingSection:null, // {original, inputValue} — inline section rename in progress
 newSectionModal:null, // {name} — open "create new section" modal
 newTags:[], // [{name, section, addedBy, ts}] — user-created tags that don't exist in main sheet
@@ -3095,6 +3097,8 @@ async function manualRefresh(){
     try{S.sectionRenames=await loadSectionRenamesFromTab();}catch(e){console.warn('Could not refresh section renames:',e);}
     try{S.sectionPositions=await loadSectionPositionsFromTab();}catch(e){console.warn('Could not refresh section positions:',e);}
     try{S.refOverrides=await loadRefOverridesFromTab();}catch(e){console.warn('Could not refresh ref overrides:',e);}
+    try{S.filmNameOverrides=await loadFilmNameOverridesFromTab();}catch(e){console.warn('Could not refresh film name overrides:',e);}
+    try{S.chapterOverrides=await loadChapterOverridesFromTab();}catch(e){console.warn('Could not refresh chapter overrides:',e);}
     buildIndex();render(true);
     toast('All data refreshed','success');
   }catch(e){
@@ -4547,6 +4551,101 @@ async function loadRefOverridesFromTab(){
     return map;
   }catch(e){
     console.warn('Failed to load ref overrides:',e);
+    return {};
+  }
+}
+
+// === FILM NAME OVERRIDES — shortened film names per produced_video_id ===
+// _FilmNameOverrides tab: Produced Video ID | Film Display Name | Notes
+// Used by filmRefForResult: if a film's produced_video_id has an override, use that name instead of auto-shortening.
+async function loadFilmNameOverridesFromTab(){
+  const TAB='_FilmNameOverrides';
+  if(!S.connected)return {};
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists){
+    // Auto-create the tab with headers so user can populate manually
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:C1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Produced Video ID','Film Display Name','Notes']]}
+      });
+      console.log(`Created ${TAB} tab — add rows manually to override film display names.`);
+    }catch(e){console.warn(`Could not create ${TAB} tab:`,e)}
+    return {};
+  }
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:C10000`
+    });
+    const rows=r.result.values||[];
+    const map={};
+    rows.forEach(row=>{
+      const pvId=(row[0]||'').toString().trim();
+      const name=(row[1]||'').trim();
+      if(!pvId||!name)return;
+      map[pvId]=name;
+    });
+    return map;
+  }catch(e){
+    console.warn('Failed to load film name overrides:',e);
+    return {};
+  }
+}
+
+// === CHAPTER OVERRIDES — shortened chapter labels per clipId ===
+// _ChapterOverrides tab: Clip ID | Chapter Display | Notes
+// For film chapter refs: combines with film name as "FilmName - ChapterDisplay".
+async function loadChapterOverridesFromTab(){
+  const TAB='_ChapterOverrides';
+  if(!S.connected)return {};
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists){
+    try{
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId:S.sheetId,
+        resource:{requests:[{addSheet:{properties:{title:TAB}}}]}
+      });
+      try{
+        const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:S.sheetId});
+        S.sheetMeta={title:meta.result.properties.title,tabs:meta.result.sheets.map(s=>({title:s.properties.title,sid:s.properties.sheetId}))};
+      }catch(_){}
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId:S.sheetId,
+        range:`'${TAB}'!A1:C1`,
+        valueInputOption:'RAW',
+        resource:{values:[['Clip ID','Chapter Display','Notes']]}
+      });
+      console.log(`Created ${TAB} tab — add rows manually to override chapter display names.`);
+    }catch(e){console.warn(`Could not create ${TAB} tab:`,e)}
+    return {};
+  }
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:C10000`
+    });
+    const rows=r.result.values||[];
+    const map={};
+    rows.forEach(row=>{
+      const clipId=(row[0]||'').toString().trim();
+      const display=(row[1]||'').trim();
+      if(!clipId||!display)return;
+      map[clipId]=display;
+    });
+    return map;
+  }catch(e){
+    console.warn('Failed to load chapter overrides:',e);
     return {};
   }
 }
@@ -6841,12 +6940,21 @@ async function generateIndexTab(sectionName){
       var newSheet=meta.result.sheets.find(function(s){return s.properties.title===tabName});
       if(newSheet){
         var newSid=newSheet.properties.sheetId;
+        // Hide non-essential columns by default. New layout (24 cols, A-X):
+        //   H (7) = Original Description
+        //   N-O (13-14) = Review Status + AI Suggestion
+        //   P (15) = spacer
+        //   S (18) = Transcript (excerpt)
+        //   T (19) = spacer
+        //   W (22) = Original Tag Name
         await gapi.client.sheets.spreadsheets.batchUpdate({
           spreadsheetId:S.sheetId,
           resource:{requests:[
-            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:4,endIndex:5},properties:{hiddenByUser:true},fields:'hiddenByUser'}},
-            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:10,endIndex:12},properties:{hiddenByUser:true},fields:'hiddenByUser'}},
-            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:19,endIndex:20},properties:{hiddenByUser:true},fields:'hiddenByUser'}}
+            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:7,endIndex:8},properties:{hiddenByUser:true},fields:'hiddenByUser'}},   // H: Original Description
+            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:13,endIndex:15},properties:{hiddenByUser:true},fields:'hiddenByUser'}}, // N-O: Review + AI Suggestion
+            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:15,endIndex:16},properties:{hiddenByUser:true},fields:'hiddenByUser'}}, // P: spacer
+            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:18,endIndex:20},properties:{hiddenByUser:true},fields:'hiddenByUser'}}, // S-T: Transcript + spacer
+            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:22,endIndex:23},properties:{hiddenByUser:true},fields:'hiddenByUser'}}  // W: Original Tag Name
           ]}
         });
       }
@@ -7016,31 +7124,47 @@ function refCodeForResult(r){
 function filmRefForResult(r){
   const rawTitle=r.pvName||r.clipName||'';
   if(!rawTitle)return '';
-  // FULL FILM binding: just the film name (no chapter suffix)
+  // === 1) Resolve FILM display name ===
+  // Priority: explicit override (_FilmNameOverrides by produced_video_id) > legacy filmShortNames (by title) > auto-shorten
+  let filmName=null;
+  if(r.pvId && S.filmNameOverrides && S.filmNameOverrides[r.pvId]){
+    filmName=S.filmNameOverrides[r.pvId];
+  }
+  if(!filmName){
+    // Extract main film name (strip Vol/chapter suffix)
+    const mainTitle=rawTitle.split(/[·:|\-–—]|Vol\.?|Chapter|Ch\.?/i)[0].trim();
+    const overrides=RULES.filmShortNames||{};
+    filmName=overrides[mainTitle]||overrides[rawTitle];
+    if(!filmName){
+      // Auto-shorten: first meaningful word (skip articles/possessives)
+      const skipWords=new Set(['a','an','the','my','our','your','his','her','its','their']);
+      const words=mainTitle.split(/\s+/).filter(w=>w.length>0);
+      filmName=words.find(w=>!skipWords.has(w.toLowerCase()))||words[0]||'Film';
+    }
+  }
+  // FULL FILM binding: just the film name (no chapter)
   if(r.isFullFilm){
-    return r.clipName||rawTitle;
+    return filmName;
   }
-  // Extract main film name (strip Vol/chapter suffix)
-  const mainTitle=rawTitle.split(/[·:|\-–—]|Vol\.?|Chapter|Ch\.?/i)[0].trim();
-  // Check for user override
-  const overrides=RULES.filmShortNames||{};
-  let shortName=overrides[mainTitle]||overrides[rawTitle];
-  if(!shortName){
-    // Auto-shorten: first meaningful word (skip articles/possessives)
-    const skipWords=new Set(['a','an','the','my','our','your','his','her','its','their']);
-    const words=mainTitle.split(/\s+/).filter(w=>w.length>0);
-    shortName=words.find(w=>!skipWords.has(w.toLowerCase()))||words[0]||'Film';
+  // === 2) Resolve CHAPTER display ===
+  // Priority: explicit override (_ChapterOverrides by clipId) > derive from raw title (Vol/Ch numbers)
+  let chapterPart=null;
+  if(r.clipId && S.chapterOverrides && S.chapterOverrides[r.clipId]){
+    chapterPart=S.chapterOverrides[r.clipId];
   }
-  // Detect volume number (e.g., "Vol 1", "Volume 2")
-  let volPart='';
-  const volMatch=rawTitle.match(/Vol(?:ume)?\.?\s*(\d+)/i);
-  if(volMatch)volPart=' '+volMatch[1];
-  // Detect chapter — use detected number if present, else placeholder "?" (TODO: pull real chapter order from JEM.tv)
-  let chNum='?';
-  const chMatch=rawTitle.match(/Ch(?:apter)?\.?\s*(\d+)/i);
-  if(chMatch)chNum=chMatch[1];
-  // Always show Ch — placeholder reminds us the data needs to be filled in
-  return shortName+volPart+' · Ch'+chNum;
+  if(!chapterPart){
+    // Detect volume number (e.g., "Vol 1", "Volume 2")
+    let volPart='';
+    const volMatch=rawTitle.match(/Vol(?:ume)?\.?\s*(\d+)/i);
+    if(volMatch)volPart=volMatch[1];
+    // Detect chapter — use detected number if present, else placeholder "?"
+    let chNum='?';
+    const chMatch=rawTitle.match(/Ch(?:apter)?\.?\s*(\d+)/i);
+    if(chMatch)chNum=chMatch[1];
+    chapterPart=(volPart?volPart+' ':'')+'Ch'+chNum;
+  }
+  // Combine: "FilmName - ChapterPart"
+  return filmName+' - '+chapterPart;
 }
 
 // Cache for tab maps to avoid re-reading on every action
@@ -10041,6 +10165,8 @@ try{S.customSections=await loadCustomSectionsFromTab();console.log(`Loaded ${S.c
 try{S.sectionRenames=await loadSectionRenamesFromTab();console.log(`Loaded ${Object.keys(S.sectionRenames).length} section renames`);}catch(e){console.warn('Could not load section renames:',e);S.sectionRenames={};}
 try{S.sectionPositions=await loadSectionPositionsFromTab();console.log(`Loaded ${Object.keys(S.sectionPositions).length} section positions`);}catch(e){console.warn('Could not load section positions:',e);S.sectionPositions={};}
 try{S.refOverrides=await loadRefOverridesFromTab();console.log(`Loaded ${Object.keys(S.refOverrides).length} ref overrides`);}catch(e){console.warn('Could not load ref overrides:',e);S.refOverrides={};}
+try{S.filmNameOverrides=await loadFilmNameOverridesFromTab();console.log(`Loaded ${Object.keys(S.filmNameOverrides).length} film name overrides`);}catch(e){console.warn('Could not load film name overrides:',e);S.filmNameOverrides={};}
+try{S.chapterOverrides=await loadChapterOverridesFromTab();console.log(`Loaded ${Object.keys(S.chapterOverrides).length} chapter overrides`);}catch(e){console.warn('Could not load chapter overrides:',e);S.chapterOverrides={};}
 await loadTab(0);
 // CRITICAL: migration runs BEFORE any writes so tabs are populated before anything else touches them
 const migRes=await migrateBlobToPerRow();
@@ -13098,6 +13224,8 @@ window.addEventListener('resize',fixIdxScroll);
       try{S.sectionRenames=await loadSectionRenamesFromTab();}catch(e){console.warn('Could not load section renames:',e);S.sectionRenames={};}
       try{S.sectionPositions=await loadSectionPositionsFromTab();}catch(e){console.warn('Could not load section positions:',e);S.sectionPositions={};}
       try{S.refOverrides=await loadRefOverridesFromTab();}catch(e){console.warn('Could not load ref overrides:',e);S.refOverrides={};}
+      try{S.filmNameOverrides=await loadFilmNameOverridesFromTab();}catch(e){console.warn('Could not load film name overrides:',e);S.filmNameOverrides={};}
+      try{S.chapterOverrides=await loadChapterOverridesFromTab();}catch(e){console.warn('Could not load chapter overrides:',e);S.chapterOverrides={};}
       await loadTab(0);
       registerTeamMember();
       startAutoRefresh();
