@@ -3664,11 +3664,12 @@ async function loadAllData() {
       if (tCfg.key === 'short_film' || tCfg.key === 'films') {
         clip.subtitle = (row[CONFIG.COL.SUBTITLE] || '').toString().trim();
       }
-      // Sichos (Addresses): parse the event-type JSON in column C. The column holds an
-      // array like [{"id":4296,"name":"Farbrengen, Yud Tes Kislev, 5744","type":"Farbrengen",...}].
+      // Sichos, Timeless Moments, Conversations, Short Films: parse the event-type JSON
+      // in column C. The column holds an array like
+      // [{"id":4296,"name":"Farbrengen, Yud Tes Kislev, 5744","type":"Farbrengen",...}].
       // We only display the `type` field (e.g. "Farbrengen", "Children's Rally") near the
-      // clip title in the detail header.
-      if (tCfg.key === 'sichos') {
+      // clip title in the detail header and as a column in exports / book views.
+      if (tCfg.key === 'sichos' || tCfg.key === 'timeless' || tCfg.key === 'conversations' || tCfg.key === 'short_film') {
         const raw = (row[CONFIG.COL.EVENTS] || '').toString().trim();
         clip.eventTypes = [];
         if (raw) {
@@ -4561,7 +4562,7 @@ function renderDetail() {
         <div class="detail-meta-row" style="margin-bottom:10px">
           ${formattedDate ? `<span class="detail-meta-item" style="font-size:13px;color:var(--tx2)">${esc(formattedDate)}</span>` : ''}
           ${clip.programNum ? `<span class="detail-meta-item">LT ${esc(clip.programNum)}</span>` : ''}
-          ${clip.typeKey === 'sichos' && clip.eventTypes && clip.eventTypes.length
+          ${(clip.typeKey === 'sichos' || clip.typeKey === 'timeless' || clip.typeKey === 'conversations' || clip.typeKey === 'short_film') && clip.eventTypes && clip.eventTypes.length
             ? clip.eventTypes.map(t => `<span class="detail-meta-item event-type-badge" title="Event type — from column C of the main sheet">${esc(t)}</span>`).join('')
             : ''}
           <span class="detail-meta-item">${statusBadgeHTML(status)}</span>
@@ -6638,12 +6639,13 @@ async function generateSheetExport() {
     const isShortFilm = typeKey === 'short_film';
     const isFilmChapter = typeKey === 'film_chapter';
     const isSichosExp = typeKey === 'sichos';
+    const isEventTypeExp = isSichosExp || typeKey === 'timeless' || typeKey === 'conversations' || typeKey === 'short_film';
     const header = ['Thumbnail', 'Title'];
     if (isFilmChapter) header.push('Film', 'Chapter Title');
     else header.push('Program');
     const isConvOrEncExp = (typeKey === 'conversations' || typeKey === 'my_encounter');
     if (isShortFilm) header.push('Subtitle');
-    if (isSichosExp) header.push('Event Type');
+    if (isEventTypeExp) header.push('Event Type');
     if (isConvOrEncExp) header.push('Featured People');
     header.push('New Description', 'Tags', 'Date', 'Duration', 'Watch URL', 'Approved By', 'Approved At');
 
@@ -6663,7 +6665,7 @@ async function generateSheetExport() {
       if (isShortFilm) {
         row.push(clip.subtitle || '');
       }
-      if (isSichosExp) {
+      if (isEventTypeExp) {
         row.push((clip.eventTypes || []).join(', '));
       }
       if (isConvOrEncExp) {
@@ -6777,12 +6779,13 @@ function downloadCsv() {
   const isShortFilm = typeKey === 'short_film';
   const isFilmChapter = typeKey === 'film_chapter';
   const isSichosExp = typeKey === 'sichos';
+  const isEventTypeExp = isSichosExp || typeKey === 'timeless' || typeKey === 'conversations' || typeKey === 'short_film';
   const header = ['Title'];
   if (isFilmChapter) header.push('Film', 'Chapter Title');
   else header.push('Program');
   const isConvOrEncExp = (typeKey === 'conversations' || typeKey === 'my_encounter');
   if (isShortFilm) header.push('Subtitle');
-  if (isSichosExp) header.push('Event Type');
+  if (isEventTypeExp) header.push('Event Type');
   if (isConvOrEncExp) header.push('Featured People');
   header.push('New Description', 'Tags', 'Date', 'Duration', 'Watch URL');
   // CSV-escape: wrap in quotes if value contains comma, quote, or newline; double-up internal quotes
@@ -6800,7 +6803,7 @@ function downloadCsv() {
     if (isFilmChapter) row.push(clip.filmName || '', clip.title || '');
     else row.push(clip.programNum ? 'LT ' + clip.programNum : '');
     if (isShortFilm) row.push(clip.subtitle || '');
-    if (isSichosExp) row.push((clip.eventTypes || []).join(', '));
+    if (isEventTypeExp) row.push((clip.eventTypes || []).join(', '));
     if (isConvOrEncExp) row.push(clip.featuredPeople || clip.featuredPeopleAuto || '');
     row.push(summary, tags, formatClipDate(clip.date), formatDuration(clip.durationMs), watchUrl);
     lines.push(row.map(csvCell).join(','));
@@ -6970,7 +6973,7 @@ function renderBookView() {
             ${(clip.typeKey === 'conversations' || clip.typeKey === 'my_encounter') && (clip.featuredPeople || clip.featuredPeopleAuto)
               ? `<div class="book-entry-featured">${clip.typeKey === 'my_encounter' ? 'Featuring' : 'In conversation with'}: <strong>${esc(clip.featuredPeople || clip.featuredPeopleAuto)}</strong></div>`
               : ''}
-            <div class="book-entry-meta">LT ${esc(clip.programNum)}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ⏱ ' + esc(dur) : ''}${clip.typeKey === 'sichos' && clip.eventTypes && clip.eventTypes.length ? ' · ' + esc(clip.eventTypes.join(', ')) : ''}</div>
+            <div class="book-entry-meta">LT ${esc(clip.programNum)}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ⏱ ' + esc(dur) : ''}${(clip.typeKey === 'sichos' || clip.typeKey === 'timeless' || clip.typeKey === 'conversations' || clip.typeKey === 'short_film') && clip.eventTypes && clip.eventTypes.length ? ' · ' + esc(clip.eventTypes.join(', ')) : ''}</div>
             <div class="book-entry-summary">${esc(summary)}</div>
             ${tags.length ? `<div class="book-entry-tags">${tags.map(t=>`<span class="book-tag">${esc(t)}</span>`).join('')}</div>` : ''}
           </div>
@@ -8095,7 +8098,7 @@ function renderFullBookView() {
               ${(clip.typeKey === 'conversations' || clip.typeKey === 'my_encounter') && (clip.featuredPeople || clip.featuredPeopleAuto)
                 ? `<div class="book-entry-featured">${clip.typeKey === 'my_encounter' ? 'Featuring' : 'In conversation with'}: <strong>${esc(clip.featuredPeople || clip.featuredPeopleAuto)}</strong></div>`
                 : ''}
-              <div class="book-entry-meta">${clip.programNum ? 'LT ' + esc(clip.programNum) : ''}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ' + esc(dur) : ''}${clip.typeKey === 'sichos' && clip.eventTypes && clip.eventTypes.length ? ' · ' + esc(clip.eventTypes.join(', ')) : ''}</div>
+              <div class="book-entry-meta">${clip.programNum ? 'LT ' + esc(clip.programNum) : ''}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ' + esc(dur) : ''}${(clip.typeKey === 'sichos' || clip.typeKey === 'timeless' || clip.typeKey === 'conversations' || clip.typeKey === 'short_film') && clip.eventTypes && clip.eventTypes.length ? ' · ' + esc(clip.eventTypes.join(', ')) : ''}</div>
               <div class="book-entry-summary">${esc(summary)}</div>
               ${tags.length ? `<div class="book-entry-tags">${tags.map(tg=>`<span class="book-tag">${esc(tg)}</span>`).join('')}</div>` : ''}
             </div>
