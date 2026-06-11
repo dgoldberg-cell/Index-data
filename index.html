@@ -4804,6 +4804,14 @@ async function loadNewTagsFromTab(){
 async function appendToNewTagBindingsLog(tagName,rowIdx,desc,segType,rel,relevancy,action,timestamp,user,bindingType){
   const TAB='_NewTagBindings';
   const existing=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  // Look up clip ID for this rowIdx so we record it as a stable identifier
+  let clipId='';
+  try{
+    if(rowIdx>=0&&rowIdx<S.rows.length){
+      const idCol=S.headers.findIndex(h=>h.toLowerCase()==='id');
+      if(idCol>=0)clipId=(S.rows[rowIdx][idCol]||'').toString().trim();
+    }
+  }catch(_){}
   if(!existing){
     try{
       await gapi.client.sheets.spreadsheets.batchUpdate({
@@ -4816,18 +4824,18 @@ async function appendToNewTagBindingsLog(tagName,rowIdx,desc,segType,rel,relevan
       }catch(_){}
       await gapi.client.sheets.spreadsheets.values.update({
         spreadsheetId:S.sheetId,
-        range:`'${TAB}'!A1:J1`,
+        range:`'${TAB}'!A1:K1`,
         valueInputOption:'RAW',
-        resource:{values:[['Timestamp','Tag Name','Row Index','Description','SegType','Relationship','Relevancy','Action','Set By','Binding Type']]}
+        resource:{values:[['Timestamp','Tag Name','Row Index','Description','SegType','Relationship','Relevancy','Action','Set By','Binding Type','Clip ID']]}
       });
     }catch(e){console.warn('Could not create _NewTagBindings tab:',e)}
   }
   try{
     await gapi.client.sheets.spreadsheets.values.append({
       spreadsheetId:S.sheetId,
-      range:`'${TAB}'!A:J`,
+      range:`'${TAB}'!A:K`,
       valueInputOption:'RAW',
-      resource:{values:[[timestamp||new Date().toISOString(),tagName,String(rowIdx),desc||'',segType||'',rel||'',String(relevancy||''),action||'add',user||S.user?.name||S.user?.email||'Unknown',bindingType||'clip']]}
+      resource:{values:[[timestamp||new Date().toISOString(),tagName,String(rowIdx),desc||'',segType||'',rel||'',String(relevancy||''),action||'add',user||S.user?.name||S.user?.email||'Unknown',bindingType||'clip',clipId]]}
     });
   }catch(e){console.warn('Could not append to new tag bindings log:',e)}
 }
@@ -4840,7 +4848,7 @@ async function loadNewTagBindingsFromTab(){
   try{
     const r=await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId:S.sheetId,
-      range:`'${TAB}'!A2:J10000`
+      range:`'${TAB}'!A2:K10000`
     });
     const rows=r.result.values||[];
     const sorted=[...rows].sort((a,b)=>(Date.parse(a[0]||'')||0)-(Date.parse(b[0]||'')||0));
@@ -4856,10 +4864,11 @@ async function loadNewTagBindingsFromTab(){
       const action=(row[7]||'add').trim();
       const setBy=(row[8]||'').trim();
       const bindingType=(row[9]||'clip').trim();
+      const clipId=(row[10]||'').toString().trim();
       if(!tagName||rowIdx<0)return;
       const key=tagName+'|'+rowIdx;
       if(action==='remove')delete map[key];
-      else map[key]={tagName,rowIdx,desc,segType,rel,relevancy,addedBy:setBy,ts:row[0],bindingType};
+      else map[key]={tagName,rowIdx,desc,segType,rel,relevancy,addedBy:setBy,ts:row[0],bindingType,clipId};
     });
     return Object.values(map);
   }catch(e){
