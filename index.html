@@ -6679,8 +6679,8 @@ async function generateIndexTab(sectionName){
         'LT Sicha':'A',
         'LT Timeless Moment':'T',
         'LT Eye to Eye':'C',
-        'LT My Encounter':'ME',
-        'Short Film':'SF',
+        'LT My Encounter':'I',
+        'Short Film':'S',
       }[r.clipType];
       if(pref===undefined)pref=r.clipType||''; // unknown type → use the clipType verbatim
       return pref+r.progNum;
@@ -7108,7 +7108,7 @@ function refCodeForResult(r){
   const prefixMap={
     'Addresses':'A',
     'Conversations':'C',
-    'My Encounter':'M',
+    'My Encounter':'I',
     'Timeless Moments':'T',
     'Short Films':'S'
   };
@@ -13120,7 +13120,7 @@ function rGroups(){
         if(r.clipType==='Film Chapter')return r.pvName||r.clipName||'';
         if(r.clipType==='Film')return r.clipName||'';
         if(!r.progNum)return '';
-        var pref={'LT Sicha':'A','LT Timeless Moment':'T','LT Eye to Eye':'C','LT My Encounter':'ME','Short Film':'SF'}[r.clipType];
+        var pref={'LT Sicha':'A','LT Timeless Moment':'T','LT Eye to Eye':'C','LT My Encounter':'I','Short Film':'S'}[r.clipType];
         if(pref===undefined)pref=r.clipType||'';
         return pref+r.progNum;
       })(m);
