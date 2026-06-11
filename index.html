@@ -6685,12 +6685,10 @@ async function generateIndexTab(sectionName){
       if(pref===undefined)pref=r.clipType||''; // unknown type → use the clipType verbatim
       return pref+r.progNum;
     }
-    // Column layout: A=Entry, B=Sub1, C=Sub2, D=Sub3, E=Sub4, F=Sub5 (6 name cols),
-    // G=Segment, H=Original Desc, I=Description, J=Relationship, K=Reference, L=Chapter Name,
-    // M=Relevancy, N=Review, O=AI Suggestion, P=spacer, Q=Clip Link, R=Clip Title, S=Transcript,
-    // T=spacer, U=Notes, V=Bookmarked, W=Original Tag Name, X=See Also
-    var EC=24; // total columns (6 name cols + 18 data cols)
-    var headers=['Entry','Sub1','Sub2','Sub3','Sub4','Sub5','Segment Type','Original Description','Description','Relationship','Reference','Chapter Name For Film','Relevancy','Review Status','AI Suggestion','','Clip Link','Clip Title','Transcript (excerpt)','','Notes','Bookmarked','Original Tag Name','See Also'];
+    // Column layout: A-F = name cols (6 levels), G=See Also, H=Segment, I=Description,
+    // J=Reference, K=Chapter Name For Film, L=Relevancy
+    var EC=12; // total columns
+    var headers=['Entry','Sub1','Sub2','Sub3','Sub4','Sub5','See Also','Segment Type','Description','Reference','Chapter Name For Film','Relevancy'];
     
     // Step 2: Build rows in indented format
     const dataRows=[headers];
@@ -6769,7 +6767,7 @@ async function generateIndexTab(sectionName){
         var aliasRow=[];for(var z=0;z<EC;z++)aliasRow.push('');
         aliasRow[nameCol]=entry.name||'';
         aliasRow[8]='See: '+entry.aliasTargetResolved; // Description column (I=index 8)
-        aliasRow[13]='Alias'; // Review Status column (N=index 13)
+        // (Review Status column removed from layout)
         dataRows.push(aliasRow);
         return;
       }
@@ -6780,13 +6778,8 @@ async function generateIndexTab(sectionName){
         var col=entryColumn(anc);
         entryRow[col]=anc.name||'';
       });
-      // W (col 22): Original Tag Name — populated if entry was renamed
-      if(entry.originalNames&&entry.originalNames.size){
-        entryRow[22]=Array.from(entry.originalNames).join('; ');
-      }else if(entry.originalName&&entry.originalName!==entry.name){
-        entryRow[22]=entry.originalName;
-      }
-      // X (col 23): See Also — list tag refs (resolved current names) and free-text refs
+      // (Original Tag Name column removed from layout)
+      // G (col 6): See Also — list tag refs (resolved current names) and free-text refs
       // Skip tag references whose target is soft-deleted
       var seeAlsoList=S.seeAlsoRefs?.[entry.name]||[];
       if(seeAlsoList.length){
@@ -6798,7 +6791,7 @@ async function generateIndexTab(sectionName){
           return true;
         });
         if(visibleRefs.length){
-          entryRow[23]=visibleRefs.map(function(s){
+          entryRow[6]=visibleRefs.map(function(s){
             if(s.type==='tag')return resolveTagName(s.target);
             return '"'+s.target+'"';
           }).join('; ');
@@ -6817,7 +6810,7 @@ async function generateIndexTab(sectionName){
         if(!bySeg[seg])return;
         
         var segRow=[];for(var z=0;z<EC;z++)segRow.push('');
-        segRow[6]=seg; // G: Segment Type (index 6)
+        segRow[7]=seg; // H: Segment Type (index 7)
         dataRows.push(segRow);
         
         bySeg[seg].sort(function(a,b){return(a.desc||'').localeCompare(b.desc||'')});
@@ -6829,48 +6822,20 @@ async function generateIndexTab(sectionName){
           if(r.groupKey && !r.groupFirst) return;
           var members=(r.groupKey && r.groupMembers && r.groupMembers.length) ? r.groupMembers : [r];
           var row=[];for(var z=0;z<EC;z++)row.push('');
-          var rvk=rvKey(entry.name,seg,r.rowIdx);
-          var rvd=getRV(rvk);
-          row[7]=(rvd&&rvd.originalDesc)?rvd.originalDesc:'';   // H: Original Description
-          row[8]=r.desc||'';                                     // I: Description
-          var defRel=relDefaults[seg]||'spoken_about';
-          if(r.rel&&r.rel!==defRel){
-            if(sectionName==='Nigunim'){if(r.rel==='spoken_about')row[9]=r.rel}
-            else row[9]=r.rel;                                   // J: Relationship
-          }
-          // K: Reference — join refs across all members (films keep their format individually)
-          row[10]=members.map(function(m){return refForClip(m)}).filter(function(s){return s}).join(', ');
-          // L: Chapter — only for Film Chapters; join across members
+          // I (col 8): Description
+          row[8]=r.desc||'';
+          // J (col 9): Reference — join refs across all members
+          row[9]=members.map(function(m){return refForClip(m)}).filter(function(s){return s}).join(', ');
+          // K (col 10): Chapter Name — only for Film Chapters; join across members
           if(r.clipType==='Film Chapter'){
-            row[11]=members.map(function(m){return m.clipName||''}).filter(function(s){return s}).join(', ');
+            row[10]=members.map(function(m){return m.clipName||''}).filter(function(s){return s}).join(', ');
           }
-          // M: Relevancy — for grouped clips, list each member's relevancy in same order as refs
+          // L (col 11): Relevancy — for grouped clips, list each member's relevancy in same order as refs
           if(members.length>1){
-            row[12]=members.map(function(m){return (m.relevancy||'').toString()}).join(', ');
+            row[11]=members.map(function(m){return (m.relevancy||'').toString()}).join(', ');
           }else{
-            row[12]=(r.relevancy||'').toString();
+            row[11]=(r.relevancy||'').toString();
           }
-          // N: Review Status — for groups, only "Reviewed" if ALL members are reviewed
-          if(members.length>1){
-            var allReviewed=members.every(function(m){
-              var rv2=getRV(rvKey(entry.name,seg,m.rowIdx));
-              return rv2 && rv2.reviewed;
-            });
-            row[13]=allReviewed ? '✓ Reviewed' : '';
-            row[14]='';                                          // O: AI Suggestion
-          }else if(rvd){
-            var statusLabels={pending:'⏳ Pending',accepted:'✅ Accepted',denied:'❌ Denied',custom:'✏️ Custom',ok:'✓ OK'};
-            row[13]=statusLabels[rvd.status]||(rvd.reviewed?'✓ Reviewed':'');
-            row[14]=rvd.suggestion||'';
-          }else{
-            row[13]='';
-            row[14]='';
-          }
-          // Q: Clip link — uses clipLinkForResult so full films get ?produced=X
-          row[16]=clipLinkForResult(r);
-          // R: Clip title — join across members
-          row[17]=members.map(function(m){return m.clipName||''}).filter(function(s){return s}).join(' | ');
-          row[18]=(r.transcript||'').substring(0,500);            // S: Transcript
           dataRows.push(row);
         });
       });
@@ -6937,29 +6902,7 @@ async function generateIndexTab(sectionName){
     invalidateTabMapCache(tabName);
     
     // Auto-hide Original Description (col E, index 4), Review columns (K-L, index 10-11), and Original Tag Name (col T, index 19)
-    try{
-      var newSheet=meta.result.sheets.find(function(s){return s.properties.title===tabName});
-      if(newSheet){
-        var newSid=newSheet.properties.sheetId;
-        // Hide non-essential columns by default. New layout (24 cols, A-X):
-        //   H (7) = Original Description
-        //   N-O (13-14) = Review Status + AI Suggestion
-        //   P (15) = spacer
-        //   S (18) = Transcript (excerpt)
-        //   T (19) = spacer
-        //   W (22) = Original Tag Name
-        await gapi.client.sheets.spreadsheets.batchUpdate({
-          spreadsheetId:S.sheetId,
-          resource:{requests:[
-            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:7,endIndex:8},properties:{hiddenByUser:true},fields:'hiddenByUser'}},   // H: Original Description
-            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:13,endIndex:15},properties:{hiddenByUser:true},fields:'hiddenByUser'}}, // N-O: Review + AI Suggestion
-            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:15,endIndex:16},properties:{hiddenByUser:true},fields:'hiddenByUser'}}, // P: spacer
-            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:18,endIndex:20},properties:{hiddenByUser:true},fields:'hiddenByUser'}}, // S-T: Transcript + spacer
-            {updateDimensionProperties:{range:{sheetId:newSid,dimension:'COLUMNS',startIndex:22,endIndex:23},properties:{hiddenByUser:true},fields:'hiddenByUser'}}  // W: Original Tag Name
-          ]}
-        });
-      }
-    }catch(hideErr){console.warn('Auto-hide columns error:',hideErr)}
+    // New 12-col layout — all columns are visible by default (nothing to hide).
     
     toast('"'+tabName+'" created with '+(dataRows.length-1)+' rows!','success');
   }catch(e){
@@ -7024,28 +6967,28 @@ async function buildIndexTabMap(tabName){
   try{
     const r=await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId:S.sheetId,
-      range:`'${tabName}'!A:R`
+      range:`'${tabName}'!A:L`
     });
     const rows=r.result.values||[];
-    const map={}; // key: "entryName|clipLink" → {sheetRow (1-indexed), tabName}
+    const map={}; // key: "entryName|reference" → {sheetRow (1-indexed), tabName}
     let currentEntry='';
     let currentSeg='';
     for(let i=1;i<rows.length;i++){ // skip header
       const row=rows[i]||[];
-      // Name columns are now A-F (indices 0-5). Find the rightmost non-empty one — that's the entry name on a tag header row.
+      // Name columns are A-F (indices 0-5). Find the rightmost non-empty one — that's the entry name on a tag header row.
       let entryHere='';
       for(let c=5;c>=0;c--){
         if((row[c]||'').trim()){entryHere=(row[c]||'').trim();break}
       }
-      const segG=(row[6]||'').trim();    // G: Segment Type (index 6)
-      const colQ=(row[16]||'').trim();   // Q: Clip Link (index 16)
-      // Header row: has an entry name in cols A-F and NO clip link
-      if(entryHere && !colQ){currentEntry=entryHere;currentSeg='';continue}
-      // Segment header row: G has segment, but nothing in A-F and no clip link
-      if(segG && !entryHere && !colQ){currentSeg=segG;continue}
-      // Result row — has clip link in col Q
-      if(colQ && currentEntry){
-        const mapKey=currentEntry+'|'+colQ;
+      const segH=(row[7]||'').trim();    // H: Segment Type (index 7)
+      const refJ=(row[9]||'').trim();    // J: Reference (index 9)
+      // Header row: has an entry name in cols A-F and NO reference
+      if(entryHere && !refJ){currentEntry=entryHere;currentSeg='';continue}
+      // Segment header row: H has segment, but nothing in A-F and no reference
+      if(segH && !entryHere && !refJ){currentSeg=segH;continue}
+      // Result row — has reference in col J
+      if(refJ && currentEntry){
+        const mapKey=currentEntry+'|'+refJ;
         map[mapKey]={sheetRow:i+1,tabName,entry:currentEntry,seg:currentSeg};
       }
     }
@@ -7192,39 +7135,15 @@ function invalidateTabMapCache(tabName){
   else{_tabMapCache={};_tabMapCacheTime={}}
 }
 
-// Write Review Status and AI Suggestion to the Index tab for a specific result
-// reviewStatus: 'pending', 'accepted', 'denied', 'custom', 'ok', 'reviewed'
-// suggestion: the AI suggestion text (or empty)
+// Write Review Status and AI Suggestion to the Index tab for a specific result.
+// NO-OP in the new 12-column layout — Review Status / AI Suggestion are not in the export anymore.
+// Review state is tracked separately in the _ReviewStatus tab via setRV / appendToReviewStatusLog.
 async function syncToIndexTab(entryName,result,reviewStatus,suggestion){
-  const section=sectionForEntry(entryName);
-  if(!section)return;
-  const tabName=indexTabForSection(section);
-  const map=await getTabMap(tabName);
-  if(!map)return; // Tab doesn't exist yet, skip silently
-
-  const clipLink=clipLinkForResult(result);
-  if(!clipLink)return;
-  const mapKey=entryName+'|'+clipLink;
-  const info=map[mapKey];
-  if(!info)return; // Row not found in tab
-
-  // Write H (Review Status) and I (AI Suggestion) — columns index 7 and 8
-  const statusLabel={pending:'⏳ Pending',accepted:'✅ Accepted',denied:'❌ Denied',custom:'✏️ Custom',ok:'✓ OK',reviewed:'✓ Reviewed'}[reviewStatus]||reviewStatus;
-  try{
-    await gapi.client.sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId:S.sheetId,
-      resource:{
-        valueInputOption:'RAW',
-        data:[
-          {range:`'${tabName}'!I${info.sheetRow}`,values:[[statusLabel]]},
-          {range:`'${tabName}'!J${info.sheetRow}`,values:[[suggestion||'']]}
-        ]
-      }
-    });
-  }catch(e){console.warn('syncToIndexTab write error:',e)}
+  return; // No-op — these columns were removed from the export tab.
 }
 
-// Also update the Description column (C) in the Index tab when a description changes
+// Also update the Description column in the Index tab when a description changes.
+// In the new 12-col layout, Description is column I (index 8). Reference is column J (index 9).
 async function syncDescToIndexTab(entryName,result,newDesc){
   if(!newDesc&&newDesc!=='')return; // Skip if undefined/null (but allow explicit empty string)
   const section=sectionForEntry(entryName);
@@ -7233,68 +7152,40 @@ async function syncDescToIndexTab(entryName,result,newDesc){
   const map=await getTabMap(tabName);
   if(!map)return;
 
-  const clipLink=clipLinkForResult(result);
-  if(!clipLink)return;
-  const mapKey=entryName+'|'+clipLink;
+  // Build the ref code — same as refForClip/refCodeForResult produce for this clip
+  let ref='';
+  if(result.clipId && S.refOverrides && S.refOverrides[result.clipId])ref=S.refOverrides[result.clipId];
+  else if(result.objId && S.refOverrides){
+    const stripped=result.objId.replace(/^video_clip-/,'');
+    if(S.refOverrides[stripped])ref=S.refOverrides[stripped];
+  }
+  if(!ref){
+    if(result.clipType==='Film Chapter'||result.clipType==='Film'){
+      ref=filmRefForResult(result);
+    }else{
+      ref=refCodeForResult(result)||'';
+    }
+  }
+  if(!ref)return;
+  const mapKey=entryName+'|'+ref;
   const info=map[mapKey];
   if(!info)return;
 
   try{
     await gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId:S.sheetId,
-      range:`'${tabName}'!D${info.sheetRow}`,
+      range:`'${tabName}'!I${info.sheetRow}`, // I = Description (new 12-col layout)
       valueInputOption:'RAW',
       resource:{values:[[newDesc]]}
     });
   }catch(e){console.warn('syncDescToIndexTab write error:',e)}
 }
 
-// Batch sync: write all current review data to Index tabs
-// Called manually from dashboard or settings
+// Batch sync: previously wrote Review Status + AI Suggestion to Index tabs.
+// NO-OP in the new 12-column layout — those columns aren't in the export anymore.
+// Review state lives in the _ReviewStatus tab.
 async function fullSyncToSheets(){
-  if(!S.indexData){toast('No index data','error');return}
-  toast('Syncing review data to sheets…');
-  let synced=0,skipped=0;
-  for(const sec of effectiveSectionOrder()){
-    const tabName=indexTabForSection(sec);
-    const map=await getTabMap(tabName);
-    if(!map){skipped++;continue}
-
-    const entries=S.indexData.sections[sec]||[];
-    const batchData=[];
-    entries.forEach(entry=>{
-      entry.results.forEach(r=>{
-        const k=rvKey(entry.name,r.segType,r.rowIdx);
-        const rv=getRV(k);
-        if(!rv)return;
-        const clipLink=clipLinkForResult(r);
-        if(!clipLink)return;
-        const mapKey=entry.name+'|'+clipLink;
-        const info=map[mapKey];
-        if(!info)return;
-        const statusLabel={pending:'⏳ Pending',accepted:'✅ Accepted',denied:'❌ Denied',custom:'✏️ Custom',ok:'✓ OK'}[rv.status]||(rv.reviewed?'✓ Reviewed':'');
-        batchData.push(
-          {range:`'${tabName}'!I${info.sheetRow}`,values:[[statusLabel]]},
-          {range:`'${tabName}'!J${info.sheetRow}`,values:[[rv.suggestion||'']]}
-        );
-      });
-    });
-
-    if(batchData.length){
-      // Write in chunks of 200 ranges (100 rows × 2 cols)
-      for(let i=0;i<batchData.length;i+=200){
-        try{
-          await gapi.client.sheets.spreadsheets.values.batchUpdate({
-            spreadsheetId:S.sheetId,
-            resource:{valueInputOption:'RAW',data:batchData.slice(i,i+200)}
-          });
-          synced+=Math.min(200,batchData.length-i)/2;
-        }catch(e){console.warn('Batch sync error:',e)}
-        if(i+200<batchData.length)await new Promise(r=>setTimeout(r,300));
-      }
-    }
-  }
-  toast(`Synced ${Math.round(synced)} items to ${effectiveSectionOrder().length-skipped} tabs`,'success');
+  toast('Review data is tracked in _ReviewStatus tab; nothing to sync to Index tabs in the new layout.','info');
 }
 
 
