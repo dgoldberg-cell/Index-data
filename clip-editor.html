@@ -2077,6 +2077,10 @@ let S = {
   regenCounts: {}, // rowNum -> count of regenerations this session
   isAdmin: false,
   userFilter: '',
+  // _NewTagBindings — map of rowNum → array of binding records. Populated by
+  // loadNewTagBindings() on startup. Used by Featured People derivation to pick up
+  // workstation-added `spoken_to` tags.
+  newTagBindings: {},
 };
 
 // Convenience accessors that target the active type's data
@@ -3592,6 +3596,9 @@ async function loadAllData() {
   // which bucket each clip lands in. The override tab is created on demand
   // (loadTypeOverrides silently does nothing if it doesn't exist yet).
   try { await loadTypeOverrides(); } catch(e) { console.warn('Type overrides load error:', e); }
+  // Load _NewTagBindings — connections between tags and clips added via the Index Workstation.
+  // Used to extend Featured People for Conversations + My Encounter with `spoken_to` people.
+  try { await loadNewTagBindings(); } catch(e) { console.warn('NewTagBindings load error:', e); }
   showLoading('Reading sheet data…');
   try {
     const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!A:AD`);
@@ -3688,13 +3695,17 @@ async function loadAllData() {
         }
       }
       // Conversations + My Encounter: derive a "Featured People" string from column G
-      // (the keywords JSON). For My Encounter clips: pull names where relationship is
-      // "interviewee". For Conversations: pull names where relationship is "in_conversation_with".
+      // (the keywords JSON) PLUS any "spoken_to" tags added via the Index Workstation
+      // (stored in _NewTagBindings). For My Encounter clips: pull names where relationship
+      // is "interviewee" from col G + "spoken_to" from bindings. For Conversations: pull
+      // names where relationship is "in_conversation_with" from col G + "spoken_to" from bindings.
       // Stored on clip.featuredPeopleAuto — the AUTO-DERIVED value. The user-editable
       // override (if any) lives in the review tab and takes precedence at render time.
       if (tCfg.key === 'conversations' || tCfg.key === 'my_encounter') {
         const targetRel = tCfg.key === 'my_encounter' ? 'interviewee' : 'in_conversation_with';
-        clip.featuredPeopleAuto = deriveFeaturedPeople(row[CONFIG.COL.KEYWORDS], targetRel);
+        // Pass the clip's stable clipId (main sheet col D) so binding lookups work even
+        // when sheet rows have shifted. clip.clipId is already set from the row above.
+        clip.featuredPeopleAuto = deriveFeaturedPeople(row[CONFIG.COL.KEYWORDS], targetRel, clip.clipId);
       }
       // Films: also capture the film_id explicitly so chapter rows can be linked to it
       if (tCfg.key === 'films') {
@@ -3839,33 +3850,23 @@ function sanitizeDescription(s) {
 //   ["Cohen, Yossi", "Cohen, Sara", "Cohen, Mendel"] → "Yossi, Sara, and Mendel Cohen"
 //   ["Cohen, Yossi", "Levi, Avi"] → "Yossi Cohen, Avi Levi"
 // Returns '' if no qualifying tags found or JSON malformed.
-function deriveFeaturedPeople(rawKeywords, targetRel) {
-  if (!rawKeywords) return '';
-  const raw = (rawKeywords || '').toString().trim();
-  if (!raw) return '';
-  let tags;
-  try { tags = JSON.parse(raw); } catch (e) { return ''; }
-  if (!Array.isArray(tags)) return '';
-  // Normalize: underscore form for comparison (data uses 'in_conversation_with' style)
-  const want = (targetRel || '').toLowerCase().replace(/\s+/g, '_');
-  const peopleNames = [];
+// Format a list of "Lastname, Firstname Middle"-style names into the final Featured People
+// display string. Groups by surname so couples/families render together:
+//   ["Cohen, Yossi", "Cohen, Sara"] → "Yossi and Sara Cohen"
+//   ["Cohen, Yossi", "Cohen, Sara", "Cohen, Mendel"] → "Yossi, Sara, and Mendel Cohen"
+//   ["Cohen, Yossi", "Levi, Avi"] → "Yossi Cohen, Avi Levi"
+function formatFeaturedPeopleNames(rawNames) {
+  if (!rawNames || !rawNames.length) return '';
+  // Dedupe (case-insensitive) while preserving first-seen order
   const seen = new Set();
-  tags.forEach(t => {
-    const rel = ((t?.relationship) || '').toString().toLowerCase().replace(/\s+/g, '_');
-    if (rel !== want) return;
-    // Only People-section tags. Path looks like "People > Cohen, Shlomo Zalman" or similar.
-    const path = ((t?.path) || '').toString();
-    if (path && !/^people\b/i.test(path.trim())) return;
-    const name = ((t?.name) || '').toString().trim();
-    if (!name) return;
-    if (seen.has(name.toLowerCase())) return;
-    seen.add(name.toLowerCase());
-    peopleNames.push(name);
+  const unique = [];
+  rawNames.forEach(n => {
+    const k = (n || '').toLowerCase().trim();
+    if (!k || seen.has(k)) return;
+    seen.add(k);
+    unique.push(n);
   });
-  if (!peopleNames.length) return '';
-  // Names come in as "Lastname, Firstname Middle" — convert to display "Firstname Lastname"
-  // and group by surname to detect couples/families.
-  const parsed = peopleNames.map(raw => {
+  const parsed = unique.map(raw => {
     if (raw.includes(',')) {
       const [last, ...rest] = raw.split(',');
       const first = rest.join(',').trim();
@@ -3893,6 +3894,127 @@ function deriveFeaturedPeople(rawKeywords, targetRel) {
     return `${firsts.slice(0, -1).join(', ')}, and ${firsts[firsts.length - 1]} ${surname}`;
   });
   return rendered.join(', ');
+}
+
+// Extract People names from a clip's column G keywords JSON where relationship matches `targetRel`.
+// Returns an array of "Lastname, Firstname" strings (in order of first appearance).
+function extractFeaturedFromKeywords(rawKeywords, targetRel) {
+  if (!rawKeywords) return [];
+  const raw = (rawKeywords || '').toString().trim();
+  if (!raw) return [];
+  let tags;
+  try { tags = JSON.parse(raw); } catch (e) { return []; }
+  if (!Array.isArray(tags)) return [];
+  const want = (targetRel || '').toLowerCase().replace(/\s+/g, '_');
+  const names = [];
+  tags.forEach(t => {
+    const rel = ((t?.relationship) || '').toString().toLowerCase().replace(/\s+/g, '_');
+    if (rel !== want) return;
+    const path = ((t?.path) || '').toString();
+    if (path && !/^people\b/i.test(path.trim())) return;
+    const name = ((t?.name) || '').toString().trim();
+    if (name) names.push(name);
+  });
+  return names;
+}
+
+// _NewTagBindings tab — logs tag-to-clip connections added via the Index Workstation.
+// Loaded once at startup and indexed by clipId (column K of the binding row, which is
+// the stable clipId from main sheet column D — NOT the row position).
+//
+// Tab column layout (1-indexed):
+//   A: timestamp ISO8601
+//   B: tag name (e.g. "Sandhaus, Avrohom")
+//   C: row index (where the clip appears in the Index Workstation's filtered view — NOT used here)
+//   D: description / note (often blank)
+//   E: SegType (e.g. "Conversations", "My Encounter") — informational
+//   F: Relationship (e.g. "spoken_to", "spoken_about")
+//   G: Relevancy (number)
+//   H: Action ("add" | "remove")
+//   I: Set By (added_by name)
+//   J: (scope or other — varies)
+//   K: Clip ID — the stable clipId from main sheet col D. This is what we key on.
+//
+// We expose: S.newTagBindings = { [clipId]: [ { name, relationship, action, ts } ... ] }
+// Sorted chronologically per clipId so "latest action wins" works by replay.
+async function loadNewTagBindings() {
+  S.newTagBindings = {};
+  try {
+    const data = await sheetsGet(`'_NewTagBindings'!A2:K100000`);
+    const rows = data.values || [];
+    let skippedNoClipId = 0;
+    rows.forEach(row => {
+      if (!row || !row.length) return;
+      const ts = (row[0] || '').toString().trim();
+      const name = (row[1] || '').toString().trim();
+      const relationship = (row[5] || '').toString().trim();
+      const action = (row[7] || '').toString().trim().toLowerCase();
+      const clipId = (row[10] || '').toString().trim(); // column K
+      if (!name || !action) return;
+      if (!clipId) { skippedNoClipId++; return; }
+      if (!S.newTagBindings[clipId]) S.newTagBindings[clipId] = [];
+      S.newTagBindings[clipId].push({ name, relationship, action, ts });
+    });
+    // Sort each clipId's bindings chronologically so "latest action wins" works by replay
+    Object.values(S.newTagBindings).forEach(arr => {
+      arr.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
+    });
+    const numClips = Object.keys(S.newTagBindings).length;
+    console.log(`Loaded new-tag bindings for ${numClips} clips${skippedNoClipId ? ` (skipped ${skippedNoClipId} rows with no clipId in col K — legacy data)` : ''}`);
+  } catch (e) {
+    // Tab may not exist — silently skip. Featured People still derives from col G.
+    console.warn('_NewTagBindings load skipped:', e?.message || e);
+    S.newTagBindings = {};
+  }
+}
+
+// Walk the bindings for a clip, applying add/remove actions in chronological order,
+// and return the names whose relationship (after all replays) matches one of the wanted
+// relationships. `wantedRels` is a list of underscore-normalized relationship strings.
+// Keyed by the clip's stable clipId (main sheet col D).
+function extractFeaturedFromBindings(clipId, wantedRels) {
+  const bindings = S.newTagBindings?.[String(clipId)];
+  if (!bindings || !bindings.length) return [];
+  const wantedSet = new Set((wantedRels || []).map(r => (r || '').toLowerCase().replace(/\s+/g, '_')));
+  // Track each (name + relationship) tuple's latest state: add → present, remove → absent.
+  // A name may appear under multiple relationships — handle each tuple independently.
+  const state = new Map(); // key: `${nameLower}::${rel}` → 'add' | 'remove'
+  const orderByKey = new Map(); // preserve first-add order
+  let i = 0;
+  bindings.forEach(b => {
+    const name = (b.name || '').trim();
+    const rel = (b.relationship || '').toLowerCase().replace(/\s+/g, '_');
+    if (!name || !rel) return;
+    const key = name.toLowerCase() + '::' + rel;
+    if (!orderByKey.has(key)) orderByKey.set(key, i++);
+    state.set(key, b.action === 'remove' ? 'remove' : 'add');
+  });
+  // Collect names whose final state is 'add' AND relationship is in the wanted set
+  const names = [];
+  Array.from(orderByKey.entries())
+    .sort((a, b) => a[1] - b[1])
+    .forEach(([key]) => {
+      if (state.get(key) !== 'add') return;
+      const [_, rel] = key.split('::');
+      if (!wantedSet.has(rel)) return;
+      // Recover original casing — grab the most recent matching binding name
+      const matching = bindings.filter(b => {
+        const r = (b.relationship || '').toLowerCase().replace(/\s+/g, '_');
+        return r === rel && b.name.toLowerCase() === key.split('::')[0];
+      });
+      if (matching.length) names.push(matching[matching.length - 1].name);
+    });
+  return names;
+}
+
+// Build the full Featured People string for a clip, combining names from:
+//   1) Column G keywords JSON, filtered by the type's primary relationship
+//   2) _NewTagBindings, filtered by `spoken_to` (a workstation-added relationship that
+//      JEM editors use to attach speakers/discussion participants after the fact)
+function deriveFeaturedPeople(rawKeywords, primaryRel, clipId) {
+  const fromKeywords = extractFeaturedFromKeywords(rawKeywords, primaryRel);
+  const fromBindings = extractFeaturedFromBindings(clipId, ['spoken_to']);
+  return formatFeaturedPeopleNames([...fromKeywords, ...fromBindings]);
 }
 
 function getDescription(row, typeKey) {
