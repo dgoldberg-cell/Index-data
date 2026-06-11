@@ -3956,6 +3956,18 @@ function isExportable(clip) {
   return getStatus(clip) === 'approved' && !isDuplicate(clip);
 }
 
+// Used by export and book-view filters. A clip is exportable IN A SPECIFIC TYPE'S EXPORT
+// only if it's approved + not duplicate AND it actually belongs to that type's section.
+// Special rule: chapters marked "Treated as Address" (moved into the sichos bucket but
+// whose originalTypeKey is 'film_chapter') should NOT appear in the Addresses export —
+// they're still part of the film and appear under their parent film in the Films export.
+function isExportableForType(clip, typeKey) {
+  if (!isExportable(clip)) return false;
+  // For Addresses (Sichos) export: exclude treated-as-address film chapters.
+  if (typeKey === 'sichos' && clip.originalTypeKey === 'film_chapter') return false;
+  return true;
+}
+
 // ══════════════════════════════════════════════
 // FILMS EXPORT — interleaved film+chapter rows
 // ══════════════════════════════════════════════
@@ -6493,13 +6505,13 @@ function renderExportView() {
     return;
   }
 
-  let approved = activeBucket().clips.filter(c => isExportable(c));
+  let approved = activeBucket().clips.filter(c => isExportableForType(c, S.activeType));
   if (S.activeType === 'film_chapter' && _filmOrderCache) {
     const byFilm = {};
     approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
     const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
     approved = [];
-    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportable(c))); });
+    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportableForType(c, S.activeType))); });
   }
   document.getElementById('exportStats').textContent = `${approved.length} approved clips`;
   const showOrig = document.getElementById('exportShowOriginal')?.checked;
@@ -6605,14 +6617,14 @@ async function generateSheetExport() {
     return;
   }
 
-  let approved = activeBucket().clips.filter(c => isExportable(c));
+  let approved = activeBucket().clips.filter(c => isExportableForType(c, S.activeType));
   // For Film Chapters: respect the saved chapter ordering per film
   if (typeKey === 'film_chapter' && _filmOrderCache) {
     const byFilm = {};
     approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
     const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
     approved = [];
-    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportable(c))); });
+    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportableForType(c, S.activeType))); });
   }
   if (!approved.length) { showToast('No approved clips to export', 'error'); return; }
   const tabName = `${typeCfg.displayName} Export`;
@@ -6767,13 +6779,13 @@ function downloadCsv() {
     return;
   }
 
-  let approved = activeBucket().clips.filter(c => isExportable(c));
+  let approved = activeBucket().clips.filter(c => isExportableForType(c, S.activeType));
   if (typeKey === 'film_chapter' && _filmOrderCache) {
     const byFilm = {};
     approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
     const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
     approved = [];
-    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportable(c))); });
+    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportableForType(c, S.activeType))); });
   }
   if (!approved.length) { showToast('No approved clips to export', 'error'); return; }
   const isShortFilm = typeKey === 'short_film';
@@ -6863,7 +6875,7 @@ function exportHTML() {
     return;
   }
 
-  const approved = activeBucket().clips.filter(c => isExportable(c));
+  const approved = activeBucket().clips.filter(c => isExportableForType(c, S.activeType));
   const rows = approved.map(clip => {
     const tags = parseTags(clip);
     const summary = clip.rewrite || clip.description || '';
@@ -6941,14 +6953,14 @@ function renderBookView() {
     return;
   }
 
-  let approved = activeBucket().clips.filter(c => isExportable(c));
+  let approved = activeBucket().clips.filter(c => isExportableForType(c, S.activeType));
   // For film chapters, sort by saved film order
   if (S.activeType === 'film_chapter' && _filmOrderCache) {
     const byFilm = {};
     approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
     const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
     approved = [];
-    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportable(c))); });
+    filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportableForType(c, S.activeType))); });
   }
   const el = document.getElementById('bookPages');
   if (!approved.length) { el.innerHTML = `<div class="empty-state">No approved summaries yet</div>`; return; }
@@ -7531,7 +7543,7 @@ function renderChapterRow(film, chapter, isExpanded, isIntro) {
         </label>
         ${isTreatedAsAddress
           ? `<button class="btn btn-sm" onclick="restoreChapterFromAddress(${chapter._rowNum})" title="This chapter was marked as a Sicha. Click to restore it to a regular Film Chapter — it'll go back to using Film Chapter / Films AI rules and disappear from the Addresses queue." style="font-size:11.5px">↩ Restore to Film Chapter</button>`
-          : `<button class="btn btn-sm" onclick="treatChapterAsAddress(${chapter._rowNum})" title="This chapter is editorially a Sicha (Address) rather than a normal film chapter. Click to move it to the Addresses queue. It still stays visible here in the film. The Index Workspace will treat it as an Address." style="font-size:11.5px">📍 Treat as Address</button>`
+          : ''
         }
         ${chapter.clipId ? `<a href="https://videos.jem.tv/video-player?clip=${esc(chapter.clipId)}" target="_blank" rel="noopener" class="btn btn-sm" style="text-decoration:none">▶ Watch on JEM.tv</a>` : ''}
         <span style="font-size:11px;color:var(--tx4);margin-left:auto">${chapter.durationMs ? '⏱ ' + esc(formatDuration(chapter.durationMs)) : ''}</span>
@@ -8058,17 +8070,8 @@ function renderFullBookView() {
     // Skip film_chapter as a top-level section — chapters are folded into the Films section above
     if (t.key === 'film_chapter') return;
 
-    let approved = bucket.clips.filter(c => isExportable(c));
+    let approved = bucket.clips.filter(c => isExportableForType(c, t.key));
     if (!approved.length) return;
-    // For film chapters: order by saved film order
-    if (t.key === 'film_chapter') {
-      // Group by film and use ordered chapters
-      const byFilm = {};
-      approved.forEach(c => { const f = c.filmName || 'Unspecified'; if (!byFilm[f]) byFilm[f] = []; byFilm[f].push(c); });
-      const filmsSorted = Object.keys(byFilm).sort((a, b) => a.localeCompare(b));
-      approved = [];
-      filmsSorted.forEach(film => { approved.push(...getOrderedChapters(film).filter(c => isExportable(c))); });
-    }
     // Section title page
     pageNum++;
     html += `<div class="book-page" style="display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;min-height:680px;">
