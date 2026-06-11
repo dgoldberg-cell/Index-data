@@ -4012,10 +4012,10 @@ function buildFilmsExportEntries() {
 }
 
 // Header used for the films export across Sheet / CSV. Same column order everywhere.
-const FILMS_EXPORT_HEADER = ['Thumbnail', 'Type', 'Film Name', 'Chapter Title', 'Subtitle', 'Description', 'Date', 'Duration', 'Watch URL', 'Approval Status', 'Duplicate'];
+const FILMS_EXPORT_HEADER = ['Type', 'Film Name', 'Chapter Title', 'Subtitle', 'Description', 'Date', 'Duration', 'Approval Status', 'Duplicate'];
 
 // Build a single export row from an entry. Returns an array of cell values aligned with
-// FILMS_EXPORT_HEADER. Pass `includeThumbnail = false` for HTML/CSV exports that don't use the thumb.
+// FILMS_EXPORT_HEADER.
 function buildFilmsExportRow(entry) {
   const { kind, clip, film } = entry;
   const isOverview = kind === 'overview';
@@ -4023,14 +4023,7 @@ function buildFilmsExportRow(entry) {
   const desc = clip.rewrite || clip._draft || clip.description || '';
   const status = getStatus(clip);
   const dup = isDuplicate(clip);
-  const watchSrc = (clip.filmId || clip.clipId || '').toString().trim();
-  const watchUrl = watchSrc
-    ? (isOverview
-       ? `https://videos.jem.tv/video-player?produced=${watchSrc}`
-       : `https://videos.jem.tv/video-player?clip=${watchSrc}`)
-    : '';
   return [
-    clip.thumbnail || '',
     typeLabel,
     film.title || film.filmName || '',
     isOverview ? '' : (clip.title || ''),
@@ -4038,7 +4031,6 @@ function buildFilmsExportRow(entry) {
     desc,
     formatClipDate(clip.date),
     formatDuration(clip.durationMs),
-    watchUrl,
     status === 'approved' ? 'Approved' : 'Not Approved',
     dup ? 'YES' : '',
   ];
@@ -6478,9 +6470,6 @@ function renderExportView() {
       const original = getReviewField(clip, 'originalBackup') || clip.description || '';
       const status = getStatus(clip);
       const dup = isDuplicate(clip);
-      const thumbHTML = clip.thumbnail
-        ? `<img class="export-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
-        : `<div class="export-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--tx4)">${isOverview ? '🎬' : '🎞️'}</div>`;
       const typeLabel = isOverview ? 'Film Overview' : (kind === 'intro' ? 'Intro Chapter' : 'Chapter');
       const flagBadges = [];
       if (status !== 'approved') flagBadges.push(`<span style="background:#F0C97B;color:#5A4317;padding:2px 8px;border-radius:var(--radius-pill);font-size:10px;font-weight:600">NOT APPROVED</span>`);
@@ -6488,7 +6477,6 @@ function renderExportView() {
       const fd = formatClipDate(clip.date);
       const dur = formatDuration(clip.durationMs);
       return `<div class="export-item" style="${isOverview ? 'background:rgba(184,153,104,0.06);border-left:3px solid var(--accent)' : 'margin-left:24px;border-left:1px dashed var(--border)'}">
-        ${thumbHTML}
         <div class="export-body">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
             <span style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:${isOverview ? 'var(--accent2)' : 'var(--tx3)'}">${typeLabel}</span>
@@ -6517,22 +6505,16 @@ function renderExportView() {
   const showOrig = document.getElementById('exportShowOriginal')?.checked;
   const el = document.getElementById('exportList');
   el.innerHTML = approved.map(clip => {
-    const tags = parseTags(clip);
     const summary = clip.rewrite || clip._draft || '';
     const original = getReviewField(clip, 'originalBackup') || clip.description || '';
-    const thumbHTML = clip.thumbnail
-      ? `<img class="export-thumb" src="${esc(clip.thumbnail)}" onerror="this.style.display='none'">`
-      : `<div class="export-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--tx4)">🎬</div>`;
     const fd = formatClipDate(clip.date);
     const dur = formatDuration(clip.durationMs);
     return `<div class="export-item">
-      ${thumbHTML}
       <div class="export-body">
         <div class="export-clip-title">${esc(clip.title)}</div>
         <div class="export-meta">LT ${esc(clip.programNum)}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ⏱ ' + esc(dur) : ''}</div>
         ${showOrig ? `<div style="font-size:12px;color:var(--tx3);background:var(--bg2);border-radius:6px;padding:8px;margin-bottom:6px"><strong style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--tx4);display:block;margin-bottom:3px">Original</strong>${esc(original)}</div>` : ''}
         <div class="export-summary">${esc(summary)}</div>
-        <div class="tag-bubbles">${tags.map(t=>`<span class="tag-bubble">${esc(t)}</span>`).join('')}</div>
       </div>
     </div>`;
   }).join('') || `<div class="empty-state">No approved clips yet</div>`;
@@ -6645,30 +6627,25 @@ async function generateSheetExport() {
     const newSheetId = batchRes.replies?.find(r => r.addSheet)?.addSheet?.properties?.sheetId;
 
     // ── Build per-type column schema ──────────────────────────────────────────
-    // Every type gets: Thumbnail, Title, then type-specific identifiers, then
-    // (Subtitle for short_film), New Description, Tags, Date, Duration, Watch URL,
-    // Approved By, Approved At.
+    // Every type gets: Title, then type-specific identifiers (Program / Film+Chapter),
+    // then optional (Subtitle for short_film, Event Type, Featured People for conv/my_enc),
+    // then New Description, Date, Duration.
     const isShortFilm = typeKey === 'short_film';
     const isFilmChapter = typeKey === 'film_chapter';
     const isSichosExp = typeKey === 'sichos';
     const isEventTypeExp = isSichosExp || typeKey === 'timeless' || typeKey === 'conversations' || typeKey === 'short_film';
-    const header = ['Thumbnail', 'Title'];
+    const header = ['Title'];
     if (isFilmChapter) header.push('Film', 'Chapter Title');
     else header.push('Program');
     const isConvOrEncExp = (typeKey === 'conversations' || typeKey === 'my_encounter');
     if (isShortFilm) header.push('Subtitle');
     if (isEventTypeExp) header.push('Event Type');
     if (isConvOrEncExp) header.push('Featured People');
-    header.push('New Description', 'Tags', 'Date', 'Duration', 'Watch URL', 'Approved By', 'Approved At');
+    header.push('New Description', 'Date', 'Duration');
 
     const rows = approved.map(clip => {
-      const tags = parseTags(clip).join(', ');
       const summary = clip.rewrite || clip._draft || clip.description || '';
-      const watchUrl = clip.clipId ? `https://videos.jem.tv/video-player?clip=${clip.clipId}` : '';
-      const row = [
-        clip.thumbnail || '',
-        clip.title || '',
-      ];
+      const row = [clip.title || ''];
       if (isFilmChapter) {
         row.push(clip.filmName || '', clip.title || '');
       } else {
@@ -6685,12 +6662,8 @@ async function generateSheetExport() {
       }
       row.push(
         summary,
-        tags,
         formatClipDate(clip.date),
         formatDuration(clip.durationMs),
-        watchUrl,
-        getReviewField(clip, 'approvedBy') || '',
-        getReviewField(clip, 'approvedAt') || ''
       );
       return row;
     });
@@ -6704,29 +6677,21 @@ async function generateSheetExport() {
     if (newSheetId !== undefined) {
       const descColIdx = header.indexOf('New Description');
       const titleColIdx = header.indexOf('Title');
-      const tagsColIdx = header.indexOf('Tags');
       const fmtRequests = [
         { repeatCell: {
             range: { sheetId: newSheetId, startRowIndex: 0, endRowIndex: 1 },
             cell: { userEnteredFormat: { textFormat: { bold: true }, backgroundColor: { red: 0.94, green: 0.92, blue: 0.86 } } },
             fields: 'userEnteredFormat(textFormat,backgroundColor)'
         } },
-        // Wrap description and tags
+        // Wrap description
         { repeatCell: {
             range: { sheetId: newSheetId, startColumnIndex: descColIdx, endColumnIndex: descColIdx + 1 },
             cell: { userEnteredFormat: { wrapStrategy: 'WRAP', verticalAlignment: 'TOP' } },
             fields: 'userEnteredFormat(wrapStrategy,verticalAlignment)'
         } },
-        { repeatCell: {
-            range: { sheetId: newSheetId, startColumnIndex: tagsColIdx, endColumnIndex: tagsColIdx + 1 },
-            cell: { userEnteredFormat: { wrapStrategy: 'WRAP', verticalAlignment: 'TOP' } },
-            fields: 'userEnteredFormat(wrapStrategy,verticalAlignment)'
-        } },
         // Column widths
-        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 180 }, fields: 'pixelSize' } },
         { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: titleColIdx, endIndex: titleColIdx + 1 }, properties: { pixelSize: 220 }, fields: 'pixelSize' } },
-        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: descColIdx, endIndex: descColIdx + 1 }, properties: { pixelSize: 480 }, fields: 'pixelSize' } },
-        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: tagsColIdx, endIndex: tagsColIdx + 1 }, properties: { pixelSize: 280 }, fields: 'pixelSize' } },
+        { updateDimensionProperties: { range: { sheetId: newSheetId, dimension: 'COLUMNS', startIndex: descColIdx, endIndex: descColIdx + 1 }, properties: { pixelSize: 520 }, fields: 'pixelSize' } },
       ];
       await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
         method: 'POST',
@@ -6799,7 +6764,7 @@ function downloadCsv() {
   if (isShortFilm) header.push('Subtitle');
   if (isEventTypeExp) header.push('Event Type');
   if (isConvOrEncExp) header.push('Featured People');
-  header.push('New Description', 'Tags', 'Date', 'Duration', 'Watch URL');
+  header.push('New Description', 'Date', 'Duration');
   // CSV-escape: wrap in quotes if value contains comma, quote, or newline; double-up internal quotes
   const csvCell = (v) => {
     const s = String(v ?? '');
@@ -6808,16 +6773,14 @@ function downloadCsv() {
   };
   const lines = [header.map(csvCell).join(',')];
   approved.forEach(clip => {
-    const tags = parseTags(clip).join(', ');
     const summary = clip.rewrite || clip._draft || clip.description || '';
-    const watchUrl = clip.clipId ? `https://videos.jem.tv/video-player?clip=${clip.clipId}` : '';
     const row = [clip.title || ''];
     if (isFilmChapter) row.push(clip.filmName || '', clip.title || '');
     else row.push(clip.programNum ? 'LT ' + clip.programNum : '');
     if (isShortFilm) row.push(clip.subtitle || '');
     if (isEventTypeExp) row.push((clip.eventTypes || []).join(', '));
     if (isConvOrEncExp) row.push(clip.featuredPeople || clip.featuredPeopleAuto || '');
-    row.push(summary, tags, formatClipDate(clip.date), formatDuration(clip.durationMs), watchUrl);
+    row.push(summary, formatClipDate(clip.date), formatDuration(clip.durationMs));
     lines.push(row.map(csvCell).join(','));
   });
   const csv = lines.join('\n');
@@ -6840,16 +6803,9 @@ function exportHTML() {
       const desc = clip.rewrite || clip._draft || clip.description || '';
       const status = getStatus(clip);
       const dup = isDuplicate(clip);
-      const watchSrc = (clip.filmId || clip.clipId || '').toString().trim();
-      const watchUrl = watchSrc
-        ? (isOverview
-           ? `https://videos.jem.tv/video-player?produced=${watchSrc}`
-           : `https://videos.jem.tv/video-player?clip=${watchSrc}`)
-        : '';
       const typeLabel = isOverview ? 'Film Overview' : (kind === 'intro' ? 'Intro Chapter' : 'Chapter');
       const rowStyle = isOverview ? 'background:#FBF6E8;font-weight:600' : '';
       return `<tr style="${rowStyle}">
-        <td><img src="${clip.thumbnail || ''}" style="width:80px;height:52px;object-fit:cover;border-radius:4px"></td>
         <td><strong>${typeLabel}</strong></td>
         <td>${esc(film.title || film.filmName || '')}</td>
         <td>${isOverview ? '' : esc(clip.title || '')}</td>
@@ -6857,7 +6813,6 @@ function exportHTML() {
         <td>${esc(desc)}</td>
         <td>${esc(formatClipDate(clip.date))}</td>
         <td>${esc(formatDuration(clip.durationMs))}</td>
-        <td>${watchUrl ? `<a href="${watchUrl}" target="_blank">Watch</a>` : ''}</td>
         <td>${status === 'approved' ? 'Approved' : '<span style="color:#A86A2C">Not Approved</span>'}</td>
         <td>${dup ? '<span style="color:#6B5230">🔁 YES</span>' : ''}</td>
       </tr>`;
@@ -6866,7 +6821,7 @@ function exportHTML() {
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>JEM Films Export</title>
 <style>body{font-family:Georgia,serif;padding:24px;background:#faf7f2}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d4c9b5;padding:8px;vertical-align:top;font-size:12px}th{background:#f0ece3;font-weight:bold}</style></head>
 <body><h1 style="font-size:20px;margin-bottom:16px">JEM Films — ${filmCount} films · ${entries.length - filmCount} chapters</h1>
-<table><thead><tr><th>Thumb</th><th>Type</th><th>Film Name</th><th>Chapter Title</th><th>Subtitle</th><th>Description</th><th>Date</th><th>Duration</th><th>Watch</th><th>Approval Status</th><th>Duplicate</th></tr></thead>
+<table><thead><tr><th>Type</th><th>Film Name</th><th>Chapter Title</th><th>Subtitle</th><th>Description</th><th>Date</th><th>Duration</th><th>Approval Status</th><th>Duplicate</th></tr></thead>
 <tbody>${rows}</tbody></table></body></html>`;
     const blob = new Blob([html], { type: 'text/html' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -6877,24 +6832,21 @@ function exportHTML() {
 
   const approved = activeBucket().clips.filter(c => isExportableForType(c, S.activeType));
   const rows = approved.map(clip => {
-    const tags = parseTags(clip);
     const summary = clip.rewrite || clip.description || '';
     const eventType = (clip.eventTypes || []).join(', ');
     return `<tr>
-      <td><img src="${clip.thumbnail}" style="width:80px;height:52px;object-fit:cover;border-radius:4px"></td>
       <td>${clip.title}</td>
       <td>LT ${clip.programNum}</td>
       <td>${eventType}</td>
       <td>${formatClipDate(clip.date)}</td>
       <td>${formatDuration(clip.durationMs)}</td>
       <td>${summary}</td>
-      <td>${tags.join(', ')}</td>
     </tr>`;
   }).join('');
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>JEM Sichos Summaries Export</title>
 <style>body{font-family:Georgia,serif;padding:24px;background:#faf7f2}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d4c9b5;padding:8px;vertical-align:top;font-size:12px}th{background:#f0ece3;font-weight:bold}</style></head>
 <body><h1 style="font-size:20px;margin-bottom:16px">JEM Sichos Summaries — ${approved.length} clips</h1>
-<table><thead><tr><th>Thumb</th><th>Title</th><th>Program</th><th>Event Type</th><th>Date</th><th>Duration</th><th>Summary</th><th>Tags</th></tr></thead>
+<table><thead><tr><th>Title</th><th>Program</th><th>Event Type</th><th>Date</th><th>Duration</th><th>Summary</th></tr></thead>
 <tbody>${rows}</tbody></table></body></html>`;
   const blob = new Blob([html], { type: 'text/html' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
