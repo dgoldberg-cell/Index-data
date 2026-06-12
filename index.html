@@ -6208,6 +6208,17 @@ function buildIndex(){
         }
         const dupe=(tagEntry.results||[]).some(r=>r.rowIdx===b.rowIdx||(r.clipId&&String(r.clipId)===String(b.clipId)));
         if(dupe)return;
+        // Resolve the film's produced_video_id from the raw data (memoized per chapter) so
+        // the film-name half of the reference uses _FilmNameOverrides like sibling chapters.
+        if(ch._pvId===undefined){
+          ch._pvId='';
+          const pvNameCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_name');
+          const pvIdCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_id');
+          if(pvNameCol>=0&&pvIdCol>=0){
+            const fr=S.rows.find(rw=>((rw[pvNameCol]||'').trim()===ch.filmName)&&(rw[pvIdCol]||'').toString().trim());
+            if(fr)ch._pvId=(fr[pvIdCol]||'').toString().trim();
+          }
+        }
         tagEntry.results.push({
           rowIdx:b.rowIdx,
           segType:b.segType||'Films',
@@ -6221,7 +6232,7 @@ function buildIndex(){
           objId:'',
           pvName:ch.filmName,
           pvType:'Film',
-          pvId:'',
+          pvId:ch._pvId||'',
           transcript:'',
           isNewBinding:true,
           isFullFilm:false,
