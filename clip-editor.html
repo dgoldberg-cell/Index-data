@@ -5631,6 +5631,10 @@ function onDraftInput(rowNum) {
     wcEl.textContent = val.trim() ? (wc + ' words' + (wc > 110 ? ' — over limit!' : wc > 90 ? ' ✓' : '')) : '';
     wcEl.className = 'word-count' + (wc > 110 ? ' over' : '');
   }
+  // Live-enable the workstation Approve button: it renders disabled when there's no
+  // draft yet, and without this it would stay disabled even after the user types one.
+  const approveBtn = document.getElementById('approveBtn_' + rowNum);
+  if (approveBtn) approveBtn.disabled = !val.trim();
   queueDraftSave(clip);
 }
 
@@ -8131,7 +8135,7 @@ function renderInlineEditingSurface(clip) {
     ${getReviewField(clip, 'originalBackup') ? `<button class="btn btn-sm" onclick="revertClip(${clip._rowNum})">↩ Revert to Original</button>` : ''}
     <button class="btn btn-sm" onclick="acceptOriginal(${clip._rowNum})">✓ Accept Original</button>
     <span style="flex:1"></span>
-    <button class="btn btn-sm btn-green" ${hasDraft ? '' : 'disabled'} onclick="approveClip(${clip._rowNum})">✅ Approve ${clip.typeKey === 'films' ? 'Overview' : 'Draft'}</button>
+    <button id="approveBtn_${clip._rowNum}" class="btn btn-sm btn-green" ${hasDraft ? '' : 'disabled'} onclick="approveClip(${clip._rowNum})">✅ Approve ${clip.typeKey === 'films' ? 'Overview' : 'Draft'}</button>
   </div>`;
 }
 
