@@ -3603,6 +3603,8 @@ async function loadAllData() {
   try { await loadNewFilmChapters(); } catch(e) { console.warn('NewFilmChapters load error:', e); }
   // Load soft-deleted films (shared with the Index Workstation via _DeletedFilms)
   try { await loadDeletedFilms(); } catch(e) { console.warn('DeletedFilms load error:', e); }
+  // Load chapter order numbers from _ChapterOverrides (shared with the Index Workstation)
+  try { await loadChapterOrderOverrides(); } catch(e) { console.warn('ChapterOverrides load error:', e); }
   showLoading('Reading sheet data…');
   try {
     const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!A:AD`);
@@ -4071,6 +4073,44 @@ async function loadDeletedFilms() {
     console.warn('_DeletedFilms load skipped:', e?.message || e);
     S.deletedFilms = new Set();
   }
+}
+
+// ── Chapter order from _ChapterOverrides ───────────────────────────────────
+// The _ChapterOverrides tab (Clip ID | Chapter Display | Notes) is owned by the Index
+// Workstation for reference display ("Ch6"). The display value doubles as the chapter's
+// authoritative ORDER here: we parse the number out of it ("Ch6" → 6, "2 Ch3" → 3) and
+// use it to position the chapter within its film — in the workstation display and the
+// Films export. Chapters without an override row keep the default ordering.
+async function loadChapterOrderOverrides() {
+  S.chapterOrderMap = {};
+  try {
+    const data = await sheetsGet(`'_ChapterOverrides'!A2:C10000`);
+    const rows = data.values || [];
+    rows.forEach(row => {
+      const clipId = (row[0] || '').toString().trim();
+      const display = (row[1] || '').toString().trim();
+      if (!clipId || !display) return;
+      // Prefer the number following "Ch"; fall back to the first number in the string
+      let m = display.match(/Ch\s*\.?\s*(\d+)/i);
+      if (!m) m = display.match(/(\d+)/);
+      if (!m) return;
+      S.chapterOrderMap[clipId] = parseInt(m[1]);
+    });
+    const n = Object.keys(S.chapterOrderMap).length;
+    if (n) console.log(`Loaded chapter order for ${n} clips from _ChapterOverrides`);
+  } catch (e) {
+    console.warn('_ChapterOverrides load skipped:', e?.message || e);
+    S.chapterOrderMap = {};
+  }
+}
+
+// Effective explicit order number for a chapter: _ChapterOverrides number wins,
+// then the _NewFilmChapters declared position, else null (default ordering).
+function chapterOrderNum(clip) {
+  const id = (clip.clipId || '').toString().trim();
+  if (id && S.chapterOrderMap && S.chapterOrderMap[id] !== undefined) return S.chapterOrderMap[id];
+  if (clip._newChapterPos) return clip._newChapterPos;
+  return null;
 }
 
 function isFilmDeletedName(filmName) {
@@ -7563,18 +7603,19 @@ function getOrderedChapters(filmName) {
     if (m) return parseInt(m[1]);
     return c._rowNum || 0;
   };
-  // Workspace-added chapters (negative _rowNum) carry an explicit position
-  // (_newChapterPos = the chapter number). Sort the REGULAR chapters first using the
-  // existing logic, then splice each new chapter into its declared position.
-  const newOnes = chapters.filter(c => c.isNewChapter);
-  const regular = chapters.filter(c => !c.isNewChapter);
+  // Chapters with an explicit order number — from _ChapterOverrides ("Ch6" → 6), or the
+  // _NewFilmChapters declared position for workspace-added chapters — are positioned by
+  // that number. Chapters without one keep the legacy ordering (Film Chapter Order tab,
+  // else trailing clip-id number) and the numbered ones are spliced in at (number − 1).
+  const numbered = chapters.filter(c => chapterOrderNum(c) !== null);
+  const unnumbered = chapters.filter(c => chapterOrderNum(c) === null);
   let sorted;
   if (!_filmOrderCache || !_filmOrderCache[filmName]) {
     // Default: ascending by chapter number → first chapter first
-    sorted = regular.sort((a, b) => chapterNum(a) - chapterNum(b));
+    sorted = unnumbered.sort((a, b) => chapterNum(a) - chapterNum(b));
   } else {
     const orderMap = _filmOrderCache[filmName];
-    sorted = regular.sort((a, b) => {
+    sorted = unnumbered.sort((a, b) => {
       const ai = orderMap[String(a._rowNum)];
       const bi = orderMap[String(b._rowNum)];
       if (ai === undefined && bi === undefined) return chapterNum(a) - chapterNum(b);
@@ -7583,11 +7624,11 @@ function getOrderedChapters(filmName) {
       return ai - bi;
     });
   }
-  // Insert new chapters at (chapter# − 1), lowest position first so later inserts
-  // land correctly relative to earlier ones. Position past the end → append.
-  newOnes.sort((a, b) => (a._newChapterPos || 0) - (b._newChapterPos || 0));
-  newOnes.forEach(nc => {
-    const pos = Math.max(0, Math.min((nc._newChapterPos || 1) - 1, sorted.length));
+  // Insert numbered chapters at (number − 1), lowest number first so later inserts
+  // land correctly relative to earlier ones. Number past the end → append.
+  numbered.sort((a, b) => chapterOrderNum(a) - chapterOrderNum(b));
+  numbered.forEach(nc => {
+    const pos = Math.max(0, Math.min(chapterOrderNum(nc) - 1, sorted.length));
     sorted.splice(pos, 0, nc);
   });
   return sorted;
