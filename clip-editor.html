@@ -3605,6 +3605,8 @@ async function loadAllData() {
   try { await loadDeletedFilms(); } catch(e) { console.warn('DeletedFilms load error:', e); }
   // Load chapter order numbers from _ChapterOverrides (shared with the Index Workstation)
   try { await loadChapterOrderOverrides(); } catch(e) { console.warn('ChapterOverrides load error:', e); }
+  // Load reference code overrides (shared with the Index Workstation via _RefOverrides)
+  try { await loadRefOverrides(); } catch(e) { console.warn('RefOverrides load error:', e); }
   showLoading('Reading sheet data…');
   try {
     const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!A:AD`);
@@ -4111,6 +4113,48 @@ function chapterOrderNum(clip) {
   if (id && S.chapterOrderMap && S.chapterOrderMap[id] !== undefined) return S.chapterOrderMap[id];
   if (clip._newChapterPos) return clip._newChapterPos;
   return null;
+}
+
+// ── Program reference codes (index style) ──────────────────────────────────
+// Exports render LT program references the way the index does: a one-letter segment
+// prefix + program number (A=Addresses, T=Timeless Moments, C=Conversations,
+// I=My Encounter, S=Short Films). The _RefOverrides tab (Clip ID | Ref Code | Notes)
+// takes priority — it carries the special cases, e.g. programs 1-96 where two Timeless
+// Moments share a program: the second one is coded T25B etc.
+const PROGRAM_REF_PREFIX = {
+  sichos: 'A',
+  timeless: 'T',
+  conversations: 'C',
+  my_encounter: 'I',
+  short_film: 'S',
+};
+
+async function loadRefOverrides() {
+  S.refOverrides = {};
+  try {
+    const data = await sheetsGet(`'_RefOverrides'!A2:B100000`);
+    (data.values || []).forEach(row => {
+      const clipId = (row[0] || '').toString().trim();
+      const code = (row[1] || '').toString().trim();
+      if (clipId && code) S.refOverrides[clipId] = code;
+    });
+    const n = Object.keys(S.refOverrides).length;
+    if (n) console.log(`Loaded ${n} ref overrides from _RefOverrides`);
+  } catch (e) {
+    console.warn('_RefOverrides load skipped:', e?.message || e);
+    S.refOverrides = {};
+  }
+}
+
+// Reference string for a clip in exports: _RefOverrides by clipId wins; else
+// segment prefix + program number; else empty.
+function programRefForClip(clip) {
+  const id = (clip.clipId || '').toString().trim();
+  if (id && S.refOverrides && S.refOverrides[id]) return S.refOverrides[id];
+  const num = (clip.programNum || '').toString().replace(/[^0-9]/g, '');
+  if (!num) return '';
+  const pref = PROGRAM_REF_PREFIX[clip.typeKey] || PROGRAM_REF_PREFIX[clip.originalTypeKey] || '';
+  return pref ? pref + num : 'LT ' + num;
 }
 
 function isFilmDeletedName(filmName) {
@@ -6978,7 +7022,7 @@ async function generateSheetExport() {
       if (isFilmChapter) {
         row.push(clip.filmName || '', clip.title || '');
       } else {
-        row.push(clip.programNum ? 'LT ' + clip.programNum : '');
+        row.push(programRefForClip(clip));
       }
       if (isShortFilm) {
         row.push(clip.subtitle || '');
@@ -7105,7 +7149,7 @@ function downloadCsv() {
     const summary = clip.rewrite || clip._draft || clip.description || '';
     const row = [clip.title || ''];
     if (isFilmChapter) row.push(clip.filmName || '', clip.title || '');
-    else row.push(clip.programNum ? 'LT ' + clip.programNum : '');
+    else row.push(programRefForClip(clip));
     if (isShortFilm) row.push(clip.subtitle || '');
     if (isEventTypeExp) row.push((clip.eventTypes || []).join(', '));
     if (isConvOrEncExp) row.push(clip.featuredPeople || clip.featuredPeopleAuto || '');
