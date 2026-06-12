@@ -4183,7 +4183,8 @@ function exportEventTypes(clip) {
                  : clip.typeKey === 'conversations' ? 'Dollars, Sunday'
                  : null;
   if (suppress && list.length === 1 && (list[0] || '').trim() === suppress) return '';
-  return list.join(', ');
+  // Display renames for export output only (the underlying data keeps its original value)
+  return list.map(v => (v || '').trim() === 'Parade' ? "Lag B'omer Parade" : v).join(', ');
 }
 
 function isFilmDeletedName(filmName) {
