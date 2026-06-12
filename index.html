@@ -6001,6 +6001,7 @@ function migrateOldQueue(){
 // ── Build Index from Sheet Data ───────────────────────────
 function buildIndex(){
   _filmChCountCache=null; // film chapter counts may have changed (new chapters / data reload)
+  _filmNameOvByName=null; // name-keyed film overrides derive from raw rows — rebuild
   if(!S.headers.length||!S.rows.length){S.indexData=null;return}
   const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
   const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
@@ -7235,8 +7236,52 @@ function filmChapterCount(filmName){
   return _filmChCountCache[filmName]||0;
 }
 
-// FILM display name half: _FilmNameOverrides (by produced_video_id) > legacy
-// filmShortNames (by title) > auto-shorten to first meaningful word.
+// Secondary lookup for _FilmNameOverrides keyed by film NAME — derived from the same
+// tab by resolving each Produced Video ID to its produced_video_name through the raw
+// data. Lets the tab match results that arrive without a pvId (full-film bindings,
+// workspace chapters, etc.). Memoized; reset on buildIndex.
+let _filmNameOvByName=null;
+function filmNameOverrideByName(name){
+  if(!name)return null;
+  if(!_filmNameOvByName){
+    _filmNameOvByName={};
+    if(S.filmNameOverrides&&Array.isArray(S.rows)&&Array.isArray(S.headers)){
+      const pvNameCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_name');
+      const pvIdCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_id');
+      if(pvNameCol>=0&&pvIdCol>=0){
+        S.rows.forEach(rw=>{
+          const id=(rw[pvIdCol]||'').toString().trim();
+          if(!id||!S.filmNameOverrides[id])return;
+          const nm=(rw[pvNameCol]||'').toString().trim();
+          if(nm&&!_filmNameOvByName[nm])_filmNameOvByName[nm]=S.filmNameOverrides[id];
+        });
+      }
+      // Also try the raw 'name' column for Film rows (full films store their title there)
+      const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
+      const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
+      if(nameCol>=0&&pvIdCol>=0&&typeCol>=0){
+        S.rows.forEach(rw=>{
+          if((rw[typeCol]||'').toString().trim()!=='Film')return;
+          const id=(rw[pvIdCol]||'').toString().trim();
+          if(!id||!S.filmNameOverrides[id])return;
+          const nm=(rw[nameCol]||'').toString().trim();
+          if(nm&&!_filmNameOvByName[nm])_filmNameOvByName[nm]=S.filmNameOverrides[id];
+        });
+      }
+    }
+    // Workspace-added chapters: map their film name via the backfilled pvId
+    (S.newFilmChapters||[]).forEach(ch=>{
+      const fn=(ch.filmName||'').trim();
+      if(fn&&ch._pvId&&S.filmNameOverrides&&S.filmNameOverrides[ch._pvId]&&!_filmNameOvByName[fn]){
+        _filmNameOvByName[fn]=S.filmNameOverrides[ch._pvId];
+      }
+    });
+  }
+  return _filmNameOvByName[name]||null;
+}
+
+// FILM display name half: _FilmNameOverrides (by produced_video_id, then by film name) >
+// legacy filmShortNames (by title) > auto-shorten to first meaningful word.
 function filmDisplayName(r){
   const rawTitle=r.pvName||r.clipName||'';
   if(!rawTitle)return '';
@@ -7245,16 +7290,15 @@ function filmDisplayName(r){
     filmName=S.filmNameOverrides[r.pvId];
   }
   if(!filmName){
-    // Extract main film name (strip Vol/chapter suffix)
+    // Name-based fallback against the same overrides tab (for results without a pvId)
+    filmName=filmNameOverrideByName((r.pvName||'').trim())||filmNameOverrideByName(rawTitle.trim());
+  }
+  if(!filmName){
+    // Not in _FilmNameOverrides — auto-shorten: first meaningful word of the main title
     const mainTitle=rawTitle.split(/[·:|\-–—]|Vol\.?|Chapter|Ch\.?/i)[0].trim();
-    const overrides=RULES.filmShortNames||{};
-    filmName=overrides[mainTitle]||overrides[rawTitle];
-    if(!filmName){
-      // Auto-shorten: first meaningful word (skip articles/possessives)
-      const skipWords=new Set(['a','an','the','my','our','your','his','her','its','their']);
-      const words=mainTitle.split(/\s+/).filter(w=>w.length>0);
-      filmName=words.find(w=>!skipWords.has(w.toLowerCase()))||words[0]||'Film';
-    }
+    const skipWords=new Set(['a','an','the','my','our','your','his','her','its','their']);
+    const words=mainTitle.split(/\s+/).filter(w=>w.length>0);
+    filmName=words.find(w=>!skipWords.has(w.toLowerCase()))||words[0]||'Film';
   }
   return filmName;
 }
@@ -10080,21 +10124,6 @@ function rSettings(){
 
   // Film Short Names
   h+='<div class="card" style="margin-bottom:24px">';
-  h+='<h4 style="margin-bottom:10px">Film Short Names</h4>';
-  h+='<p style="font-size:11px;color:var(--tx-3);margin-bottom:10px">Custom short names for film references (e.g. "Faithful and Fortified" → "Faithful"). Only needed when auto-shortening picks a bad name. Leave blank to use the auto default.</p>';
-  const filmShorts=RULES.filmShortNames||{};
-  const filmKeys=Object.keys(filmShorts).sort();
-  if(!filmKeys.length){
-    h+='<div style="font-size:11px;color:var(--tx-4);font-style:italic;margin-bottom:8px">No overrides yet. Auto-shortened names are being used for all films.</div>';
-  }
-  filmKeys.forEach(k=>{
-    h+=`<div class="spelling-row"><input class="rule-edit-input" style="flex:1" data-filmfull="${esc(k)}" value="${esc(k)}" placeholder="Full film name"><span style="color:var(--tx-4)">\u2192</span><input class="rule-edit-input" style="flex:1" data-filmshort="${esc(k)}" value="${esc(filmShorts[k])}" placeholder="Short name"><button class="btn btn-sm btn-red btn-icon" data-filmdel="${esc(k)}">${IC.x}</button></div>`;
-  });
-  h+=`<div class="spelling-row" style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)"><input class="rule-edit-input" style="flex:1" id="film-new-full" placeholder="Full film name"><span style="color:var(--tx-4)">\u2192</span><input class="rule-edit-input" style="flex:1" id="film-new-short" placeholder="Short name"><button class="btn btn-sm btn-green" id="film-add">+ Add</button></div>`;
-  h+='</div>';
-
-  // Management
-  h+='<div class="card" style="margin-bottom:24px">';
   h+='<h4 style="margin-bottom:10px">Management</h4>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
   h+=`<button class="btn btn-sm" id="export-rules">Export JSON</button>`;
@@ -12384,12 +12413,6 @@ Description:"${S.testDesc||'[empty]'}"`;
   $$('[data-spelldel]').forEach(el=>el.onclick=()=>{const i=+el.dataset.spelldel;RULES.tagDesc.spelling.splice(i,1);saveRules();render()});
   on('#add-spelling','click',()=>{RULES.tagDesc.spelling.push({wrong:'',right:''});saveRules();render()});
 
-  // Film Short Names
-  if(!RULES.filmShortNames)RULES.filmShortNames={};
-  $$('[data-filmshort]').forEach(el=>el.onchange=()=>{const k=el.dataset.filmshort;RULES.filmShortNames[k]=el.value.trim();saveRules()});
-  $$('[data-filmfull]').forEach(el=>el.onchange=()=>{const oldK=el.dataset.filmfull,newK=el.value.trim();if(newK&&newK!==oldK){RULES.filmShortNames[newK]=RULES.filmShortNames[oldK];delete RULES.filmShortNames[oldK];saveRules();render()}});
-  $$('[data-filmdel]').forEach(el=>el.onclick=()=>{delete RULES.filmShortNames[el.dataset.filmdel];saveRules();render()});
-  on('#film-add','click',()=>{const f=$('#film-new-full')?.value.trim(),s=$('#film-new-short')?.value.trim();if(!f||!s){toast('Both fields required','error');return}RULES.filmShortNames[f]=s;saveRules();render()});
 
   // Consistency rules editing
   $$('[data-constoggle]').forEach(el=>el.onclick=()=>{const i=+el.dataset.constoggle;RULES.consistency.checks[i].on=!RULES.consistency.checks[i].on;saveRules();render()});
