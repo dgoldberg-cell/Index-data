@@ -3601,6 +3601,8 @@ async function loadAllData() {
   try { await loadNewTagBindings(); } catch(e) { console.warn('NewTagBindings load error:', e); }
   // Load workspace-added film chapters (chapters not present in the main sheet)
   try { await loadNewFilmChapters(); } catch(e) { console.warn('NewFilmChapters load error:', e); }
+  // Load soft-deleted films (shared with the Index Workstation via _DeletedFilms)
+  try { await loadDeletedFilms(); } catch(e) { console.warn('DeletedFilms load error:', e); }
   showLoading('Reading sheet data…');
   try {
     const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!A:AD`);
@@ -4045,6 +4047,82 @@ function mergeNewFilmChapters() {
   if (merged) console.log(`Merged ${merged} workspace film chapters into the Films section`);
 }
 
+// ── Deleted Films ───────────────────────────────────────────────────────────
+// Films soft-deleted from the workspace. Shared with the Index Workstation via the
+// _DeletedFilms tab: Timestamp | Film Name | Action (delete/restore) | By.
+// Latest action per film wins. Deleted films stay visible (badged) in the workspace
+// but are excluded from the Films export; the Index Workstation marks all tag results
+// pointing at a deleted film as removed (crossed out, excluded from index export).
+async function loadDeletedFilms() {
+  S.deletedFilms = new Set();
+  try {
+    const data = await sheetsGet(`'_DeletedFilms'!A2:D100000`);
+    const rows = (data.values || []).slice().sort((a, b) =>
+      (Date.parse(a[0] || '') || 0) - (Date.parse(b[0] || '') || 0));
+    rows.forEach(row => {
+      const name = (row[1] || '').toString().trim();
+      const action = (row[2] || '').toString().trim().toLowerCase();
+      if (!name) return;
+      if (action === 'restore') S.deletedFilms.delete(name);
+      else S.deletedFilms.add(name);
+    });
+    if (S.deletedFilms.size) console.log(`Deleted films: ${[...S.deletedFilms].join(', ')}`);
+  } catch (e) {
+    console.warn('_DeletedFilms load skipped:', e?.message || e);
+    S.deletedFilms = new Set();
+  }
+}
+
+function isFilmDeletedName(filmName) {
+  return !!(S.deletedFilms && S.deletedFilms.has((filmName || '').trim()));
+}
+
+async function _ensureDeletedFilmsTab() {
+  const meta = await getSheetMeta();
+  const exists = meta.sheets?.some(s => s.properties.title === '_DeletedFilms');
+  if (exists) return;
+  await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: '_DeletedFilms' } } }] })
+  });
+  invalidateSheetMeta();
+  await sheetsSet(`'_DeletedFilms'!A1:D1`, [['Timestamp', 'Film Name', 'Action', 'By']]);
+}
+
+async function toggleFilmDeletedByName(filmName) {
+  filmName = (filmName || '').trim();
+  if (!filmName) return;
+  const currentlyDeleted = isFilmDeletedName(filmName);
+  if (!currentlyDeleted) {
+    const ok = confirm(`Delete the film "${filmName}" from the workspace?\n\nIt will be excluded from the Films export, and all its tags will show as removed in the Index Workstation. You can restore it at any time.`);
+    if (!ok) return;
+  }
+  const action = currentlyDeleted ? 'restore' : 'delete';
+  showLoading(currentlyDeleted ? 'Restoring film…' : 'Deleting film…');
+  try {
+    await _ensureDeletedFilmsTab();
+    // Append via the values:append endpoint (sheetsSet is a PUT/update — appends need POST)
+    await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent("'_DeletedFilms'!A:D")}:append?valueInputOption=RAW`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ majorDimension: 'ROWS', values: [[new Date().toISOString(), filmName, action, S.user?.email || S.user?.name || '']] })
+    });
+    if (!S.deletedFilms) S.deletedFilms = new Set();
+    if (currentlyDeleted) S.deletedFilms.delete(filmName);
+    else S.deletedFilms.add(filmName);
+    hideLoading();
+    showToast(currentlyDeleted ? `Film restored: ${filmName}` : `Film deleted: ${filmName}`, 'success');
+    // Re-render whatever film view is active
+    if (typeof _filmWorkstationRow !== 'undefined' && _filmWorkstationRow) renderFilmWorkstation();
+    if (typeof _selectedFilm !== 'undefined' && _selectedFilm) renderFilmChapters(_selectedFilm);
+    else if (document.getElementById('filmsContainer')) renderFilmsList();
+  } catch (e) {
+    hideLoading();
+    showToast('Failed: ' + e.message, 'error');
+  }
+}
+
 // Walk the bindings for a clip, applying add/remove actions in chronological order,
 // and return the names whose relationship (after all replays) matches one of the wanted
 // relationships. `wantedRels` is a list of underscore-normalized relationship strings.
@@ -4190,6 +4268,8 @@ function buildFilmsExportEntries() {
   const films = filmsBucket.clips.slice().sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   const entries = [];
   films.forEach(film => {
+    // Deleted films are excluded from the export entirely (overview + all chapters)
+    if (isFilmDeletedName(film.title) || isFilmDeletedName(film.filmName)) return;
     // Film overview row — always include, even if not approved or marked duplicate
     entries.push({ kind: 'overview', clip: film, film });
     // Then chapters in workstation order (intro pinned first if marked)
@@ -7641,8 +7721,14 @@ function renderFilmWorkstation() {
           // Full-film watch link. Primary source: column M (FILM_ID / produced id).
           // Fallback: clipId from column D — some film entries store the produced id there.
           const producedId = (film.filmId || film.clipId || '').toString().trim();
-          if (!producedId) return '';
-          return `<a class="btn btn-sm btn-primary" href="https://videos.jem.tv/video-player?produced=${esc(producedId)}" target="_blank" rel="noopener" style="text-decoration:none">▶ Watch full film on JEM.tv</a>`;
+          const fName = (film.filmName || film.title || '').trim();
+          const fDel = isFilmDeletedName(fName);
+          const fNameJs = fName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          let h = '';
+          if (producedId) h += `<a class="btn btn-sm btn-primary" href="https://videos.jem.tv/video-player?produced=${esc(producedId)}" target="_blank" rel="noopener" style="text-decoration:none">▶ Watch full film on JEM.tv</a> `;
+          if (fDel) h += `<span style="background:var(--red,#c0392b);color:#fff;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700;margin-right:6px">DELETED — excluded from export</span>`;
+          h += `<button class="btn btn-sm" onclick="toggleFilmDeletedByName('${fNameJs}')" style="${fDel ? '' : 'color:var(--red,#c0392b)'}">${fDel ? '↺ Restore film' : '🗑 Delete film'}</button>`;
+          return h;
         })()}
       </div>
     </div>
@@ -8018,6 +8104,7 @@ function renderFilmsList() {
       <div class="film-card-header">
         <div class="film-card-title" onclick="selectFilm('${filmEsc}')" style="cursor:pointer;flex:1">${esc(film)}</div>
         ${filmDur ? `<span class="film-card-count" style="background:var(--bg2);color:var(--tx3);font-family:monospace">${esc(filmDur)}</span>` : ''}
+        ${isFilmDeletedName(film) ? `<span class="film-card-count" style="background:var(--red,#c0392b);color:#fff;font-weight:700">DELETED</span>` : ''}
         <span class="film-card-count">${total} chapter${total === 1 ? '' : 's'}</span>
         ${filmId ? `<a href="https://videos.jem.tv/video-player?produced=${esc(filmId)}" target="_blank" rel="noopener" class="btn btn-sm btn-primary" style="text-decoration:none;flex-shrink:0" onclick="event.stopPropagation()">▶ Watch Film</a>` : ''}
       </div>
