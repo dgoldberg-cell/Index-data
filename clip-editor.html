@@ -7006,7 +7006,7 @@ async function generateSheetExport() {
     const isShortFilm = typeKey === 'short_film';
     const isFilmChapter = typeKey === 'film_chapter';
     const isSichosExp = typeKey === 'sichos';
-    const isEventTypeExp = isSichosExp || typeKey === 'timeless' || typeKey === 'conversations' || typeKey === 'short_film';
+    const isEventTypeExp = isSichosExp || typeKey === 'timeless' || typeKey === 'conversations'; // Short Films & Films: no Event Type in exports
     const header = ['Title'];
     if (isFilmChapter) header.push('Film', 'Chapter Title');
     else header.push('Program');
@@ -7129,7 +7129,7 @@ function downloadCsv() {
   const isShortFilm = typeKey === 'short_film';
   const isFilmChapter = typeKey === 'film_chapter';
   const isSichosExp = typeKey === 'sichos';
-  const isEventTypeExp = isSichosExp || typeKey === 'timeless' || typeKey === 'conversations' || typeKey === 'short_film';
+  const isEventTypeExp = isSichosExp || typeKey === 'timeless' || typeKey === 'conversations'; // Short Films & Films: no Event Type in exports
   const header = ['Title'];
   if (isFilmChapter) header.push('Film', 'Chapter Title');
   else header.push('Program');
@@ -7204,13 +7204,15 @@ function exportHTML() {
   }
 
   const approved = activeBucket().clips.filter(c => isExportableForType(c, S.activeType));
+  // Event Type column only for Addresses / Timeless Moments / Conversations
+  const _htmlEventType = ['sichos', 'timeless', 'conversations'].includes(S.activeType);
   const rows = approved.map(clip => {
     const summary = clip.rewrite || clip.description || '';
     const eventType = (clip.eventTypes || []).join(', ');
     return `<tr>
       <td>${clip.title}</td>
       <td>${programRefForClip(clip)}</td>
-      <td>${eventType}</td>
+      ${_htmlEventType ? `<td>${eventType}</td>` : ''}
       <td>${formatClipDate(clip.date)}</td>
       <td>${formatDuration(clip.durationMs)}</td>
       <td>${summary}</td>
@@ -7219,7 +7221,7 @@ function exportHTML() {
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>JEM Sichos Summaries Export</title>
 <style>body{font-family:Georgia,serif;padding:24px;background:#faf7f2}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d4c9b5;padding:8px;vertical-align:top;font-size:12px}th{background:#f0ece3;font-weight:bold}</style></head>
 <body><h1 style="font-size:20px;margin-bottom:16px">JEM Sichos Summaries — ${approved.length} clips</h1>
-<table><thead><tr><th>Title</th><th>Program</th><th>Event Type</th><th>Date</th><th>Duration</th><th>Summary</th></tr></thead>
+<table><thead><tr><th>Title</th><th>Program</th>${_htmlEventType ? '<th>Event Type</th>' : ''}<th>Date</th><th>Duration</th><th>Summary</th></tr></thead>
 <tbody>${rows}</tbody></table></body></html>`;
   const blob = new Blob([html], { type: 'text/html' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
