@@ -4159,6 +4159,19 @@ function programRefForClip(clip) {
   return pref ? pref + num : 'LT ' + num;
 }
 
+// Event types as rendered in EXPORTS. Routine event types are suppressed when they are
+// the clip's ONLY event type: Addresses drop a lone "Farbrengen", Conversations drop a
+// lone "Dollars, Sunday" (those are the default/assumed settings for their segments).
+// If a clip carries multiple event types, all are exported as-is.
+function exportEventTypes(clip) {
+  const list = clip.eventTypes || [];
+  const suppress = clip.typeKey === 'sichos' ? 'Farbrengen'
+                 : clip.typeKey === 'conversations' ? 'Dollars, Sunday'
+                 : null;
+  if (suppress && list.length === 1 && (list[0] || '').trim() === suppress) return '';
+  return list.join(', ');
+}
+
 function isFilmDeletedName(filmName) {
   return !!(S.deletedFilms && S.deletedFilms.has((filmName || '').trim()));
 }
@@ -7109,7 +7122,7 @@ async function generateSheetExport() {
         row.push(clip.subtitle || '');
       }
       if (isEventTypeExp) {
-        row.push((clip.eventTypes || []).join(', '));
+        row.push(exportEventTypes(clip));
       }
       if (isConvOrEncExp) {
         row.push(clip.featuredPeople || clip.featuredPeopleAuto || '');
@@ -7232,7 +7245,7 @@ function downloadCsv() {
     if (isFilmChapter) row.push(clip.filmName || '', clip.title || '');
     else row.push(programRefForClip(clip));
     if (isShortFilm) row.push(clip.subtitle || '');
-    if (isEventTypeExp) row.push((clip.eventTypes || []).join(', '));
+    if (isEventTypeExp) row.push(exportEventTypes(clip));
     if (isConvOrEncExp) row.push(clip.featuredPeople || clip.featuredPeopleAuto || '');
     row.push(summary, formatClipDate(clip.date), formatDuration(clip.durationMs));
     lines.push(row.map(csvCell).join(','));
@@ -7289,7 +7302,7 @@ function exportHTML() {
   const _htmlEventType = ['sichos', 'timeless', 'conversations'].includes(S.activeType);
   const rows = approved.map(clip => {
     const summary = clip.rewrite || clip.description || '';
-    const eventType = (clip.eventTypes || []).join(', ');
+    const eventType = exportEventTypes(clip);
     return `<tr>
       <td>${clip.title}</td>
       <td>${programRefForClip(clip)}</td>
