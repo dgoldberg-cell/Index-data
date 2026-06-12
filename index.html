@@ -6000,6 +6000,7 @@ function migrateOldQueue(){
 
 // ── Build Index from Sheet Data ───────────────────────────
 function buildIndex(){
+  _filmChCountCache=null; // film chapter counts may have changed (new chapters / data reload)
   if(!S.headers.length||!S.rows.length){S.indexData=null;return}
   const kwCol=S.headers.findIndex(h=>h.toLowerCase()==='keywords');
   const nameCol=S.headers.findIndex(h=>h.toLowerCase()==='name');
@@ -7202,6 +7203,32 @@ function refCodeForResult(r){
 // Shortened film reference: auto-derive shortened name from first meaningful word,
 // with user overrides stored in RULES.filmShortNames (tag name → short name).
 // Example: "Faithful and Fortified: Israel's Prime Ministers" → "Faithful 1 · Ch2"
+// Count how many chapters a film has — raw data rows (type 'Film Chapter') plus
+// workspace-added chapters from _NewFilmChapters. Memoized; reset on buildIndex.
+let _filmChCountCache=null;
+function filmChapterCount(filmName){
+  if(!_filmChCountCache){
+    _filmChCountCache={};
+    const pvNameCol=S.headers.findIndex(h=>h.toLowerCase()==='produced_video_name');
+    const typeCol=S.headers.findIndex(h=>h.toLowerCase()==='type');
+    if(pvNameCol>=0&&Array.isArray(S.rows)){
+      S.rows.forEach(rw=>{
+        const t=typeCol>=0?(rw[typeCol]||'').toString().trim():'';
+        if(t!=='Film Chapter')return;
+        const fn=(rw[pvNameCol]||'').toString().trim();
+        if(!fn)return;
+        _filmChCountCache[fn]=(_filmChCountCache[fn]||0)+1;
+      });
+    }
+    (S.newFilmChapters||[]).forEach(ch=>{
+      const fn=(ch.filmName||'').trim();
+      if(!fn)return;
+      _filmChCountCache[fn]=(_filmChCountCache[fn]||0)+1;
+    });
+  }
+  return _filmChCountCache[filmName]||0;
+}
+
 function filmRefForResult(r){
   const rawTitle=r.pvName||r.clipName||'';
   if(!rawTitle)return '';
@@ -7225,6 +7252,11 @@ function filmRefForResult(r){
   }
   // FULL FILM binding: just the film name (no chapter)
   if(r.isFullFilm){
+    return filmName;
+  }
+  // SINGLE-CHAPTER FILM: when the film only has one chapter, the chapter IS the film —
+  // reference the film alone, ignoring any chapter display override.
+  if(filmChapterCount((r.pvName||'').trim())===1){
     return filmName;
   }
   // === 2) Resolve CHAPTER display ===
