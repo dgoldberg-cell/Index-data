@@ -1835,18 +1835,14 @@ const ALLOWED_FILMS = new Set([
   'Climbing the Rungs of Prayer',
   'Connected',
   'Cornerstones',
-  'Enduring Peace - Episode 1',
-  'Enduring Peace 6',
   'Faithful and Fortified Defense and Intelligence',
   "Faithful and Fortified Israel’s Journalists",
   "Faithful and Fortified: Israel’s Prime Ministers",
   'Glimpse Through the Veil',
   'Glimpse Through the Veil 2',
-  'Hand in Hand',
   'Hidden Treasure',
   'I Am A Chassid',
   'JEM Presents - Motti Eden - Motivating the youth',
-  'JEM Presents: How Israel can achieve complete victory and a lasting peace',
   'Jem Presents: Anti-Semitism',
   'Jem Presents: It Will Be Good',
   'Joy!',
@@ -1865,7 +1861,6 @@ const ALLOWED_FILMS = new Set([
   'Switch',
   'Take to Heart',
   'The Alter Rebbe',
-  "The Case for Israel's Preemptive Strike? | The Rebbe’s Roadmap to Peace, Episode 2",
   'The Early Years 1',
   'The Early Years 2',
   'The Early Years 3',
@@ -1875,14 +1870,33 @@ const ALLOWED_FILMS = new Set([
   'The Jewish Woman',
   'The Rebbe Unfiltered | Terrorism | Party Politics | Peace Treaties',
   'The Rebbe and the Holy Land',
-  "The Rebbe's Road Map to Peace Ep. 3",
-  "The Rebbe's Roadmap to Peace, Episode 3",
   'The Rebbetzin',
   'The Scharf Family',
   'Tishrei with the Rebbe - Vol. 1',
   'Tishrei with the Rebbe - Vol. 2',
   'Truly Free (Our Rebbe)',
+  'Peace Deal in Gaza',
+  "Israel's Deed of Ownership",
+  "Torah's Security Doctrine",
+  'Preemptive Defense',
+  'One Choice, Every Time: Security or Compromise | The Lubavitcher Rebbe',
+  "JEM Presents: The Rebbe's Three Steps to Lasting Peace",
+  "Israeli Jets Over Tehran. What's next?",
+  'Joyful In Wartime?',
+  'Gaza War 5784 - 2023: 19 Tishrei 5741',
+  'Suez Canal - 29 Iyar 5739',
+  'Hand  in Hand',
 ]);
+
+// Whitespace- and apostrophe-tolerant matching: runs of spaces collapse to one, curly
+// apostrophes equal straight ones, and both sides are trimmed — so a stray double space
+// or quote style difference in the sheet can never silently hide a film from the workspace.
+const _normFilmName = s => (s || '').toString().replace(/[\u2018\u2019]/g, "'").replace(/\s+/g, ' ').trim();
+{
+  const _normSet = new Set([...ALLOWED_FILMS].map(_normFilmName));
+  const _origHas = ALLOWED_FILMS.has.bind(ALLOWED_FILMS);
+  ALLOWED_FILMS.has = v => _origHas(v) || _normSet.has(_normFilmName(v));
+}
 
 const CLIP_TYPES = [
   { key: 'sichos',         displayName: 'Addresses',        adValue: 'LT Sicha',            reviewTab: 'Addresses Review Data',         rulesTab: 'Addresses AI Rules' },
