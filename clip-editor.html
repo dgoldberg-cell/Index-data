@@ -6885,7 +6885,7 @@ function renderExportView() {
     return `<div class="export-item">
       <div class="export-body">
         <div class="export-clip-title">${esc(clip.title)}</div>
-        <div class="export-meta">LT ${esc(clip.programNum)}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ⏱ ' + esc(dur) : ''}</div>
+        <div class="export-meta">${esc(programRefForClip(clip))}${fd ? ' · ' + esc(fd) : ''}${dur ? ' · ⏱ ' + esc(dur) : ''}</div>
         ${showOrig ? `<div style="font-size:12px;color:var(--tx3);background:var(--bg2);border-radius:6px;padding:8px;margin-bottom:6px"><strong style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--tx4);display:block;margin-bottom:3px">Original</strong>${esc(original)}</div>` : ''}
         <div class="export-summary">${esc(summary)}</div>
       </div>
@@ -7209,7 +7209,7 @@ function exportHTML() {
     const eventType = (clip.eventTypes || []).join(', ');
     return `<tr>
       <td>${clip.title}</td>
-      <td>LT ${clip.programNum}</td>
+      <td>${programRefForClip(clip)}</td>
       <td>${eventType}</td>
       <td>${formatClipDate(clip.date)}</td>
       <td>${formatDuration(clip.durationMs)}</td>
