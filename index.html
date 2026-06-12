@@ -3092,6 +3092,7 @@ async function manualRefresh(){
     try{S.deletedEntries=await loadDeletedEntriesFromTab();}catch(e){console.warn('Could not refresh deleted entries:',e);}
     try{S.newTags=await loadNewTagsFromTab();}catch(e){console.warn('Could not refresh new tags:',e);}
     try{S.newTagBindings=await loadNewTagBindingsFromTab();}catch(e){console.warn('Could not refresh new tag bindings:',e);}
+    try{S.newFilmChapters=await loadNewFilmChaptersFromTab();}catch(e){console.warn('Could not refresh new film chapters:',e);}
     try{S.removedBindings=await loadRemovedBindingsFromTab();}catch(e){console.warn('Could not refresh removed bindings:',e);}
     try{S.customSections=await loadCustomSectionsFromTab();}catch(e){console.warn('Could not refresh custom sections:',e);}
     try{S.sectionRenames=await loadSectionRenamesFromTab();}catch(e){console.warn('Could not refresh section renames:',e);}
@@ -4606,6 +4607,36 @@ async function loadFilmNameOverridesFromTab(){
 // === CHAPTER OVERRIDES — shortened chapter labels per clipId ===
 // _ChapterOverrides tab: Clip ID | Chapter Display | Notes
 // For film chapter refs: combines with film name as "FilmName - ChapterDisplay".
+// ── Workspace-added film chapters (chapters that don't exist in the raw data tab) ──
+// Stored in _NewFilmChapters: Timestamp | Film Name | Chapter Title | Chapter # | Clip ID | Description | Added By
+async function loadNewFilmChaptersFromTab(){
+  const TAB='_NewFilmChapters';
+  if(!S.connected)return [];
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return [];
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:G10000`
+    });
+    const rows=r.result.values||[];
+    const out=[];
+    rows.forEach(row=>{
+      const filmName=(row[1]||'').toString().trim();
+      const chapterTitle=(row[2]||'').toString().trim();
+      const chapterNum=parseInt(row[3]||'0')||0;
+      const clipId=(row[4]||'').toString().trim();
+      const description=(row[5]||'').toString();
+      if(!filmName||!chapterTitle||!clipId)return;
+      out.push({filmName,chapterTitle,chapterNum,clipId,description});
+    });
+    return out;
+  }catch(e){
+    console.warn('Failed to load new film chapters:',e);
+    return [];
+  }
+}
+
 async function loadChapterOverridesFromTab(){
   const TAB='_ChapterOverrides';
   if(!S.connected)return {};
@@ -4865,7 +4896,8 @@ async function loadNewTagBindingsFromTab(){
       const setBy=(row[8]||'').trim();
       const bindingType=(row[9]||'clip').trim();
       const clipId=(row[10]||'').toString().trim();
-      if(!tagName||rowIdx<0)return;
+      if(!tagName)return;
+      if(rowIdx<0&&bindingType!=='newchapter')return; // negative rowIdx only valid for workspace-added chapters
       const key=tagName+'|'+rowIdx;
       if(action==='remove')delete map[key];
       else map[key]={tagName,rowIdx,desc,segType,rel,relevancy,addedBy:setBy,ts:row[0],bindingType,clipId};
@@ -6134,6 +6166,36 @@ function buildIndex(){
       const resolvedName=resolveTagName(b.tagName);
       const tagEntry=entries[resolvedName];
       if(!tagEntry)return; // tag doesn't exist
+      // ── Workspace-added chapter binding: resolve against _NewFilmChapters, not the raw rows ──
+      if(b.bindingType==='newchapter'){
+        const ch=(S.newFilmChapters||[]).find(c=>String(c.clipId)===String(b.clipId));
+        if(!ch){
+          console.warn(`newchapter binding for "${b.tagName}" — clipId ${b.clipId} not found in _NewFilmChapters`);
+          return;
+        }
+        const dupe=(tagEntry.results||[]).some(r=>r.rowIdx===b.rowIdx||(r.clipId&&String(r.clipId)===String(b.clipId)));
+        if(dupe)return;
+        tagEntry.results.push({
+          rowIdx:b.rowIdx,
+          segType:b.segType||'Films',
+          desc:b.desc,
+          rel:b.rel,
+          relevancy:b.relevancy,
+          clipType:'Film Chapter',
+          clipName:ch.chapterTitle,
+          progNum:'',
+          clipId:ch.clipId,
+          objId:'',
+          pvName:ch.filmName,
+          pvType:'Film',
+          pvId:'',
+          transcript:'',
+          isNewBinding:true,
+          isFullFilm:false,
+          isNewChapter:true,
+        });
+        return;
+      }
       const row=S.rows[b.rowIdx];
       if(!row){
         console.warn(`Binding references row ${b.rowIdx} which doesn't exist`);
@@ -10061,6 +10123,7 @@ try{S.syntheticTags=await loadSyntheticTagsFromTab();console.log(`Loaded ${S.syn
 try{S.deletedEntries=await loadDeletedEntriesFromTab();console.log(`Loaded ${S.deletedEntries.size} deleted entries`);}catch(e){console.warn('Could not load deleted entries:',e);S.deletedEntries=new Set();}
 try{S.newTags=await loadNewTagsFromTab();console.log(`Loaded ${S.newTags.length} new tags`);}catch(e){console.warn('Could not load new tags:',e);S.newTags=[];}
 try{S.newTagBindings=await loadNewTagBindingsFromTab();console.log(`Loaded ${S.newTagBindings.length} new tag bindings`);}catch(e){console.warn('Could not load new tag bindings:',e);S.newTagBindings=[];}
+try{S.newFilmChapters=await loadNewFilmChaptersFromTab();console.log(`Loaded ${S.newFilmChapters.length} new film chapters`);}catch(e){console.warn('Could not load new film chapters:',e);S.newFilmChapters=[];}
 try{S.removedBindings=await loadRemovedBindingsFromTab();console.log(`Loaded ${S.removedBindings.size} removed clip-tag bindings`);}catch(e){console.warn('Could not load removed bindings:',e);S.removedBindings=new Set();}
 try{S.customSections=await loadCustomSectionsFromTab();console.log(`Loaded ${S.customSections.length} custom sections`);}catch(e){console.warn('Could not load custom sections:',e);S.customSections=[];}
 try{S.sectionRenames=await loadSectionRenamesFromTab();console.log(`Loaded ${Object.keys(S.sectionRenames).length} section renames`);}catch(e){console.warn('Could not load section renames:',e);S.sectionRenames={};}
@@ -13120,6 +13183,7 @@ window.addEventListener('resize',fixIdxScroll);
       try{S.deletedEntries=await loadDeletedEntriesFromTab();console.log(`Loaded ${S.deletedEntries.size} deleted entries`);}catch(e){console.warn('Could not load deleted entries:',e);S.deletedEntries=new Set();}
       try{S.newTags=await loadNewTagsFromTab();console.log(`Loaded ${S.newTags.length} new tags`);}catch(e){console.warn('Could not load new tags:',e);S.newTags=[];}
       try{S.newTagBindings=await loadNewTagBindingsFromTab();console.log(`Loaded ${S.newTagBindings.length} new tag bindings`);}catch(e){console.warn('Could not load new tag bindings:',e);S.newTagBindings=[];}
+try{S.newFilmChapters=await loadNewFilmChaptersFromTab();console.log(`Loaded ${S.newFilmChapters.length} new film chapters`);}catch(e){console.warn('Could not load new film chapters:',e);S.newFilmChapters=[];}
       try{S.removedBindings=await loadRemovedBindingsFromTab();console.log(`Loaded ${S.removedBindings.size} removed clip-tag bindings`);}catch(e){console.warn('Could not load removed bindings:',e);S.removedBindings=new Set();}
       try{S.customSections=await loadCustomSectionsFromTab();}catch(e){console.warn('Could not load custom sections:',e);S.customSections=[];}
       try{S.sectionRenames=await loadSectionRenamesFromTab();}catch(e){console.warn('Could not load section renames:',e);S.sectionRenames={};}
