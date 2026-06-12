@@ -3603,6 +3603,8 @@ async function loadAllData() {
   try { await loadNewFilmChapters(); } catch(e) { console.warn('NewFilmChapters load error:', e); }
   // Load soft-deleted films (shared with the Index Workstation via _DeletedFilms)
   try { await loadDeletedFilms(); } catch(e) { console.warn('DeletedFilms load error:', e); }
+  // Load soft-deleted chapters (shared with the Index Workstation via _DeletedChapters)
+  try { await loadDeletedChapters(); } catch(e) { console.warn('DeletedChapters load error:', e); }
   // Load chapter order numbers from _ChapterOverrides (shared with the Index Workstation)
   try { await loadChapterOrderOverrides(); } catch(e) { console.warn('ChapterOverrides load error:', e); }
   // Load reference code overrides (shared with the Index Workstation via _RefOverrides)
@@ -4207,6 +4209,83 @@ async function toggleFilmDeletedByName(filmName) {
   }
 }
 
+// ── Deleted Chapters ────────────────────────────────────────────────────────
+// Individual chapters soft-deleted from the workspace. Shared with the Index
+// Workstation via the _DeletedChapters tab:
+// Timestamp | Clip ID | Chapter Title | Film Name | Action (delete/restore) | By.
+// Latest action per clip ID wins. Deleted chapters stay visible (badged) in the
+// workstation but are excluded from the Films export; the Index Workstation marks
+// their tag results as removed (crossed out, excluded from index export).
+async function loadDeletedChapters() {
+  S.deletedChapters = new Set();
+  try {
+    const data = await sheetsGet(`'_DeletedChapters'!A2:F100000`);
+    const rows = (data.values || []).slice().sort((a, b) =>
+      (Date.parse(a[0] || '') || 0) - (Date.parse(b[0] || '') || 0));
+    rows.forEach(row => {
+      const clipId = (row[1] || '').toString().trim();
+      const action = (row[4] || '').toString().trim().toLowerCase();
+      if (!clipId) return;
+      if (action === 'restore') S.deletedChapters.delete(clipId);
+      else S.deletedChapters.add(clipId);
+    });
+    if (S.deletedChapters.size) console.log(`Deleted chapters: ${[...S.deletedChapters].join(', ')}`);
+  } catch (e) {
+    console.warn('_DeletedChapters load skipped:', e?.message || e);
+    S.deletedChapters = new Set();
+  }
+}
+
+function isChapterDeletedClip(clip) {
+  const id = (clip?.clipId || '').toString().trim();
+  return !!(id && S.deletedChapters && S.deletedChapters.has(id));
+}
+
+async function _ensureDeletedChaptersTab() {
+  const meta = await getSheetMeta();
+  const exists = meta.sheets?.some(s => s.properties.title === '_DeletedChapters');
+  if (exists) return;
+  await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: '_DeletedChapters' } } }] })
+  });
+  invalidateSheetMeta();
+  await sheetsSet(`'_DeletedChapters'!A1:F1`, [['Timestamp', 'Clip ID', 'Chapter Title', 'Film Name', 'Action', 'By']]);
+}
+
+async function toggleChapterDeleted(rowNum) {
+  const clip = findClipByRow(rowNum);
+  if (!clip) return;
+  const clipId = (clip.clipId || '').toString().trim();
+  if (!clipId) { showToast('Chapter has no clip ID — cannot delete', 'error'); return; }
+  const currentlyDeleted = isChapterDeletedClip(clip);
+  if (!currentlyDeleted) {
+    const ok = confirm(`Delete the chapter "${clip.title}" from the workspace?\n\nIt will be excluded from the Films export, and its tags will show as removed in the Index Workstation. You can restore it at any time.`);
+    if (!ok) return;
+  }
+  const action = currentlyDeleted ? 'restore' : 'delete';
+  showLoading(currentlyDeleted ? 'Restoring chapter…' : 'Deleting chapter…');
+  try {
+    await _ensureDeletedChaptersTab();
+    await sheetsApiCall(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent("'_DeletedChapters'!A:F")}:append?valueInputOption=RAW`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ majorDimension: 'ROWS', values: [[new Date().toISOString(), clipId, clip.title || '', clip.filmName || '', action, S.user?.email || S.user?.name || '']] })
+    });
+    if (!S.deletedChapters) S.deletedChapters = new Set();
+    if (currentlyDeleted) S.deletedChapters.delete(clipId);
+    else S.deletedChapters.add(clipId);
+    hideLoading();
+    showToast(currentlyDeleted ? `Chapter restored: ${clip.title}` : `Chapter deleted: ${clip.title}`, 'success');
+    if (typeof _filmWorkstationRow !== 'undefined' && _filmWorkstationRow) renderFilmWorkstation();
+    if (typeof _selectedFilm !== 'undefined' && _selectedFilm) renderFilmChapters(_selectedFilm);
+  } catch (e) {
+    hideLoading();
+    showToast('Failed: ' + e.message, 'error');
+  }
+}
+
 // Walk the bindings for a clip, applying add/remove actions in chronological order,
 // and return the names whose relationship (after all replays) matches one of the wanted
 // relationships. `wantedRels` is a list of underscore-normalized relationship strings.
@@ -4363,6 +4442,8 @@ function buildFilmsExportEntries() {
     const otherChapters = introChapter ? chapters.filter(c => String(c.clipId) !== String(introId)) : chapters;
     const orderedChapters = introChapter ? [introChapter, ...otherChapters] : chapters;
     orderedChapters.forEach((ch, i) => {
+      // Deleted chapters are excluded from the export (sheet / CSV / HTML all build from here)
+      if (isChapterDeletedClip(ch)) return;
       entries.push({
         kind: String(ch.clipId) === String(introId) ? 'intro' : 'chapter',
         clip: ch,
@@ -7870,13 +7951,15 @@ function renderChapterRow(film, chapter, isExpanded, isIntro) {
     : `<div class="fw-chapter-thumb" style="display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--tx4)">🎬</div>`;
   const chapterIsDup = isDuplicate(chapter);
   const chapterDupOf = chapterIsDup ? getReviewField(chapter, 'duplicateOf') : '';
-  return `<div class="fw-chapter-row ${isExpanded ? 'expanded' : ''} ${isIntro ? 'is-intro' : ''} ${isTreatedAsAddress ? 'is-treated-as-address' : ''} ${chapterIsDup ? 'is-duplicate' : ''}" id="fwChap_${chapter._rowNum}">
+  const chapterIsDeleted = isChapterDeletedClip(chapter);
+  return `<div class="fw-chapter-row ${isExpanded ? 'expanded' : ''} ${isIntro ? 'is-intro' : ''} ${isTreatedAsAddress ? 'is-treated-as-address' : ''} ${chapterIsDup ? 'is-duplicate' : ''}" id="fwChap_${chapter._rowNum}" ${chapterIsDeleted ? 'style="opacity:.55"' : ''}>
     <div class="fw-chapter-header" onclick="toggleChapterExpand(${film._rowNum}, ${chapter._rowNum})">
       ${thumbHTML}
       <div class="fw-chapter-info">
-        <div class="fw-chapter-title">${isIntro ? '<span class="fw-intro-badge">🎬 Intro</span> ' : ''}${isTreatedAsAddress ? '<span class="fw-treated-badge" title="This chapter is editorially treated as a Sicha (Address). It uses Addresses AI rules and appears in the Addresses queue.">📍 Treated as Address</span> ' : ''}${chapterIsDup ? `<span class="fw-treated-badge" title="Duplicate of: ${esc(chapterDupOf)}" style="background:#E8DACA;color:#6B5230">🔁 Duplicate</span> ` : ''}${esc(chapter.title)}</div>
+        <div class="fw-chapter-title">${isIntro ? '<span class="fw-intro-badge">🎬 Intro</span> ' : ''}${isTreatedAsAddress ? '<span class="fw-treated-badge" title="This chapter is editorially treated as a Sicha (Address). It uses Addresses AI rules and appears in the Addresses queue.">📍 Treated as Address</span> ' : ''}${chapterIsDup ? `<span class="fw-treated-badge" title="Duplicate of: ${esc(chapterDupOf)}" style="background:#E8DACA;color:#6B5230">🔁 Duplicate</span> ` : ''}${chapterIsDeleted ? '<span class="fw-treated-badge" title="This chapter is deleted — excluded from the Films export; its tags show as removed in the Index Workstation." style="background:var(--red,#c0392b);color:#fff">🗑 DELETED</span> ' : ''}${esc(chapter.title)}</div>
         <div class="fw-chapter-preview">${esc(preview)}</div>
       </div>
+      <button class="btn btn-sm" onclick="event.stopPropagation(); toggleChapterDeleted(${chapter._rowNum})" title="${chapterIsDeleted ? 'Restore this chapter' : 'Delete this chapter (excluded from export; tags removed in index)'}" style="flex-shrink:0;margin-right:6px;${chapterIsDeleted ? '' : 'color:var(--red,#c0392b)'}">${chapterIsDeleted ? '↺' : '🗑'}</button>
       <span class="fw-chapter-status ${statusClass}">${statusLabel}</span>
     </div>
     ${isExpanded ? `<div class="fw-chapter-body">
