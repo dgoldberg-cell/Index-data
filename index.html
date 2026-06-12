@@ -6810,8 +6810,8 @@ async function generateIndexTab(sectionName){
         var stripped=r.objId.replace(/^video_clip-/,'');
         if(S.refOverrides[stripped])return S.refOverrides[stripped];
       }
-      if(r.clipType==='Film Chapter')return r.pvName||''; // Film title (chapter goes in next col)
-      if(r.clipType==='Film')return r.clipName||''; // Film name
+      if(r.clipType==='Film Chapter')return filmDisplayName(r)||r.pvName||''; // Short film name w/ overrides (chapter goes in next col)
+      if(r.clipType==='Film')return filmDisplayName(r)||r.clipName||''; // Short film name w/ overrides
       if(!r.progNum)return '';
       var pref={
         'LT Sicha':'A',
@@ -6964,9 +6964,15 @@ async function generateIndexTab(sectionName){
           row[8]=r.desc||'';
           // J (col 9): Reference — join refs across all members
           row[9]=members.map(function(m){return refForClip(m)}).filter(function(s){return s}).join(', ');
-          // K (col 10): Chapter Name — only for Film Chapters; join across members
+          // K (col 10): Chapter Name — only for Film Chapters; join across members.
+          // Display rules match the in-app reference: single-chapter films get NO chapter
+          // (the chapter IS the film); _ChapterOverrides display wins; else the chapter title.
           if(r.clipType==='Film Chapter'){
-            row[10]=members.map(function(m){return m.clipName||''}).filter(function(s){return s}).join(', ');
+            row[10]=members.map(function(m){
+              if(filmChapterCount(((m.pvName||'')+'').trim())===1)return '';
+              if(m.clipId&&S.chapterOverrides&&S.chapterOverrides[m.clipId])return S.chapterOverrides[m.clipId];
+              return m.clipName||'';
+            }).filter(function(s){return s}).join(', ');
           }
           // L (col 11): Relevancy — for grouped clips, list each member's relevancy in same order as refs
           if(members.length>1){
@@ -7229,11 +7235,11 @@ function filmChapterCount(filmName){
   return _filmChCountCache[filmName]||0;
 }
 
-function filmRefForResult(r){
+// FILM display name half: _FilmNameOverrides (by produced_video_id) > legacy
+// filmShortNames (by title) > auto-shorten to first meaningful word.
+function filmDisplayName(r){
   const rawTitle=r.pvName||r.clipName||'';
   if(!rawTitle)return '';
-  // === 1) Resolve FILM display name ===
-  // Priority: explicit override (_FilmNameOverrides by produced_video_id) > legacy filmShortNames (by title) > auto-shorten
   let filmName=null;
   if(r.pvId && S.filmNameOverrides && S.filmNameOverrides[r.pvId]){
     filmName=S.filmNameOverrides[r.pvId];
@@ -7250,17 +7256,17 @@ function filmRefForResult(r){
       filmName=words.find(w=>!skipWords.has(w.toLowerCase()))||words[0]||'Film';
     }
   }
-  // FULL FILM binding: just the film name (no chapter)
-  if(r.isFullFilm){
-    return filmName;
-  }
+  return filmName;
+}
+
+// CHAPTER display half: '' for full films and single-chapter films; else
+// _ChapterOverrides (by clipId) > derive from raw title (Vol/Ch numbers) > 'Ch?'.
+function chapterDisplayFor(r){
+  if(r.isFullFilm)return '';
   // SINGLE-CHAPTER FILM: when the film only has one chapter, the chapter IS the film —
   // reference the film alone, ignoring any chapter display override.
-  if(filmChapterCount((r.pvName||'').trim())===1){
-    return filmName;
-  }
-  // === 2) Resolve CHAPTER display ===
-  // Priority: explicit override (_ChapterOverrides by clipId) > derive from raw title (Vol/Ch numbers)
+  if(filmChapterCount((r.pvName||'').trim())===1)return '';
+  const rawTitle=r.pvName||r.clipName||'';
   let chapterPart=null;
   if(r.clipId && S.chapterOverrides && S.chapterOverrides[r.clipId]){
     chapterPart=S.chapterOverrides[r.clipId];
@@ -7276,8 +7282,14 @@ function filmRefForResult(r){
     if(chMatch)chNum=chMatch[1];
     chapterPart=(volPart?volPart+' ':'')+'Ch'+chNum;
   }
-  // Combine: "FilmName - ChapterPart"
-  return filmName+' - '+chapterPart;
+  return chapterPart;
+}
+
+function filmRefForResult(r){
+  const filmName=filmDisplayName(r);
+  if(!filmName)return '';
+  const chapterPart=chapterDisplayFor(r);
+  return chapterPart?filmName+' - '+chapterPart:filmName;
 }
 
 // Cache for tab maps to avoid re-reading on every action
@@ -7330,7 +7342,9 @@ async function syncDescToIndexTab(entryName,result,newDesc){
   }
   if(!ref){
     if(result.clipType==='Film Chapter'||result.clipType==='Film'){
-      ref=filmRefForResult(result);
+      // Must mirror generateIndexTab's Reference column (film display name only —
+      // the chapter display lives in its own column there)
+      ref=filmDisplayName(result)||(result.clipType==='Film Chapter'?(result.pvName||''):(result.clipName||''));
     }else{
       ref=refCodeForResult(result)||'';
     }
