@@ -3094,6 +3094,7 @@ async function manualRefresh(){
     try{S.newTagBindings=await loadNewTagBindingsFromTab();}catch(e){console.warn('Could not refresh new tag bindings:',e);}
     try{S.newFilmChapters=await loadNewFilmChaptersFromTab();}catch(e){console.warn('Could not refresh new film chapters:',e);}
     try{S.deletedFilms=await loadDeletedFilmsFromTab();}catch(e){console.warn('Could not refresh deleted films:',e);}
+    try{S.deletedChapters=await loadDeletedChaptersFromTab();}catch(e){console.warn('Could not refresh deleted chapters:',e);}
     try{S.removedBindings=await loadRemovedBindingsFromTab();}catch(e){console.warn('Could not refresh removed bindings:',e);}
     try{S.customSections=await loadCustomSectionsFromTab();}catch(e){console.warn('Could not refresh custom sections:',e);}
     try{S.sectionRenames=await loadSectionRenamesFromTab();}catch(e){console.warn('Could not refresh section renames:',e);}
@@ -4636,6 +4637,38 @@ async function loadDeletedFilmsFromTab(){
     return set;
   }catch(e){
     console.warn('Failed to load deleted films:',e);
+    return new Set();
+  }
+}
+
+// ── Deleted chapters (soft-deleted in the Summary Workspace via _DeletedChapters tab) ──
+// Timestamp | Clip ID | Chapter Title | Film Name | Action (delete/restore) | By.
+// Latest action per clip ID wins. Matching results get isRemoved (crossed out, excluded
+// from export) plus isChapterDeleted so the UI shows an inert indicator instead of the
+// per-binding restore button — restore happens in the Summary Workspace.
+async function loadDeletedChaptersFromTab(){
+  const TAB='_DeletedChapters';
+  if(!S.connected)return new Set();
+  const tabExists=(S.sheetMeta?.tabs||[]).some(t=>t.title===TAB);
+  if(!tabExists)return new Set();
+  try{
+    const r=await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId:S.sheetId,
+      range:`'${TAB}'!A2:F100000`
+    });
+    const rows=r.result.values||[];
+    const sorted=[...rows].sort((a,b)=>(Date.parse(a[0]||'')||0)-(Date.parse(b[0]||'')||0));
+    const set=new Set();
+    sorted.forEach(row=>{
+      const clipId=(row[1]||'').toString().trim();
+      const action=(row[4]||'').toString().trim().toLowerCase();
+      if(!clipId)return;
+      if(action==='restore')set.delete(clipId);
+      else set.add(clipId);
+    });
+    return set;
+  }catch(e){
+    console.warn('Failed to load deleted chapters:',e);
     return new Set();
   }
 }
@@ -6422,6 +6455,27 @@ function buildIndex(){
           if(fname&&S.deletedFilms.has(fname)){
             r.isRemoved=true;
             r.isFilmDeleted=true;
+          }
+        });
+      });
+    });
+  }
+
+  // === DELETED CHAPTERS: mark every result pointing at a soft-deleted chapter ===
+  // Chapters are deleted/restored per clip ID in the Summary Workspace (_DeletedChapters
+  // tab). Matching results get isRemoved (crossed out + excluded from export) plus
+  // isChapterDeleted for the inert UI indicator.
+  if(S.deletedChapters && S.deletedChapters.size){
+    Object.values(sections).forEach(arr=>{
+      arr.forEach(e=>{
+        if(e.isAlias)return;
+        (e.results||[]).forEach(r=>{
+          const isChapterResult=r.isNewChapter||r.clipType==='Film Chapter';
+          if(!isChapterResult)return;
+          const cid=(r.clipId||'').toString().trim();
+          if(cid&&S.deletedChapters.has(cid)){
+            r.isRemoved=true;
+            r.isChapterDeleted=true;
           }
         });
       });
@@ -9823,6 +9877,8 @@ function rIndex(){
           if(!e.isAlias){
             if(r.isFilmDeleted){
               eh+=`<span class="idx-result-remove-btn" style="cursor:help;opacity:.7" title="Film deleted in the Summary Workspace — restore the film there to bring this back">🎬✕</span>`;
+            }else if(r.isChapterDeleted){
+              eh+=`<span class="idx-result-remove-btn" style="cursor:help;opacity:.7" title="Chapter deleted in the Summary Workspace — restore it there to bring this back">🎞✕</span>`;
             }else if(r.isRemoved){
               eh+=`<button class="idx-result-remove-btn" data-restore-binding="${esc(e.name)}|${r.rowIdx}" title="Restore this clip to this tag">↺</button>`;
             }else{
@@ -10268,6 +10324,7 @@ try{S.newTags=await loadNewTagsFromTab();console.log(`Loaded ${S.newTags.length}
 try{S.newTagBindings=await loadNewTagBindingsFromTab();console.log(`Loaded ${S.newTagBindings.length} new tag bindings`);}catch(e){console.warn('Could not load new tag bindings:',e);S.newTagBindings=[];}
 try{S.newFilmChapters=await loadNewFilmChaptersFromTab();console.log(`Loaded ${S.newFilmChapters.length} new film chapters`);}catch(e){console.warn('Could not load new film chapters:',e);S.newFilmChapters=[];}
 try{S.deletedFilms=await loadDeletedFilmsFromTab();if(S.deletedFilms.size)console.log(`Deleted films: ${[...S.deletedFilms].join(', ')}`);}catch(e){console.warn('Could not load deleted films:',e);S.deletedFilms=new Set();}
+try{S.deletedChapters=await loadDeletedChaptersFromTab();if(S.deletedChapters.size)console.log(`Deleted chapters: ${[...S.deletedChapters].join(', ')}`);}catch(e){console.warn('Could not load deleted chapters:',e);S.deletedChapters=new Set();}
 try{S.removedBindings=await loadRemovedBindingsFromTab();console.log(`Loaded ${S.removedBindings.size} removed clip-tag bindings`);}catch(e){console.warn('Could not load removed bindings:',e);S.removedBindings=new Set();}
 try{S.customSections=await loadCustomSectionsFromTab();console.log(`Loaded ${S.customSections.length} custom sections`);}catch(e){console.warn('Could not load custom sections:',e);S.customSections=[];}
 try{S.sectionRenames=await loadSectionRenamesFromTab();console.log(`Loaded ${Object.keys(S.sectionRenames).length} section renames`);}catch(e){console.warn('Could not load section renames:',e);S.sectionRenames={};}
@@ -13323,6 +13380,7 @@ window.addEventListener('resize',fixIdxScroll);
       try{S.newTagBindings=await loadNewTagBindingsFromTab();console.log(`Loaded ${S.newTagBindings.length} new tag bindings`);}catch(e){console.warn('Could not load new tag bindings:',e);S.newTagBindings=[];}
 try{S.newFilmChapters=await loadNewFilmChaptersFromTab();console.log(`Loaded ${S.newFilmChapters.length} new film chapters`);}catch(e){console.warn('Could not load new film chapters:',e);S.newFilmChapters=[];}
 try{S.deletedFilms=await loadDeletedFilmsFromTab();if(S.deletedFilms.size)console.log(`Deleted films: ${[...S.deletedFilms].join(', ')}`);}catch(e){console.warn('Could not load deleted films:',e);S.deletedFilms=new Set();}
+try{S.deletedChapters=await loadDeletedChaptersFromTab();if(S.deletedChapters.size)console.log(`Deleted chapters: ${[...S.deletedChapters].join(', ')}`);}catch(e){console.warn('Could not load deleted chapters:',e);S.deletedChapters=new Set();}
       try{S.removedBindings=await loadRemovedBindingsFromTab();console.log(`Loaded ${S.removedBindings.size} removed clip-tag bindings`);}catch(e){console.warn('Could not load removed bindings:',e);S.removedBindings=new Set();}
       try{S.customSections=await loadCustomSectionsFromTab();}catch(e){console.warn('Could not load custom sections:',e);S.customSections=[];}
       try{S.sectionRenames=await loadSectionRenamesFromTab();}catch(e){console.warn('Could not load section renames:',e);S.sectionRenames={};}
