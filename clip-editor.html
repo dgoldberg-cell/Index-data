@@ -3599,6 +3599,8 @@ async function loadAllData() {
   // Load _NewTagBindings — connections between tags and clips added via the Index Workstation.
   // Used to extend Featured People for Conversations + My Encounter with `spoken_to` people.
   try { await loadNewTagBindings(); } catch(e) { console.warn('NewTagBindings load error:', e); }
+  // Load workspace-added film chapters (chapters not present in the main sheet)
+  try { await loadNewFilmChapters(); } catch(e) { console.warn('NewFilmChapters load error:', e); }
   showLoading('Reading sheet data…');
   try {
     const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!A:AD`);
@@ -3715,6 +3717,9 @@ async function loadAllData() {
       }
       S.byType[tCfg.key].clips.push(clip);
     });
+
+    // Merge workspace-added film chapters (from _NewFilmChapters) into the film_chapter bucket
+    try { mergeNewFilmChapters(); } catch(e) { console.warn('NewFilmChapters merge error:', e); }
 
     // Ensure each type's review tab exists, load review data, load rules
     for (const t of CLIP_TYPES) {
@@ -3966,6 +3971,78 @@ async function loadNewTagBindings() {
     console.warn('_NewTagBindings load skipped:', e?.message || e);
     S.newTagBindings = {};
   }
+}
+
+// ── Workspace-added film chapters ──────────────────────────────────────────
+// Chapters that don't exist in the main sheet, stored in the _NewFilmChapters tab:
+// Timestamp | Film Name | Chapter Title | Chapter # | Clip ID | Description | Added By
+// Each becomes a synthetic film_chapter clip with a NEGATIVE _rowNum (-clipId) so it
+// can never collide with a real sheet row. Description edits write back to the
+// _NewFilmChapters tab (not the main sheet); review data works normally since the
+// review tab is keyed by rowNum strings.
+async function loadNewFilmChapters() {
+  S.newFilmChapters = [];
+  try {
+    const data = await sheetsGet(`'_NewFilmChapters'!A2:G10000`);
+    const rows = data.values || [];
+    rows.forEach((row, i) => {
+      if (!row || !row.length) return;
+      const filmName = (row[1] || '').toString().trim();
+      const title = (row[2] || '').toString().trim();
+      const chapterNum = parseInt(row[3] || '0') || 0;
+      const clipId = (row[4] || '').toString().trim();
+      const description = (row[5] || '').toString();
+      if (!filmName || !title || !clipId) return;
+      S.newFilmChapters.push({ filmName, title, chapterNum, clipId, description, _tabRow: i + 2 });
+    });
+    console.log(`Loaded ${S.newFilmChapters.length} workspace film chapters from _NewFilmChapters`);
+  } catch (e) {
+    // Tab may not exist — silently skip.
+    console.warn('_NewFilmChapters load skipped:', e?.message || e);
+    S.newFilmChapters = [];
+  }
+}
+
+function mergeNewFilmChapters() {
+  if (!Array.isArray(S.newFilmChapters) || !S.newFilmChapters.length) return;
+  const bucket = S.byType['film_chapter'];
+  if (!bucket) return;
+  let merged = 0;
+  S.newFilmChapters.forEach(nc => {
+    const idNum = parseInt(String(nc.clipId).replace(/\D/g, '') || '0');
+    if (!idNum) return;
+    const rowNum = -idNum;
+    // Skip if already merged (guards against double-merge on reload paths)
+    const exists = (bucket.clips || []).some(c => c._rowNum === rowNum);
+    if (exists) return;
+    // Skip if the parent film isn't part of this workspace
+    if (typeof ALLOWED_FILMS !== 'undefined' && !ALLOWED_FILMS.has(nc.filmName)) {
+      console.warn(`_NewFilmChapters: film "${nc.filmName}" not in allowed films — chapter "${nc.title}" skipped`);
+      return;
+    }
+    bucket.clips.push({
+      _rowNum: rowNum,
+      typeKey: 'film_chapter',
+      clipId: nc.clipId,
+      description: nc.description || '',
+      descSourceCol: 'H',
+      thumbnail: '',
+      keywords: '',
+      programNum: '',
+      date: '',
+      durationMs: '',
+      clipType: 'Film Chapter',
+      title: nc.title,
+      rewrite: '',
+      originalTypeKey: 'film_chapter',
+      filmName: nc.filmName,
+      _newChapterPos: nc.chapterNum,
+      _newChapterTabRow: nc._tabRow,
+      isNewChapter: true,
+    });
+    merged++;
+  });
+  if (merged) console.log(`Merged ${merged} workspace film chapters into the Films section`);
 }
 
 // Walk the bindings for a clip, applying add/remove actions in chronological order,
@@ -5296,6 +5373,7 @@ async function loadTranscript(rowNum) {
   if (clip.typeKey === 'films') {
     return await loadAggregatedFilmTranscript(rowNum);
   }
+  if (rowNum < 0) throw new Error('No transcript available for this clip');
   const data = await sheetsGet(`'${CONFIG.MAIN_TAB}'!AC${rowNum}:AC${rowNum}`);
   const transcript = data.values?.[0]?.[0] || '';
   if (!transcript || !transcript.trim()) {
@@ -5311,7 +5389,8 @@ async function loadTranscript(rowNum) {
 async function loadAggregatedFilmTranscript(filmRowNum) {
   const film = (S.byType['films']?.clips || []).find(c => c._rowNum === filmRowNum);
   if (!film) throw new Error('Film not found');
-  const chapters = getOrderedChapters(film.filmName);
+  // Workspace-added chapters (negative _rowNum) have no main-sheet row → no transcript to read
+  const chapters = getOrderedChapters(film.filmName).filter(ch => ch._rowNum > 0);
   if (!chapters.length) throw new Error('No chapters found for this film');
   // Read column AC for every chapter row in a single batchGet to keep it fast even for
   // films with many chapters.
@@ -5989,9 +6068,17 @@ async function approveClip(rowNum) {
     // (so a second editor can see exactly what was approved without re-loading from main sheet)
     setReviewField(clip, 'draftText', draft);
     setReviewField(clip, 'descSourceCol', clip.descSourceCol || 'H');
-    // Write back to the same column the description was read from (H, A, or Y)
-    const targetCol = clipDescColLetter(clip);
-    await sheetsSet(`'${CONFIG.MAIN_TAB}'!${targetCol}${rowNum}:${targetCol}${rowNum}`, [[draft]]);
+    // Write back to the same column the description was read from (H, A, or Y).
+    // Workspace-added chapters (negative rowNum) live in the _NewFilmChapters tab —
+    // their description is column F of that tab, not the main sheet.
+    if (rowNum < 0) {
+      if (clip._newChapterTabRow) {
+        await sheetsSet(`'_NewFilmChapters'!F${clip._newChapterTabRow}:F${clip._newChapterTabRow}`, [[draft]]);
+      }
+    } else {
+      const targetCol = clipDescColLetter(clip);
+      await sheetsSet(`'${CONFIG.MAIN_TAB}'!${targetCol}${rowNum}:${targetCol}${rowNum}`, [[draft]]);
+    }
     // Write review row
     await saveReviewRow(clip);
     hideLoading();
@@ -7396,19 +7483,34 @@ function getOrderedChapters(filmName) {
     if (m) return parseInt(m[1]);
     return c._rowNum || 0;
   };
+  // Workspace-added chapters (negative _rowNum) carry an explicit position
+  // (_newChapterPos = the chapter number). Sort the REGULAR chapters first using the
+  // existing logic, then splice each new chapter into its declared position.
+  const newOnes = chapters.filter(c => c.isNewChapter);
+  const regular = chapters.filter(c => !c.isNewChapter);
+  let sorted;
   if (!_filmOrderCache || !_filmOrderCache[filmName]) {
     // Default: ascending by chapter number → first chapter first
-    return chapters.sort((a, b) => chapterNum(a) - chapterNum(b));
+    sorted = regular.sort((a, b) => chapterNum(a) - chapterNum(b));
+  } else {
+    const orderMap = _filmOrderCache[filmName];
+    sorted = regular.sort((a, b) => {
+      const ai = orderMap[String(a._rowNum)];
+      const bi = orderMap[String(b._rowNum)];
+      if (ai === undefined && bi === undefined) return chapterNum(a) - chapterNum(b);
+      if (ai === undefined) return 1;
+      if (bi === undefined) return -1;
+      return ai - bi;
+    });
   }
-  const orderMap = _filmOrderCache[filmName];
-  return chapters.sort((a, b) => {
-    const ai = orderMap[String(a._rowNum)];
-    const bi = orderMap[String(b._rowNum)];
-    if (ai === undefined && bi === undefined) return chapterNum(a) - chapterNum(b);
-    if (ai === undefined) return 1;
-    if (bi === undefined) return -1;
-    return ai - bi;
+  // Insert new chapters at (chapter# − 1), lowest position first so later inserts
+  // land correctly relative to earlier ones. Position past the end → append.
+  newOnes.sort((a, b) => (a._newChapterPos || 0) - (b._newChapterPos || 0));
+  newOnes.forEach(nc => {
+    const pos = Math.max(0, Math.min((nc._newChapterPos || 1) - 1, sorted.length));
+    sorted.splice(pos, 0, nc);
   });
+  return sorted;
 }
 
 // ══════════════════════════════════════════════
